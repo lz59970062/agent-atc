@@ -11,6 +11,7 @@ from pathlib import Path
 from unittest import mock
 
 from agent_atc import cli
+from agent_atc.engine import reminders as reminder_policy
 from agent_atc.store import layout
 from agent_atc.owners import SystemdUserBackend
 
@@ -48,7 +49,7 @@ class DaemonServiceSelectionTests(unittest.TestCase):
             stack.enter_context(mock.patch.object(cli, "systemd_user_dir", return_value=self.directory / "systemd"))
             for owner, name in ((cli, "install_skill"), (cli, "install_systemd"), (cli, "install_supervisor"),
                                 (cli, "start_standalone_daemon"), (cli, "configure_proxy_environment"),
-                                (cli, "ensure_callback_hook_file"), (cli, "report_claude_agent_readiness")):
+                                (reminder_policy, "ensure_callback_hook_file"), (cli, "report_claude_agent_readiness")):
                 spies[name] = stack.enter_context(mock.patch.object(owner, name, return_value=0))
             spies["run_systemctl"] = stack.enter_context(mock.patch.object(cli, "run_systemctl"))
             with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
@@ -153,7 +154,7 @@ class DaemonServiceSelectionTests(unittest.TestCase):
         ), mock.patch.object(cli, "systemd_user_dir", return_value=self.directory / "systemd"), mock.patch.object(
             layout, "daemon_state_dir", return_value=self.directory / "state"
         ), mock.patch.object(cli, "install_skill", return_value=0), mock.patch.object(
-            cli, "ensure_callback_hook_file"
+            reminder_policy, "ensure_callback_hook_file"
         ), mock.patch.object(cli, "report_claude_agent_readiness"), mock.patch.object(
             cli, "configure_proxy_environment"
         ), mock.patch.object(cli, "systemd_service_text", return_value="[Service]\nExecStart=/fixture/atc daemon\n"), mock.patch.object(

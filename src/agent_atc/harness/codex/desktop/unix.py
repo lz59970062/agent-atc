@@ -44,7 +44,7 @@ def prepare_socket(metadata: Path) -> tuple[Path, int]:
 
 
 def run_app_server(executable: Path, arguments: list[str]) -> int:
-    from ....cli import AppServerConnection
+    from ..app_server import AppServerConnection
     from .connection import UnixBridgeEndpoint
 
     raw = os.environ.get(BRIDGE_FILE_ENV, "")

@@ -11,6 +11,8 @@ import time
 import unittest
 
 from agent_atc import callback_transport, cli
+from agent_atc.engine import delivery as delivery_engine
+from agent_atc.harness.codex import app_server
 from agent_atc.store import records as queue_store
 from agent_atc.store import layout
 from agent_atc.harness.pi import channel as bridge
@@ -41,7 +43,7 @@ def build_bound(tmp_path):
     payload = {'request': request, 'queue_dir': str(queue), 'prompt': request['prompt'],
                'ack_path': str(layout.ack_path(queue, 'fixture')),
                'canceled_path': str(layout.request_path(queue, 'canceled', 'fixture')),
-               'command': cli.resume_command(request), 'cwd': str(tmp_path), 'timeout': 1}
+               'command': delivery_engine.resume_command(request), 'cwd': str(tmp_path), 'timeout': 1}
     return request, owner, directory, queue, payload
 
 
@@ -115,10 +117,10 @@ class PiLiveCallbackTests(unittest.TestCase):
         owner.pop('delivery_modes')
         queue_store.write_request(directory/'owner.json', owner)
         assert bridge.inspect_route(request)['status'] == 'blocked'
-        with self.assertRaisesRegex(cli.CallbackTransportBlocked, 'does not support steer'):
+        with self.assertRaisesRegex(app_server.CallbackTransportBlocked, 'does not support steer'):
             bridge.prepare_delivery(payload)
         assert not (directory/'inbox').exists()
-        assert not cli.retained_target_lease_is_held(request)
+        assert not delivery_engine.retained_target_lease_is_held(request)
         owner['delivery_modes'] = ['follow-up', 'steer']
         queue_store.write_request(directory/'owner.json', owner)
         assert bridge.inspect_route(request)['status'] == 'owner_registered'
@@ -127,11 +129,11 @@ class PiLiveCallbackTests(unittest.TestCase):
         envelope = bridge.read_record(file, versions=(1, 2))
         assert envelope['version'] == 2 and envelope['pi_delivery'] == 'steer'
         request['pi_delivery'] = 'follow-up'
-        with self.assertRaisesRegex(cli.CallbackTransportBlocked, 'different delivery policy'):
+        with self.assertRaisesRegex(app_server.CallbackTransportBlocked, 'different delivery policy'):
             bridge.prepare_delivery(payload)
         assert bridge.read_record(file, versions=(1, 2)) == envelope
         queue_store.write_request(layout.ack_path(queue, 'fixture'), {'id': 'fixture'})
-        cli.release_retained_target_lease(queue, request)
+        delivery_engine.release_retained_target_lease(queue, request)
 
     def test_online_publication_retains_lease_and_never_spawns_pi(self):
         bound = self.bound
@@ -142,10 +144,10 @@ class PiLiveCallbackTests(unittest.TestCase):
         assert delivery.online
         envelope = json.loads(next((directory / 'inbox').glob('*.json')).read_text())
         assert envelope['prompt'] == payload['prompt']
-        assert cli.retained_target_lease_is_held(request)
+        assert delivery_engine.retained_target_lease_is_held(request)
         queue_store.write_request(layout.ack_path(queue, 'fixture'), {'id': 'fixture'})
-        assert cli.wait_for_remote_delivery(payload, delivery, 1)['returncode'] == 0
-        assert not cli.retained_target_lease_is_held(request)
+        assert delivery_engine.wait_for_remote_delivery(payload, delivery, 1)['returncode'] == 0
+        assert not delivery_engine.retained_target_lease_is_held(request)
 
 
 
@@ -154,12 +156,12 @@ class PiLiveCallbackTests(unittest.TestCase):
         tmp_path = self.directory
         request, _, _, queue, payload = bound
         delivery = bridge.prepare_delivery(payload)
-        assert cli.wait_for_remote_delivery(payload, delivery, 0.01)['returncode'] == 125
-        assert cli.retained_target_lease_is_held(request)
+        assert delivery_engine.wait_for_remote_delivery(payload, delivery, 0.01)['returncode'] == 125
+        assert delivery_engine.retained_target_lease_is_held(request)
         queue_store.write_request(queue / 'failed/fixture.json', request)
         queue_store.write_request(layout.ack_path(queue, 'fixture'), {'id': 'fixture'})
-        cli.reconcile_acknowledged_retained_leases(queue)
-        assert not cli.retained_target_lease_is_held(request)
+        delivery_engine.reconcile_acknowledged_retained_leases(queue)
+        assert not delivery_engine.retained_target_lease_is_held(request)
 
 
 
@@ -169,7 +171,7 @@ class PiLiveCallbackTests(unittest.TestCase):
         queue_store.write_request(queue / 'pending' / 'fixture.json', request)
         args = argparse.Namespace(resume_timeout=3600, retries=3, retry_delay=0, retry_backoff=1)
         started = time.monotonic()
-        assert cli.process_one(queue, args)
+        assert delivery_engine.process_one(queue, args)
         # The daemon returns as soon as the live mailbox has the callback.
         assert time.monotonic() - started < 15
         published = cli.load_request(queue / 'pending' / 'fixture.json')
@@ -179,21 +181,21 @@ class PiLiveCallbackTests(unittest.TestCase):
 
     def test_publication_frees_the_daemon_and_ack_finishes_it(self):
         request, _, _, queue = self.queue_published()
-        assert cli.retained_target_lease_is_held(request)
-        assert cli.select_pending(queue, time.time() + 7200) is None  # Held for this session only.
+        assert delivery_engine.retained_target_lease_is_held(request)
+        assert delivery_engine.select_pending(queue, time.time() + 7200) is None  # Held for this session only.
         other = argparse.Namespace(agent='codex', session='other-thread', last=False, cwd=str(self.directory),
                                    task='other', callback_mode='cli')
         other_request = cli.make_request(other, 'Wake another session')
         other_request['id'] = 'other'
         queue_store.write_request(queue / 'pending' / 'other.json', other_request)
         # Another session's callback is not stuck behind the unacknowledged Pi one.
-        assert cli.select_pending(queue, time.time() + 7200) == queue / 'pending' / 'other.json'
+        assert delivery_engine.select_pending(queue, time.time() + 7200) == queue / 'pending' / 'other.json'
         (queue / 'pending' / 'other.json').unlink()
         bridge.reconcile_publications(queue, 3600)
         assert (queue / 'pending' / 'fixture.json').exists()  # Live owner: keep waiting.
         cli.ack(argparse.Namespace(queue_dir=str(queue), id='fixture', message=None))
         assert (queue / 'done' / 'fixture.json').exists()
-        assert not cli.retained_target_lease_is_held(request)
+        assert not delivery_engine.retained_target_lease_is_held(request)
 
     def test_owner_loss_or_replacement_or_deadline_needs_manual_recovery(self):
         for case in ('exited', 'replaced', 'deadline'):
@@ -210,10 +212,10 @@ class PiLiveCallbackTests(unittest.TestCase):
                 failed = cli.load_request(queue / 'failed' / 'fixture.json')
                 assert failed['retain_target_lease'] is True
                 assert 'had not admitted it yet' in failed['last_error'], failed['last_error']
-                assert cli.retained_target_lease_is_held(request)  # Never replayed automatically.
+                assert delivery_engine.retained_target_lease_is_held(request)  # Never replayed automatically.
                 cli.ack(argparse.Namespace(queue_dir=str(queue), id='fixture', message=None))
                 assert (queue / 'done' / 'fixture.json').exists()
-                assert not cli.retained_target_lease_is_held(request)
+                assert not delivery_engine.retained_target_lease_is_held(request)
                 for state in ('done', 'acks'):
                     (queue / state / 'fixture.json').unlink()
                 for envelope in (directory / 'inbox').glob('*.json'):
@@ -229,8 +231,8 @@ class PiLiveCallbackTests(unittest.TestCase):
             if path.parent.name == 'inbox': raise OSError('disk full')
             return original(path, data, **kwargs)
         with mock.patch.object(bridge.storage, 'write_request', side_effect=fail_envelope):
-            with self.assertRaises(cli.CallbackTransportBlocked): bridge.prepare_delivery(payload)
-        assert cli.retained_target_lease_is_held(request)
+            with self.assertRaises(app_server.CallbackTransportBlocked): bridge.prepare_delivery(payload)
+        assert delivery_engine.retained_target_lease_is_held(request)
 
 
 
@@ -241,7 +243,7 @@ class PiLiveCallbackTests(unittest.TestCase):
         owner['owner_pid'] = 99999999; owner['state'] = 'closed'
         queue_store.write_request(directory / 'owner.json', owner)
         assert bridge.inspect_route(request)['status'] == 'blocked'
-        with self.assertRaises(cli.CallbackTransportBlocked): bridge.prepare_delivery(payload)
+        with self.assertRaises(app_server.CallbackTransportBlocked): bridge.prepare_delivery(payload)
         dead_managed(owner, directory)
         assert bridge.confirmed_owner_dead(owner)
         delivery = bridge.prepare_delivery(payload)
@@ -279,11 +281,11 @@ class PiLiveCallbackTests(unittest.TestCase):
         request, owner, directory, queue, payload = bound
         bridge.prepare_delivery(payload)
         dead_managed(owner, directory)
-        with self.assertRaisesRegex(cli.CallbackTransportBlocked, 'already published'):
+        with self.assertRaisesRegex(app_server.CallbackTransportBlocked, 'already published'):
             bridge.prepare_delivery(payload)
         for path in (directory / 'inbox').glob('*.json'): path.unlink()
-        with mock.patch.object(cli, 'retain_target_lease', side_effect=ValueError('conflicting lease')):
-            with self.assertRaises(cli.CallbackTransportBlocked): bridge.prepare_delivery(payload)
+        with mock.patch.object(delivery_engine, 'retain_target_lease', side_effect=ValueError('conflicting lease')):
+            with self.assertRaises(app_server.CallbackTransportBlocked): bridge.prepare_delivery(payload)
         assert bridge.read_record(directory / 'owner.json') == owner
 
 
@@ -295,7 +297,7 @@ class PiLiveCallbackTests(unittest.TestCase):
         os.environ['PI_CODING_AGENT_DIR'] = '/different/current/profile'
         assert bridge.owner_record(request)[1] == owner
         owner['profile_dir'] = '/another/profile'; queue_store.write_request(directory / 'owner.json', owner)
-        with self.assertRaises(cli.CallbackTransportBlocked): bridge.prepare_delivery(payload)
+        with self.assertRaises(app_server.CallbackTransportBlocked): bridge.prepare_delivery(payload)
         owner['profile_dir'] = request['pi_profile_dir']
         owner.update(managed=True, lease_pid=99999999, lease_identity=cli.daemon_process_identity(os.getpid()))
         queue_store.write_request(directory / 'owner.json', owner)
@@ -311,7 +313,7 @@ class PiLiveCallbackTests(unittest.TestCase):
         try: alias.symlink_to(request['target']['value'])
         except OSError: self.skipTest('symlink privilege unavailable')
         other = dict(request, target={'kind': 'session', 'value': str(alias)})
-        assert cli.target_lock_path(other) == cli.target_lock_path(request)
+        assert delivery_engine.target_lock_path(other) == delivery_engine.target_lock_path(request)
         assert bridge.writer_lock_path(str(alias)) == bridge.writer_lock_path(request['target']['value'])
         for invalid in ('partial-id', '', None):
             with self.assertRaises(ValueError): bridge.canonical_session(invalid)
@@ -381,7 +383,7 @@ class PiLiveCallbackTests(unittest.TestCase):
         # No subprocess was created; close is the definite pre-spawn rollback.
         plan.close()
         assert bridge.read_record(directory/'owner.json')==owner
-        assert not cli.retained_target_lease_is_held(request)
+        assert not delivery_engine.retained_target_lease_is_held(request)
 
 
 

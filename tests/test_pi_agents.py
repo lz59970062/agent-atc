@@ -21,6 +21,7 @@ import unittest
 from unittest import mock
 
 from agent_atc import cli
+from agent_atc.engine import delivery as delivery_engine
 from agent_atc.store import records as queue_store
 from agent_atc.store import layout
 from agent_atc.install import diagnostics
@@ -74,7 +75,7 @@ class PiAdapterContractTests(unittest.TestCase):
         )
         with mock.patch.dict(os.environ, {"ATC_PI_BIN": "/opt/my Pi/bin/pi"}, clear=False):
             self.assertEqual(
-                cli.resume_command({"agent": "pi", "target": {"kind": "session", "value": session}}),
+                delivery_engine.resume_command({"agent": "pi", "target": {"kind": "session", "value": session}}),
                 ["/opt/my Pi/bin/pi", "--print", "--session", session],
             )
         self.assertEqual(
@@ -181,9 +182,9 @@ class PiAgentContractTests(unittest.TestCase):
         self.addCleanup(environment.stop)
 
     def tearDown(self):
-        for delivery in list(cli._BACKGROUND_RESUMES.values()):
-            cli.stop_resume_process(delivery.process)
-        cli._BACKGROUND_RESUMES.clear()
+        for delivery in list(delivery_engine._BACKGROUND_RESUMES.values()):
+            delivery_engine.stop_resume_process(delivery.process)
+        delivery_engine._BACKGROUND_RESUMES.clear()
 
     def invoke(self, options=(), *, parent="codex", prompt="Inspect the public Pi child contract."):
         argv = ["atc", "agent", "pi", "--cwd", str(self.directory),
@@ -500,16 +501,16 @@ class PiAgentContractTests(unittest.TestCase):
         args = argparse.Namespace(retries=3, retry_delay=0.0, retry_backoff=2.0, resume_timeout=15.0)
         with mock.patch.dict(os.environ, environment), \
                 contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
-            self.assertTrue(cli.process_one(root, args))
+            self.assertTrue(delivery_engine.process_one(root, args))
 
         deadline = time.monotonic() + 15.0
         while time.monotonic() < deadline:
-            cli.reap_background_resumes()
-            if not cli._BACKGROUND_RESUMES:
+            delivery_engine.reap_background_resumes()
+            if not delivery_engine._BACKGROUND_RESUMES:
                 break
             time.sleep(0.05)
-        self.assertFalse(cli._BACKGROUND_RESUMES, "the delivery worker did not finish")
-        cli.recover_running(root)
+        self.assertFalse(delivery_engine._BACKGROUND_RESUMES, "the delivery worker did not finish")
+        delivery_engine.recover_running(root)
         self.assertTrue((root / "done" / f"{request['id']}.json").exists())
         received = json.loads(capture.read_text(encoding="utf-8"))
         self.assertEqual(received["argv"], ["--print", "--session", str(session),

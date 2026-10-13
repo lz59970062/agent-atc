@@ -10,6 +10,7 @@ from pathlib import Path
 from unittest import mock
 
 from agent_atc import cli
+from agent_atc.engine import delivery as delivery_engine
 from agent_atc.owners import host
 from agent_atc.store import records as queue_store
 from agent_atc.store import layout
@@ -263,7 +264,7 @@ class RuntimeHealthTests(HealthArtifacts, unittest.TestCase):
 class DeliveryHealthTests(HealthArtifacts, unittest.TestCase):
     def observe_deliveries(self):
         before = self.snapshot()
-        with mock.patch.object(cli, "retain_target_lease") as retain, mock.patch.object(
+        with mock.patch.object(delivery_engine, "retain_target_lease") as retain, mock.patch.object(
             queue_store, "write_request"
         ) as write:
             issues = diagnostics.delivery_issues(self.root)

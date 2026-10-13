@@ -15,6 +15,7 @@ from unittest import mock
 
 from agent_atc.harness.claude import session as claude_code
 from agent_atc import cli
+from agent_atc.engine import delivery as delivery_engine
 from agent_atc import runtime as atc_runtime
 from agent_atc.store import records as queue_store
 from agent_atc.store import layout
@@ -125,7 +126,7 @@ class ExecutableDiscoveryTests(unittest.TestCase):
         request = {"agent": "claude", "target": {"kind": "session", "value": SESSION}, "cwd": "/tmp", "prompt": "x"}
         with mock.patch.object(cli.claude_code, "discover_executable",
                                return_value=claude_code.Executable("/found/claude", "standalone")):
-            self.assertEqual(cli.resume_command(request)[0], "/found/claude")
+            self.assertEqual(delivery_engine.resume_command(request)[0], "/found/claude")
 
 
 class SessionDirectoryTests(unittest.TestCase):
@@ -163,9 +164,9 @@ class SessionDirectoryTests(unittest.TestCase):
         codex = dict(claude, agent="codex")
         last = dict(claude, target={"kind": "last"})
         with mock.patch.dict(os.environ, self.environment):
-            self.assertEqual(cli.resume_cwd(claude), str(self.project))
-            self.assertEqual(cli.resume_cwd(codex), "/task/cwd")
-            self.assertEqual(cli.resume_cwd(last), "/task/cwd")
+            self.assertEqual(delivery_engine.resume_cwd(claude), str(self.project))
+            self.assertEqual(delivery_engine.resume_cwd(codex), "/task/cwd")
+            self.assertEqual(delivery_engine.resume_cwd(last), "/task/cwd")
 
 
 class LiveWaiterTests(unittest.TestCase):
@@ -226,12 +227,12 @@ class LiveWaiterTests(unittest.TestCase):
         codex = self.enqueue("cb-codex", agent="codex")
         watcher = claude_code.register_live_watcher(SESSION)
         try:
-            self.assertEqual(cli.select_pending(self.root, time.time()), codex)
+            self.assertEqual(delivery_engine.select_pending(self.root, time.time()), codex)
             codex.unlink()
-            self.assertIsNone(cli.select_pending(self.root, time.time()))
+            self.assertIsNone(delivery_engine.select_pending(self.root, time.time()))
         finally:
             claude_code.release_live_watcher(watcher)
-        self.assertEqual(cli.select_pending(self.root, time.time()), claude)
+        self.assertEqual(delivery_engine.select_pending(self.root, time.time()), claude)
 
     def test_wait_refuses_outside_claude_code_and_never_claims_other_agents(self) -> None:
         self.enqueue("cb-codex", agent="codex")
@@ -255,7 +256,7 @@ class LiveWaiterTests(unittest.TestCase):
         pending = layout.request_path(self.root, "pending", "cb-1")
         request = json.loads(pending.read_text(encoding="utf-8"))
         self.assertGreater(request["next_attempt_at"], time.time() + 1000)
-        self.assertEqual(cli.select_pending(self.root, time.time()).stem, "cb-other")
+        self.assertEqual(delivery_engine.select_pending(self.root, time.time()).stem, "cb-other")
         self.assertFalse(any((self.root / "running").glob("*.json")))
 
         self.ack("cb-1")
@@ -296,7 +297,7 @@ class LiveWaiterTests(unittest.TestCase):
 
     def test_wait_skips_callbacks_the_daemon_is_delivering(self) -> None:
         self.enqueue("cb-busy")
-        target_lock = cli.acquire_target_lock({"target": {"kind": "session", "value": SESSION}}, blocking=False)
+        target_lock = delivery_engine.acquire_target_lock({"target": {"kind": "session", "value": SESSION}}, blocking=False)
         try:
             self.assertEqual(self.run_wait(timeout=0.2)[0], 3)
         finally:
@@ -320,7 +321,7 @@ class LiveWaiterTests(unittest.TestCase):
                 self.assertLess(time.monotonic(), deadline, "waiter never registered")
                 time.sleep(0.05)
             self.enqueue("cb-async")
-            self.assertIsNone(cli.select_pending(self.root, time.time()))
+            self.assertIsNone(delivery_engine.select_pending(self.root, time.time()))
             stdout, stderr = process.communicate(timeout=20)
         finally:
             if process.poll() is None:

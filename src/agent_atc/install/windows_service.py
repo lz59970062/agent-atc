@@ -30,6 +30,7 @@ def service_owner(name: str, profile: Path) -> str:
 
 def config_path(name: str) -> Path:
     from .. import cli
+    from ..harness.codex import app_server
     from ..store import records as queue_store
     from ..store import layout
     service_owner(name, layout.codex_home())  # Validate before making a path.
@@ -38,6 +39,7 @@ def config_path(name: str) -> Path:
 
 def configuration(args: argparse.Namespace) -> dict[str, object]:
     from .. import cli
+    from ..harness.codex import app_server
     from ..store import records as queue_store
     from ..store import layout
     root = layout.queue_dir(args).resolve()
@@ -50,7 +52,7 @@ def configuration(args: argparse.Namespace) -> dict[str, object]:
     environment.update(CODEX_HOME=str(layout.codex_home().resolve()),
                        CLAUDE_CONFIG_DIR=str(layout.claude_home().resolve()),
                        PYTHONIOENCODING="utf-8")
-    for name in (layout.TARGET_LOCK_DIR_ENV, cli.APP_SERVER_BRIDGE_FILE_ENV):
+    for name in (layout.TARGET_LOCK_DIR_ENV, app_server.APP_SERVER_BRIDGE_FILE_ENV):
         if name in os.environ:
             environment[name] = os.environ[name]
     return {
@@ -65,6 +67,7 @@ def configuration(args: argparse.Namespace) -> dict[str, object]:
 
 def install(args: argparse.Namespace) -> int:
     from .. import cli
+    from ..harness.codex import app_server
     from ..store import records as queue_store
     from ..store import layout
     try:
@@ -168,6 +171,7 @@ def run_coordinator(path: Path) -> int:
 def uninstall(args: argparse.Namespace) -> int:
     """Remove login registration, allowing live callback owners to drain."""
     from .. import cli
+    from ..harness.codex import app_server
     from ..store import records as queue_store
     from ..store import layout
     try:

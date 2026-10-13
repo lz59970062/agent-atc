@@ -19,6 +19,7 @@ from unittest import mock
 
 from agent_atc.core import envelope as callbacks
 from agent_atc import cli
+from agent_atc.engine import reminders as reminder_policy
 from agent_atc import runtime as atc_runtime
 from agent_atc.store import layout
 from test_cli import assert_private_file
@@ -78,8 +79,8 @@ class CompactCallbackTests(unittest.TestCase):
             payload = dict(prompt=restored["prompt"], request=restored,
                            queue_dir=str(self.root))
             with mock.patch.object(cli.time, "time", return_value=9999999999):
-                selected = cli.select_delivery_prompt(payload)
-                retried = cli.select_delivery_prompt(payload)
+                selected = reminder_policy.select_delivery_prompt(payload)
+                retried = reminder_policy.select_delivery_prompt(payload)
             self.assertEqual(restored["duration_seconds"], 125.5)
             self.assertIn("Duration: 2m 5.5s", selected)
             self.assertEqual(selected, retried)
@@ -157,7 +158,7 @@ class CompactCallbackTests(unittest.TestCase):
             requests.append(request)
             payload = dict(prompt=request["prompt"], request=request,
                            queue_dir=str(self.root), callback_hook_path=str(hook))
-            selected = cli.select_delivery_prompt(payload)
+            selected = reminder_policy.select_delivery_prompt(payload)
             self.assertEqual(payload["prompt"], selected)
             self.assertNotIn("Reminder cadence:", selected)
             self.assertEqual("USER REMINDER" in selected, sequence in (1, 4))
@@ -167,7 +168,7 @@ class CompactCallbackTests(unittest.TestCase):
         request = json.loads(json.dumps(requests[1]))
         retry = dict(prompt=request["prompt"], request=request,
                      queue_dir=str(self.root), callback_hook_path=str(hook))
-        self.assertEqual(cli.select_delivery_prompt(retry), outputs[1])
+        self.assertEqual(reminder_policy.select_delivery_prompt(retry), outputs[1])
         self.assertEqual(list((self.root / "pending").glob("*.json")), [])
 
 

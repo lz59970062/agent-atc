@@ -184,7 +184,7 @@ def launch_command(config: dict[str, object], *, check_only: bool) -> list[str]:
 
 
 def command(args: argparse.Namespace) -> int:
-    from ....cli import codex_home
+    from ....store.layout import codex_home
 
     try:
         if sys.platform != "win32":

@@ -19,6 +19,8 @@ import unittest
 from unittest import mock
 
 from agent_atc import cli
+from agent_atc.engine import delivery as delivery_engine
+from agent_atc.harness.codex import app_server
 from agent_atc.store import records as queue_store
 from agent_atc.store import layout
 
@@ -54,6 +56,8 @@ class DesktopDeliveryTimeoutTests(unittest.TestCase):
             import argparse,json,os,sys,time
             from pathlib import Path
             from agent_atc import cli
+            from agent_atc.engine import delivery as delivery_engine
+            from agent_atc.harness.codex import app_server
             from agent_atc.store import records as queue_store
             from agent_atc.store import layout
             root=Path(ROOT)
@@ -66,23 +70,23 @@ class DesktopDeliveryTimeoutTests(unittest.TestCase):
                 def notify(self, method, params): pass
                 def request(self, method, params):
                     if method == 'thread/resume' and mode == 'before-submit-failure':
-                        raise cli.AppServerProtocolError('connection lost before turn submission')
+                        raise app_server.AppServerProtocolError('connection lost before turn submission')
                     if method != 'turn/start': return {}
                     with events.open('a',encoding='utf-8') as log:
-                        log.write(json.dumps({'method':method,'intent_durable':cli.desktop_submission_pending(root,request)})+'\\n')
+                        log.write(json.dumps({'method':method,'intent_durable':delivery_engine.desktop_submission_pending(root,request)})+'\\n')
                     if mode == 'worker-crash': os._exit(23)
                     if mode == 'explicit-rejection':
-                        raise cli.AppServerRpcError('explicit rejection')
+                        raise app_server.AppServerRpcError('explicit rejection')
                     if mode in ('acknowledged','unknown-after-ack'):
                         cli.ack(argparse.Namespace(queue_dir=str(root),id=request['id'],message='fixture ACK'))
                     if mode in ('unknown','unknown-after-ack'):
                         time.sleep(0.35)
-                        raise cli.AppServerProtocolError('turn/start response lost')
+                        raise app_server.AppServerProtocolError('turn/start response lost')
                     return {'turn':{'id':'fixture-turn'}}
                 def wait_for_turn_completion(self, thread_id, turn_id, timeout): return True
-            cli.desktop_app_server_socket=lambda request:Path('unused-fixture.sock')
-            cli.AppServerConnection=lambda path,timeout:FakeConnection()
-            raise SystemExit(cli.delivery_worker_main())
+            app_server.desktop_app_server_socket=lambda request:Path('unused-fixture.sock')
+            app_server.AppServerConnection=lambda path,timeout:FakeConnection()
+            raise SystemExit(delivery_engine.delivery_worker_main())
         """)
         program = program.replace("ROOT", repr(str(self.root))).replace("REQUEST", repr(json.dumps(self.request)))
         program = program.replace("EVENTS", repr(str(self.events))).replace("MODE", repr(mode))
@@ -96,10 +100,10 @@ class DesktopDeliveryTimeoutTests(unittest.TestCase):
         return [sys.executable, "-c", code]
 
     def run_worker(self, mode, timeout=1):
-        with mock.patch.object(cli, "delivery_worker_command", return_value=self.worker_command(mode)), mock.patch.object(
-            cli, "resume_command", return_value=self.fallback_command()
+        with mock.patch.object(delivery_engine, "delivery_worker_command", return_value=self.worker_command(mode)), mock.patch.object(
+            delivery_engine, "resume_command", return_value=self.fallback_command()
         ):
-            return cli.run_resume_until_exit_or_ack(self.root, self.request["id"], self.request,
+            return delivery_engine.run_resume_until_exit_or_ack(self.root, self.request["id"], self.request,
                                                     argparse.Namespace(resume_timeout=timeout))
 
     def assert_submission_recorded_once(self):
@@ -107,9 +111,9 @@ class DesktopDeliveryTimeoutTests(unittest.TestCase):
         self.assertEqual(events, [{"method": "turn/start", "intent_durable": True}])
 
     def tearDown(self):
-        for delivery in list(cli._BACKGROUND_RESUMES.values()):
-            cli.stop_resume_process(delivery.process)
-        cli._BACKGROUND_RESUMES.clear()
+        for delivery in list(delivery_engine._BACKGROUND_RESUMES.values()):
+            delivery_engine.stop_resume_process(delivery.process)
+        delivery_engine._BACKGROUND_RESUMES.clear()
 
     def test_parent_deadline_before_worker_timeout_preserves_unknown_outcome(self):
         result, acked, running = self.run_worker("unknown")
@@ -117,8 +121,8 @@ class DesktopDeliveryTimeoutTests(unittest.TestCase):
         self.assertFalse(acked)
         self.assertFalse(running)
         self.assert_submission_recorded_once()
-        self.assertTrue(cli.desktop_submission_pending(self.root, self.request))
-        self.assertTrue(cli.retained_target_lease_is_held(self.request))
+        self.assertTrue(delivery_engine.desktop_submission_pending(self.root, self.request))
+        self.assertTrue(delivery_engine.retained_target_lease_is_held(self.request))
         self.assertFalse(self.cli_calls.exists())
 
     def test_worker_crash_after_submission_preserves_unknown_outcome(self):
@@ -127,17 +131,17 @@ class DesktopDeliveryTimeoutTests(unittest.TestCase):
         self.assertFalse(acked)
         self.assertFalse(running)
         self.assert_submission_recorded_once()
-        self.assertTrue(cli.retained_target_lease_is_held(self.request))
+        self.assertTrue(delivery_engine.retained_target_lease_is_held(self.request))
         self.assertFalse(self.cli_calls.exists())
 
     def test_unknown_submission_enters_failed_without_retry_and_blocks_other_queue(self):
         queue_store.write_request(layout.request_path(self.root, "pending", self.request["id"]), self.request)
         args = argparse.Namespace(resume_timeout=1, retries=3, retry_delay=0, retry_backoff=1)
-        with mock.patch.object(cli, "delivery_worker_command", return_value=self.worker_command("unknown")), mock.patch.object(
-            cli, "resume_command", return_value=self.fallback_command()
+        with mock.patch.object(delivery_engine, "delivery_worker_command", return_value=self.worker_command("unknown")), mock.patch.object(
+            delivery_engine, "resume_command", return_value=self.fallback_command()
         ):
-            self.assertTrue(cli.process_one(self.root, args))
-            self.assertFalse(cli.process_one(self.root, args))
+            self.assertTrue(delivery_engine.process_one(self.root, args))
+            self.assertFalse(delivery_engine.process_one(self.root, args))
         failed = cli.load_request(layout.request_path(self.root, "failed", self.request["id"]))
         self.assertTrue(failed["retain_target_lease"])
         self.assertEqual(failed["attempts"], 1)
@@ -145,7 +149,7 @@ class DesktopDeliveryTimeoutTests(unittest.TestCase):
         other = self.directory / "other-queue"
         queue_store.ensure_daemon_dirs(other)
         queue_store.write_request(layout.request_path(other, "pending", "contender"), dict(self.request, id="contender", queue_dir=str(other)))
-        self.assertIsNone(cli.select_pending(other, time.time()))
+        self.assertIsNone(delivery_engine.select_pending(other, time.time()))
         self.assert_submission_recorded_once()
 
     def test_explicit_rejection_clears_intent_and_allows_cli(self):
@@ -154,7 +158,7 @@ class DesktopDeliveryTimeoutTests(unittest.TestCase):
         self.assertFalse(acked)
         self.assertFalse(running)
         self.assert_submission_recorded_once()
-        self.assertFalse(cli.desktop_submission_pending(self.root, self.request))
+        self.assertFalse(delivery_engine.desktop_submission_pending(self.root, self.request))
         self.assertTrue(self.cli_calls.exists())
 
     def test_matching_completion_clears_intent_and_keeps_normal_ack_policy(self):
@@ -163,7 +167,7 @@ class DesktopDeliveryTimeoutTests(unittest.TestCase):
         self.assertFalse(acked)
         self.assertFalse(running)
         self.assert_submission_recorded_once()
-        self.assertFalse(cli.desktop_submission_pending(self.root, self.request))
+        self.assertFalse(delivery_engine.desktop_submission_pending(self.root, self.request))
         self.assertFalse(self.cli_calls.exists())
 
     def test_acknowledged_submission_releases_intent_even_if_rpc_reply_is_lost(self):
@@ -176,7 +180,7 @@ class DesktopDeliveryTimeoutTests(unittest.TestCase):
                 result, acked, _running = self.run_worker(mode, timeout=3)
                 self.assertEqual(result.returncode, 0, self.errors.getvalue())
                 self.assertTrue(acked)
-                self.assertFalse(cli.retained_target_lease_is_held(self.request))
+                self.assertFalse(delivery_engine.retained_target_lease_is_held(self.request))
                 self.assertFalse(self.cli_calls.exists())
                 self.assert_submission_recorded_once()
                 self.tearDown()  # Finish the acknowledged worker before the next fixture.
@@ -187,13 +191,13 @@ class DesktopDeliveryTimeoutTests(unittest.TestCase):
         self.assertFalse(acked)
         self.assertFalse(running)
         self.assertFalse(self.events.exists())
-        self.assertFalse(cli.desktop_submission_pending(self.root, self.request))
+        self.assertFalse(delivery_engine.desktop_submission_pending(self.root, self.request))
         self.assertTrue(self.cli_calls.exists())
 
     def test_foreign_callback_lease_does_not_classify_this_request_as_unknown(self):
         other = dict(self.request, id="another-callback")
-        cli.retain_target_lease(self.root, other)
-        self.assertFalse(cli.desktop_submission_pending(self.root, self.request))
+        delivery_engine.retain_target_lease(self.root, other)
+        self.assertFalse(delivery_engine.desktop_submission_pending(self.root, self.request))
 
 
 if __name__ == "__main__":

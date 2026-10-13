@@ -78,6 +78,7 @@ def queue_writable(root: Path) -> bool:
 def coordinator_issue(root: Path) -> dict[str, str] | None:
     """Observe the existing singleton inode without creating a new lock file."""
     from .. import cli
+    from ..engine import delivery as delivery_engine
     from ..owners import host
     from ..store import records as queue_store
     from ..store import layout
@@ -115,6 +116,7 @@ def coordinator_issue(root: Path) -> dict[str, str] | None:
 def environment_profile() -> dict[str, object]:
     """Describe this runtime; supported backends determine useful checks."""
     from .. import cli
+    from ..engine import delivery as delivery_engine
     from ..owners import host
     from ..store import records as queue_store
     from ..store import layout
@@ -133,6 +135,7 @@ def runtime_issues(root: Path) -> list[dict[str, object]]:
     a manager outage does not flood the calling Agent with one block per task.
     """
     from .. import cli
+    from ..engine import delivery as delivery_engine
     from ..owners import host
     from ..store import records as queue_store
     from ..store import layout
@@ -272,6 +275,7 @@ def _work(args: argparse.Namespace) -> dict[str, object]:
 def inspect(args: argparse.Namespace) -> dict[str, object]:
     """Check supported environment, configuration and observed lifecycle state."""
     from .. import cli
+    from ..engine import delivery as delivery_engine
     from ..owners import host
     from ..store import records as queue_store
     from ..store import layout
@@ -328,7 +332,7 @@ def inspect(args: argparse.Namespace) -> dict[str, object]:
     callback_agent = cli.resolve_agent(args)
     adapter = get_agent(callback_agent)
     executables: dict[str, str] = {}
-    callback_executable = shutil.which(adapter.executable(cli.agent_environment(callback_agent)))
+    callback_executable = shutil.which(adapter.executable(delivery_engine.agent_environment(callback_agent)))
     if callback_executable is None:
         issues.append({"code": "callback_agent_unavailable", "action": "Make the selected callback Agent CLI available in the coordinator's environment."})
     else:
@@ -337,7 +341,7 @@ def inspect(args: argparse.Namespace) -> dict[str, object]:
     if operation == "agent" and not child_agent:
         issues.append({"code": "child_agent_unspecified", "action": "Pass --agent-worker with the actual intended child Agent to check delegated-task readiness."})
     if operation == "agent" and child_agent:
-        child_executable = shutil.which(get_child_agent(child_agent).executable(cli.agent_environment(child_agent)))
+        child_executable = shutil.which(get_child_agent(child_agent).executable(delivery_engine.agent_environment(child_agent)))
         if child_executable is None:
             issues.append({"code": "child_agent_unavailable", "action": "Install or configure the selected child Agent CLI before executing this delegated task."})
         elif child_agent == "claude" and claude_code.is_desktop_bundle(child_executable):
@@ -487,6 +491,7 @@ def delivery_issues(root: Path) -> list[dict[str, object]]:
     each group. Commands, prompts and recorded exception text are never emitted.
     """
     from .. import cli
+    from ..engine import delivery as delivery_engine
     from ..owners import host
     from ..store import records as queue_store
     from ..store import layout

@@ -13,6 +13,7 @@ import time
 import unittest
 
 from agent_atc import cli
+from agent_atc.harness.codex import app_server
 from agent_atc.harness.codex.desktop.connection import load_unix_bridge_endpoint
 
 
@@ -62,7 +63,7 @@ class MacDesktopIntegrationTests(unittest.TestCase):
                     request("persist", "thread/inject_items", {"threadId": thread, "items": [{"type": "message", "role": "assistant",
                         "content": [{"type": "output_text", "text": "Disposable protocol fixture; no model call."}]}]})
                     endpoint = load_unix_bridge_endpoint(metadata, profile)
-                    callback = cli.AppServerConnection(endpoint, 5)
+                    callback = app_server.AppServerConnection(endpoint, 5)
                     callback.connect()
                     callback.request("initialize", {"clientInfo": {"name": "atc-callback-fixture", "version": "1"},
                                                     "capabilities": {"experimentalApi": True}})
@@ -75,7 +76,7 @@ class MacDesktopIntegrationTests(unittest.TestCase):
                     self.assertEqual(process.returncode, 0, (root / "wrapper.log").read_text())
                     self.assertFalse(metadata.exists())
                     self.assertFalse(endpoint.path.exists())
-                    with self.assertRaises((OSError, cli.AppServerProtocolError)):
+                    with self.assertRaises((OSError, app_server.AppServerProtocolError)):
                         callback.request("thread/loaded/list", {})
                 finally:
                     if callback:

@@ -12,6 +12,8 @@ import unittest
 from unittest import mock
 
 from agent_atc import cli
+from agent_atc.engine import delivery as delivery_engine
+from agent_atc.engine import reminders as reminder_policy
 from agent_atc.store import layout
 from test_cli import patch_inprocess_delivery_worker
 
@@ -20,7 +22,7 @@ def _allocate_in_process(root, policy, callback_id, results):
     request = {"id": callback_id, "agent": "codex",
                "target": {"kind": "session", "value": "concurrent-session"}}
     try:
-        results.put(cli.allocate_prompt_cadence(Path(root), request, Path(policy)))
+        results.put(reminder_policy.allocate_prompt_cadence(Path(root), request, Path(policy)))
     except Exception as exc:
         results.put({"error": repr(exc)})
 
@@ -38,7 +40,7 @@ class PromptCadenceTests(unittest.TestCase):
                 "target": {"kind": "session", "value": session}}
 
     def allocate(self, request):
-        return cli.allocate_prompt_cadence(self.root, request, policy_path=self.policy)
+        return reminder_policy.allocate_prompt_cadence(self.root, request, policy_path=self.policy)
 
     def test_default_schedule_counts_callbacks_not_retries(self):
         expected_system = {1, 5, 9}
@@ -146,11 +148,11 @@ class PromptCadenceTests(unittest.TestCase):
                 with mock.patch.dict(os.environ, {"CODEX_LONG_TASK_DELIVERY_LOCK_FDS": "[]"}), \
                         mock.patch.object(sys, "stdin", io.StringIO(json.dumps(payload))), \
                         mock.patch.object(cli.signal, "signal"), \
-                        mock.patch.object(cli, "start_desktop_app_server_turn",
+                        mock.patch.object(delivery_engine, "start_desktop_app_server_turn",
                                           return_value=desktop if transport == "desktop" else None) as start, \
                         mock.patch.object(cli.subprocess, "Popen", return_value=child) as popen, \
                         contextlib.redirect_stdout(io.StringIO()):
-                    self.assertEqual(cli.delivery_worker_main(), 0)
+                    self.assertEqual(delivery_engine.delivery_worker_main(), 0)
                 selected = start.call_args.args[0]["prompt"]
                 self.assertIn("COMPACT RESULT ACK TASK-SPECIFIC", selected)
                 self.assertNotIn("FULL", selected)
@@ -173,11 +175,11 @@ class PromptCadenceTests(unittest.TestCase):
                 with mock.patch.dict(os.environ, {"CODEX_LONG_TASK_DELIVERY_LOCK_FDS": "[]"}), \
                         mock.patch.object(sys, "stdin", io.StringIO(json.dumps(payload))), \
                         mock.patch.object(cli.signal, "signal"), \
-                        mock.patch.object(cli, "select_delivery_prompt") as select, \
-                        mock.patch.object(cli, "start_desktop_app_server_turn") as desktop, \
+                        mock.patch.object(reminder_policy, "select_delivery_prompt") as select, \
+                        mock.patch.object(delivery_engine, "start_desktop_app_server_turn") as desktop, \
                         mock.patch.object(cli.subprocess, "Popen") as child, \
                         contextlib.redirect_stdout(io.StringIO()) as output:
-                    self.assertEqual(cli.delivery_worker_main(), 0)
+                    self.assertEqual(delivery_engine.delivery_worker_main(), 0)
                 result = json.loads(output.getvalue())
                 self.assertEqual(result["returncode"], 0)
                 self.assertEqual(result["skipped"], expected)
@@ -191,16 +193,16 @@ class PromptCadenceTests(unittest.TestCase):
         hook.write_text("USER HOOK")
         for sequence in range(1, 10):
             payload = self.payload(f"select-{sequence}")
-            selected = cli.select_delivery_prompt(payload)
+            selected = reminder_policy.select_delivery_prompt(payload)
             self.assertEqual(payload["prompt"], selected)
             self.assertEqual("FULL" in selected, sequence in (1, 5, 9))
             self.assertEqual("USER HOOK" in selected, sequence in (1, 4, 7))
             self.assertIn("RESULT ACK TASK-SPECIFIC", selected)
         hook.write_text("EDITED USER HOOK")
-        retry = cli.select_delivery_prompt(self.payload("select-1"))
+        retry = reminder_policy.select_delivery_prompt(self.payload("select-1"))
         self.assertIn("EDITED USER HOOK", retry)
         self.assertIn("FULL", retry)
-        self.assertNotIn("EDITED USER HOOK", cli.select_delivery_prompt(self.payload("select-2")))
+        self.assertNotIn("EDITED USER HOOK", reminder_policy.select_delivery_prompt(self.payload("select-2")))
 
     def test_policy_changes_do_not_change_existing_allocations(self):
         first = self.allocate(self.request("first"))
@@ -220,14 +222,14 @@ class PromptCadenceTests(unittest.TestCase):
                         "system_every: 1.5", "[]", "system_every: ["):
             with self.subTest(invalid=invalid), contextlib.redirect_stderr(io.StringIO()):
                 self.policy.write_text(invalid)
-                selected = cli.select_delivery_prompt(self.payload("invalid"))
+                selected = reminder_policy.select_delivery_prompt(self.payload("invalid"))
                 self.assertIn("FULL", selected)
                 self.assertIn("USER HOOK", selected)
                 self.assertFalse(list((self.root / "prompt-counters").glob("*.json")))
         self.policy.unlink()
         payload = self.payload("unknown")
         payload["request"]["target"] = {"kind": "last"}
-        selected = cli.select_delivery_prompt(payload)
+        selected = reminder_policy.select_delivery_prompt(payload)
         self.assertIn("FULL", selected)
         self.assertIn("USER HOOK", selected)
         self.assertFalse(list((self.root / "prompt-counters").glob("*.json")))
@@ -235,25 +237,25 @@ class PromptCadenceTests(unittest.TestCase):
     def test_legacy_request_keeps_full_system_text_on_non_due_callback(self):
         self.allocate(self.request("first"))
         payload = self.payload("legacy", compact=False)
-        selected = cli.select_delivery_prompt(payload)
+        selected = reminder_policy.select_delivery_prompt(payload)
         self.assertIn("FULL RESULT ACK TASK-SPECIFIC", selected)
 
     def test_policy_show_is_read_only_and_partial_updates_preserve_other_interval(self):
         state = self.policy.parent / "fresh-state"
         with mock.patch.object(layout, "daemon_state_dir", return_value=state), \
                 contextlib.redirect_stdout(io.StringIO()) as output:
-            self.assertEqual(cli.callback_prompt_policy(argparse.Namespace(system_every=None, user_every=None)), 0)
+            self.assertEqual(reminder_policy.callback_prompt_policy(argparse.Namespace(system_every=None, user_every=None)), 0)
             self.assertFalse(state.exists())
             self.assertIn("system_every: 4", output.getvalue())
             self.assertIn("user_every: 3", output.getvalue())
-            self.assertEqual(cli.callback_prompt_policy(argparse.Namespace(system_every=2, user_every=None)), 0)
-            self.assertEqual(cli.callback_prompt_policy(argparse.Namespace(system_every=None, user_every=7)), 0)
+            self.assertEqual(reminder_policy.callback_prompt_policy(argparse.Namespace(system_every=2, user_every=None)), 0)
+            self.assertEqual(reminder_policy.callback_prompt_policy(argparse.Namespace(system_every=None, user_every=7)), 0)
             saved = (state / "callback-prompts.yaml").read_text()
             self.assertIn("system_every: 2", saved)
             self.assertIn("user_every: 7", saved)
             for invalid in (0, -2, True):
                 with contextlib.redirect_stderr(io.StringIO()):
-                    self.assertNotEqual(cli.callback_prompt_policy(argparse.Namespace(system_every=invalid, user_every=None)), 0)
+                    self.assertNotEqual(reminder_policy.callback_prompt_policy(argparse.Namespace(system_every=invalid, user_every=None)), 0)
                 self.assertEqual((state / "callback-prompts.yaml").read_text(), saved)
 
     def test_compact_preparation_preserves_message_routing_and_ack_without_allocating(self):

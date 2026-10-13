@@ -13,6 +13,7 @@ import time
 import unittest
 
 from agent_atc import cli
+from agent_atc.harness.codex import app_server
 from agent_atc.harness.codex.desktop.connection import load_bridge_endpoint
 from agent_atc.harness.codex.desktop.bridge import bridge_status, stop_bridge
 from agent_atc.system import windows_process
@@ -76,7 +77,7 @@ class RealCodexBridgeTests(unittest.TestCase):
                         "threadId": thread["id"], "items": [{"type": "message", "role": "assistant",
                         "content": [{"type": "output_text", "text": "Desktop stdio fixture; no model call."}]}]})
                     endpoint = load_bridge_endpoint(metadata, profile)
-                    callback = cli.AppServerConnection(endpoint, 8)
+                    callback = app_server.AppServerConnection(endpoint, 8)
                     callback.connect()
                     callback.request("initialize", {
                         "clientInfo": {"name": "atc-callback-fixture", "version": "0.7.0a1"},
@@ -95,7 +96,7 @@ class RealCodexBridgeTests(unittest.TestCase):
                     self.assertFalse(reader.is_alive())
                     self.assertFalse(metadata.exists())
                     self.assertEqual(list(metadata.parent.glob("*.token")), [])
-                    with self.assertRaises((OSError, cli.AppServerProtocolError)):
+                    with self.assertRaises((OSError, app_server.AppServerProtocolError)):
                         callback.request("thread/loaded/list", {})
                 finally:
                     if callback:
@@ -134,7 +135,7 @@ class RealCodexBridgeTests(unittest.TestCase):
                                 self.fail("Isolated bridge startup failed")
                             time.sleep(0.1)
                     for name in ("atc-desktop-fixture", "atc-callback-fixture"):
-                        client = cli.AppServerConnection(endpoint, 8)
+                        client = app_server.AppServerConnection(endpoint, 8)
                         clients.append(client)
                         client.connect()
                         client.request("initialize", {"clientInfo": {"name": name, "version": "0.7.0a1"},

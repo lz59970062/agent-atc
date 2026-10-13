@@ -69,11 +69,10 @@ from .owners import host
 from . import runtime as atc_runtime
 from .store import records as queue_store
 from .system import commands
+from .engine import delivery as delivery_engine
+from .engine import reminders as reminder_policy
+from .harness.codex import app_server
 
-DEFAULT_RETRIES = 3
-DEFAULT_RETRY_DELAY = 30.0
-DEFAULT_RETRY_BACKOFF = 2.0
-DEFAULT_RESUME_TIMEOUT = 3600.0
 MANAGED_WORKER_TOKEN_PREFIX = "atc_"
 MANAGED_WORKER_HANDSHAKE_SECONDS = 1.0
 MANAGED_LAUNCH_MAX_ATTEMPTS = 3
@@ -96,18 +95,11 @@ CHILD_AGENT_PARENT_ENV_NAMES = tuple(
     dict.fromkeys(env_name for name in CHILD_AGENT_NAMES for env_name in get_child_agent(name).parent_env_names)
 )
 PROXY_ENV_FILE_ENV = "ATC_PROXY_ENV_FILE"
-CALLBACK_HOOK_SECTION = "[atc-user-hook]"
-CALLBACK_PROMPT_POLICY_FILE_NAME = "callback-prompts.yaml"
-DEFAULT_CALLBACK_PROMPT_POLICY = {"system_every": 4, "user_every": 3}
 STANDARD_CALLBACK_GUIDANCE = "\n".join([
     "Please inspect the result and any relevant artifacts.",
     "Decide whether the original goal is complete, blocked, or needs another action.",
     "Continue if the next step is clear and safe; otherwise ask the user one concise question.",
 ])
-DESKTOP_APP_SERVER_ENV = "ATC_DESKTOP_APP_SERVER"
-APP_SERVER_SOCKET_ENV = "ATC_APP_SERVER_SOCKET"
-ALLOW_APP_SERVER_SOCKET_OVERRIDE_ENV = "ATC_ALLOW_APP_SERVER_SOCKET_OVERRIDE"
-APP_SERVER_BRIDGE_FILE_ENV = "ATC_DESKTOP_BRIDGE_FILE"
 PROXY_ENV_NAMES = (
     "HTTP_PROXY",
     "HTTPS_PROXY",
@@ -118,21 +110,6 @@ PROXY_ENV_NAMES = (
     "all_proxy",
     "no_proxy",
 )
-
-
-@dataclass
-class BackgroundResume:
-    process: subprocess.Popen[str]
-    target_key: str
-    deadline: float
-    request_id: str
-
-
-_BACKGROUND_RESUMES: dict[int, BackgroundResume] = {}
-
-
-class TargetLeaseUnavailable(RuntimeError):
-    """Another queue is already delivering a callback to the same target."""
 
 
 def build_prompt(
@@ -189,21 +166,6 @@ def request_agent(request: dict[str, object]) -> str:
     if not isinstance(agent, str):
         raise ValueError(f"unsupported request agent: {agent!r}")
     return get_agent(agent).name
-
-
-def claude_command() -> str:
-    return os.environ.get(CLAUDE_BIN_ENV, "claude")
-
-
-def claude_permission_mode(request: dict[str, object]) -> str:
-    value = request.get("permission_mode")
-    if isinstance(value, str) and value:
-        return value
-    return os.environ.get(CLAUDE_PERMISSION_MODE_ENV, DEFAULT_CLAUDE_PERMISSION_MODE)
-
-
-def codex_command() -> str:
-    return os.environ.get("ATC_CODEX_BIN", "codex")
 
 
 def systemd_user_dir() -> Path:
@@ -332,7 +294,7 @@ def systemd_service_text(args: argparse.Namespace) -> str:
             f"Environment={systemd_quote(f'{CLAUDE_BIN_ENV}={claude_bin}')}",
             f"Environment={systemd_quote(f'{PI_BIN_ENV}={pi_bin}')}",
             f"Environment={systemd_quote(f'{SCREEN_BIN_ENV}={screen_bin}')}",
-            f"Environment={systemd_quote(f'{DESKTOP_APP_SERVER_ENV}=1')}",
+            f"Environment={systemd_quote(f'{app_server.DESKTOP_APP_SERVER_ENV}=1')}",
             f"Environment={systemd_quote(f'{PROXY_ENV_FILE_ENV}={layout.service_proxy_env_path()}')}",
             f"Environment={systemd_quote(f'{layout.ATC_HOME_ENV}={layout.daemon_state_dir().resolve()}')}",
             f"EnvironmentFile=-{layout.service_proxy_env_path()}",
@@ -362,7 +324,7 @@ def daemon_arguments(args: argparse.Namespace) -> list[str]:
         "--retry-backoff",
         str(args.retry_backoff),
         "--resume-timeout",
-        str(getattr(args, "resume_timeout", DEFAULT_RESUME_TIMEOUT)),
+        str(getattr(args, "resume_timeout", delivery_engine.DEFAULT_RESUME_TIMEOUT)),
     ]
     if args.queue_dir:
         command.extend(["--queue-dir", str(Path(args.queue_dir).expanduser())])
@@ -604,37 +566,6 @@ def enqueue_request(args: argparse.Namespace, prompt: str) -> int:
     return result
 
 
-def agent_environment(agent: str) -> dict[str, str]:
-    """Environment for building an agent command; Claude's binary is located on demand."""
-    if agent == "claude":
-        return claude_code.with_resolved_executable(os.environ, which=shutil.which)
-    return dict(os.environ)
-
-
-def resume_command(request: dict[str, object]) -> list[str]:
-    agent = request_agent(request)
-    return get_agent(agent).resume_command(request, agent_environment(agent))
-
-
-def resume_cwd(request: dict[str, object]) -> str:
-    """Claude looks sessions up by their starting directory, not the task's."""
-    if request_agent(request) == "claude":
-        session_cwd = claude_code.resume_cwd(request, os.environ)
-        if session_cwd:
-            return session_cwd
-    return str(request["cwd"])
-
-
-def codex_resume_command(request: dict[str, object]) -> list[str]:
-    """Compatibility entrypoint for callers that explicitly request Codex."""
-    return get_agent("codex").resume_command(request, os.environ)
-
-
-def claude_resume_command(request: dict[str, object]) -> list[str]:
-    """Compatibility entrypoint for callers that explicitly request Claude."""
-    return get_agent("claude").resume_command(request, os.environ)
-
-
 def queue_callback(args: argparse.Namespace, prompt: str) -> int:
     """Persist callback delivery; only the daemon may resume an agent."""
     if not args.dry_run:
@@ -846,7 +777,7 @@ def load_request(path: Path) -> dict[str, object]:
         pi_callback.validate_route(data)
     if data.get("version") == 4 and data.get("pi_delivery") != "steer":
         raise ValueError("version 4 callback requires explicit Pi steer delivery")
-    resume_command(data)
+    delivery_engine.resume_command(data)
     return data
 
 
@@ -877,1144 +808,6 @@ def build_acknowledgement_text(command: str, agent: str = "codex") -> str:
              if agent == "pi" else "The wakeup daemon will retry this callback until the acknowledgement marker exists or retries are exhausted."),
         ]
     )
-
-
-def next_attempt_at(path: Path) -> float:
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
-        return 0.0
-    value = data.get("next_attempt_at") if isinstance(data, dict) else None
-    return float(value) if isinstance(value, (int, float)) else 0.0
-
-
-def callback_target_key(request: dict[str, object]) -> str | None:
-    target = request.get("target")
-    if not isinstance(target, dict):
-        return None
-    kind = target.get("kind")
-    value = target.get("value")
-    if kind == "session" and isinstance(value, str) and value:
-        if request_agent(request) == "pi":
-            value = pi_callback.canonical_session(value)
-        return f"session:{value}"
-    if kind == "last":
-        return "last"
-    return None
-
-
-def target_lock_path(request: dict[str, object]) -> Path | None:
-    key = callback_target_key(request)
-    if key is None:
-        return None
-    digest = hashlib.sha256(key.encode("utf-8")).hexdigest()
-    return layout.target_lock_dir() / f"{digest}.lock"
-
-
-def retained_target_lease_path(request: dict[str, object]) -> Path | None:
-    path = target_lock_path(request)
-    if path is None:
-        return None
-    return path.with_suffix(".retained.json")
-
-
-def retained_target_lease_lock_path(request: dict[str, object]) -> Path | None:
-    path = target_lock_path(request)
-    if path is None:
-        return None
-    return path.with_suffix(".retained.lock")
-
-
-def acquire_retained_target_lease_lock(
-    request: dict[str, object],
-    *,
-    blocking: bool,
-) -> tuple[object, Path] | None:
-    path = retained_target_lease_lock_path(request)
-    if path is None:
-        return None
-    return queue_store.acquire_path_lock(path, blocking=blocking)
-
-
-def retained_target_lease_is_held(request: dict[str, object]) -> bool:
-    path = retained_target_lease_path(request)
-    if path is None or not path.exists():
-        return False
-    lock = acquire_retained_target_lease_lock(request, blocking=False)
-    if lock is None:
-        return True
-    try:
-        if not path.exists():
-            return False
-        try:
-            record = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            return True
-        if not isinstance(record, dict):
-            return True
-        request_id = record.get("request_id")
-        queue_root = record.get("queue_dir")
-        if not isinstance(request_id, str) or not isinstance(queue_root, str) or not queue_root:
-            return True
-        root = Path(queue_root)
-        if not layout.ack_path(root, request_id).exists() and not layout.request_path(root, "canceled", request_id).exists():
-            return True
-        try:
-            path.unlink()
-            queue_store.fsync_directory(path.parent)
-        except OSError:
-            return True
-        return False
-    finally:
-        queue_store.release_owner_lock(lock, remove=False)
-
-
-def retain_target_lease(root: Path, request: dict[str, object]) -> None:
-    """Persist a cross-queue recovery lease while the target flock is held."""
-    path = retained_target_lease_path(request)
-    request_id = request.get("id")
-    if path is None or not isinstance(request_id, str) or not request_id:
-        raise ValueError("manual recovery requires a session target and request id")
-    record = {
-        "version": 1,
-        "request_id": request_id,
-        "queue_dir": str(root.resolve()),
-        "recorded_at": time.time(),
-    }
-    lock = acquire_retained_target_lease_lock(request, blocking=True)
-    if lock is None:  # pragma: no cover - blocking lock acquisition always succeeds
-        raise RuntimeError(f"could not lock retained target lease: {path}")
-    try:
-        if path.exists():
-            try:
-                existing = json.loads(path.read_text(encoding="utf-8"))
-            except (OSError, json.JSONDecodeError) as exc:
-                raise RuntimeError(f"retained target lease is unreadable: {path}") from exc
-            if not isinstance(existing, dict) or (
-                existing.get("request_id") != request_id
-                or existing.get("queue_dir") != str(root.resolve())
-            ):
-                raise RuntimeError(f"retained target lease already exists: {path}")
-            return
-        queue_store.write_request(path, record)
-    finally:
-        queue_store.release_owner_lock(lock, remove=False)
-
-
-def release_retained_target_lease(root: Path, request: dict[str, object]) -> None:
-    """Release only the cross-queue recovery lease owned by this callback."""
-    path = retained_target_lease_path(request)
-    request_id = request.get("id")
-    if path is None or not isinstance(request_id, str):
-        return
-    # Ordinary ACKs have no retained lease. Avoid creating a target-lock file
-    # from inside the resumed agent sandbox just to discover that fact.
-    if not path.exists():
-        return
-    lock = acquire_retained_target_lease_lock(request, blocking=True)
-    if lock is None:  # pragma: no cover - blocking lock acquisition always succeeds
-        raise RuntimeError(f"could not lock retained target lease: {path}")
-    try:
-        try:
-            record = json.loads(path.read_text(encoding="utf-8"))
-        except FileNotFoundError:
-            return
-        except (OSError, json.JSONDecodeError) as exc:
-            raise RuntimeError(f"retained target lease is unreadable: {path}") from exc
-        if not isinstance(record, dict):
-            raise RuntimeError(f"retained target lease is malformed: {path}")
-        if record.get("request_id") != request_id or record.get("queue_dir") != str(root.resolve()):
-            return
-        path.unlink()
-        queue_store.fsync_directory(path.parent)
-    finally:
-        queue_store.release_owner_lock(lock, remove=False)
-
-
-def reconcile_acknowledged_retained_leases(root: Path) -> None:
-    """Let the daemon release leases when a sandboxed ACK cannot write target-locks."""
-    for state in ("running", "failed", "done", "canceled"):
-        for path in sorted((root / state).glob("*.json")):
-            request_id = path.stem
-            if not layout.ack_path(root, request_id).exists() and not layout.request_path(root, "canceled", request_id).exists():
-                continue
-            try:
-                request = load_request(path)
-                release_retained_target_lease(root, request)
-            except (OSError, RuntimeError) as exc:
-                print(
-                    f"atc: warning: deferred retained target lease reconciliation "
-                    f"for {request_id}: {exc}",
-                    file=sys.stderr,
-                )
-
-
-def acquire_target_lock(
-    request: dict[str, object],
-    *,
-    blocking: bool,
-) -> tuple[object, Path] | None:
-    path = target_lock_path(request)
-    if path is None:
-        return None
-    return queue_store.acquire_path_lock(path, blocking=blocking)
-
-
-def target_lock_is_held(request: dict[str, object]) -> bool:
-    path = target_lock_path(request)
-    if path is None:
-        return False
-    if not path.exists():
-        return False
-    lock = queue_store.acquire_path_lock(path, blocking=False)
-    if lock is None:
-        return True
-    queue_store.release_owner_lock(lock, remove=False)
-    return False
-
-
-def reap_background_resumes() -> None:
-    now = time.monotonic()
-    for pid, delivery in list(_BACKGROUND_RESUMES.items()):
-        if delivery.process.poll() is not None:
-            finish_delivery_worker(delivery.process)
-            _BACKGROUND_RESUMES.pop(pid, None)
-            continue
-        if now >= delivery.deadline:
-            print(
-                f"atc: warning: acknowledged resume {delivery.request_id} "
-                "exceeded its timeout; terminating the resume process",
-                file=sys.stderr,
-            )
-            stop_resume_process(delivery.process)
-            _BACKGROUND_RESUMES.pop(pid, None)
-
-
-def target_has_live_resume(root: Path, request: dict[str, object]) -> bool:
-    reap_background_resumes()
-    key = callback_target_key(request)
-    if key is None:
-        return False
-    if target_lock_is_held(request):
-        return True
-    if retained_target_lease_is_held(request):
-        return True
-    if any(delivery.target_key == key for delivery in _BACKGROUND_RESUMES.values()):
-        return True
-    for state in ("running", "canceled", "failed"):
-        for path in (root / state).glob("*.json"):
-            try:
-                live_request = json.loads(path.read_text(encoding="utf-8"))
-            except Exception:
-                continue
-            if (
-                isinstance(live_request, dict)
-                and callback_target_key(live_request) == key
-                and (
-                    (state == "failed" and live_request.get("retain_target_lease") is True)
-                    or queue_store.delivery_lock_is_held(root, path.stem)
-                )
-            ):
-                return True
-    return False
-
-
-def select_pending(root: Path, now: float) -> Path | None:
-    for path in sorted((root / "pending").glob("*.json")):
-        if next_attempt_at(path) > now:
-            continue
-        try:
-            request = json.loads(path.read_text(encoding="utf-8"))
-        except Exception:
-            return path
-        if isinstance(request, dict) and (request.get("callback_mode") == "manual"
-                                         or target_has_live_resume(root, request)
-                                         or claude_code.live_watcher_is_held(request)):
-            continue
-        return path
-    return None
-
-
-def retry_delay(args: argparse.Namespace, attempt: int) -> float:
-    delay = max(0.0, float(getattr(args, "retry_delay", DEFAULT_RETRY_DELAY)))
-    backoff = max(1.0, float(getattr(args, "retry_backoff", DEFAULT_RETRY_BACKOFF)))
-    return delay * (backoff ** max(0, attempt - 1))
-
-
-def terminate_process_group(process: subprocess.Popen[str], grace: float = 5.0) -> None:
-    if os.name == "nt":
-        # Delivery workers own kill-on-close Jobs before launching an Agent.
-        # Terminating that worker closes its final handle and its entire tree.
-        process.terminate()
-        try:
-            process.wait(timeout=grace)
-        except subprocess.TimeoutExpired:
-            process.kill()
-            process.wait()
-        return
-    if process.poll() is not None:
-        process.wait()
-        return
-    try:
-        os.killpg(process.pid, signal.SIGTERM)
-    except ProcessLookupError:
-        process.wait()
-        return
-    try:
-        process.wait(timeout=grace)
-    except subprocess.TimeoutExpired:
-        try:
-            os.killpg(process.pid, signal.SIGKILL)
-        except ProcessLookupError:
-            pass
-        process.wait()
-
-
-class AppServerProtocolError(RuntimeError):
-    """The local Codex App Server did not accept a desktop callback."""
-
-
-class AppServerTimeout(AppServerProtocolError):
-    """The local Codex App Server did not respond before the deadline."""
-
-
-class AppServerRpcError(AppServerProtocolError):
-    """The local Codex App Server explicitly rejected a JSON-RPC request."""
-
-
-class CallbackTransportBlocked(AppServerProtocolError):
-    """Definite pre-submission failure requiring route repair, not blind retry."""
-
-
-class CallbackTargetBusy(RuntimeError):
-    """The correct Core still has an active turn; wait without consuming a retry."""
-
-
-def desktop_app_server_socket(request: dict[str, object]) -> Path | BridgeEndpoint | UnixBridgeEndpoint | None:
-    target = request.get("target")
-    if DESKTOP_APP_SERVER_ENV in os.environ and not commands.truthy_env(DESKTOP_APP_SERVER_ENV):
-        if request.get("callback_mode") == "desktop":
-            raise CallbackTransportBlocked("Desktop App Server delivery is explicitly disabled")
-        return None
-    if (
-        request.get("callback_mode") == "manual"
-        or (not commands.truthy_env(DESKTOP_APP_SERVER_ENV) and request.get("callback_mode") not in ("cli", "desktop"))
-        or not isinstance(target, dict)
-        or target.get("kind") != "session"
-        or not isinstance(target.get("value"), str)
-        or not target["value"]
-    ):
-        return None
-    configured_bridge = (request.get("callback_bridge_file") or os.environ.get(APP_SERVER_BRIDGE_FILE_ENV)
-                         if request.get("callback_mode") != "cli" else None)
-    if request.get("callback_mode") == "desktop" and sys.platform in ("darwin", "win32") and not configured_bridge:
-        raise CallbackTransportBlocked("Desktop callbacks require an explicitly configured shared Core")
-    if sys.platform == "darwin" and configured_bridge:
-        return load_unix_bridge_endpoint(Path(str(configured_bridge)).expanduser(), layout.codex_home())
-    if os.name == "nt":
-        if not configured_bridge:
-            return None
-        return load_bridge_endpoint(Path(configured_bridge).expanduser(), layout.codex_home())
-    configured = os.environ.get(APP_SERVER_SOCKET_ENV)
-    if configured and commands.truthy_env(ALLOW_APP_SERVER_SOCKET_OVERRIDE_ENV):
-        return Path(configured).expanduser()
-    return layout.codex_home() / "app-server-control" / "app-server-control.sock"
-
-
-def desktop_sandbox_policy(request: dict[str, object]) -> dict[str, object] | None:
-    if request.get("sandbox_mode") != "workspace-write":
-        return None
-    queue_root = request.get("queue_dir")
-    if not isinstance(queue_root, str) or not queue_root:
-        return None
-    root = Path(queue_root).expanduser()
-    if not root.is_absolute():
-        return None
-    return {"type": "workspaceWrite", "writableRoots": [str(root)]}
-
-
-class AppServerConnection:
-    def __init__(self, path: Path | BridgeEndpoint | UnixBridgeEndpoint, timeout: float) -> None:
-        self.path = path
-        self.timeout = timeout
-        self.socket: socket.socket | None = None
-        self.buffer = b""
-        self.fragment: bytearray | None = None
-        self.request_id = 0
-        self.notifications: list[dict[str, object]] = []
-
-    def connect(self) -> None:
-        deadline = time.monotonic() + self.timeout
-        if isinstance(self.path, BridgeEndpoint):
-            connection = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        else:
-            unix_path = self.path.path if isinstance(self.path, UnixBridgeEndpoint) else self.path
-            if not unix_path.is_socket():
-                raise AppServerProtocolError(f"control socket unavailable at {self.path}")
-            connection = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        try:
-            connection.settimeout(max(0.1, deadline - time.monotonic()))
-            if isinstance(self.path, BridgeEndpoint):
-                from .system.windows_tcp import verify_loopback_peer
-                connection.connect(("127.0.0.1", self.path.port))
-                verify_loopback_peer(connection, expected_pid=self.path.pid,
-                                     expected_identity=self.path.identity)
-                host = f"127.0.0.1:{self.path.port}"
-            else:
-                connection.connect(str(unix_path))
-                self._verify_peer_uid(connection)
-                if isinstance(self.path, UnixBridgeEndpoint):
-                    # Darwin SOL_LOCAL / LOCAL_PEERPID, from sys/un.h.
-                    peer_pid = connection.getsockopt(0, 2)
-                    if (peer_pid != self.path.pid
-                            or macos_platform.process_identity(peer_pid) != self.path.identity):
-                        raise AppServerProtocolError("Desktop socket peer identity changed")
-                host = "localhost"
-            key = base64.b64encode(secrets.token_bytes(16)).decode("ascii")
-            request = (
-                "GET / HTTP/1.1\r\n"
-                f"Host: {host}\r\n"
-                "Upgrade: websocket\r\n"
-                "Connection: Upgrade\r\n"
-                f"Sec-WebSocket-Key: {key}\r\n"
-                "Sec-WebSocket-Version: 13\r\n\r\n"
-            )
-            connection.sendall(request.encode("ascii"))
-            self.socket = connection
-            header = self._read_headers(deadline)
-            lines = header.decode("iso-8859-1").split("\r\n")
-            expected_accept = base64.b64encode(
-                hashlib.sha1(f"{key}258EAFA5-E914-47DA-95CA-C5AB0DC85B11".encode("ascii")).digest()
-            ).decode("ascii")
-            headers = {
-                name.strip().lower(): value.strip()
-                for line in lines[1:]
-                if ":" in line
-                for name, value in [line.split(":", 1)]
-            }
-            if (
-                not lines
-                or lines[0] != "HTTP/1.1 101 Switching Protocols"
-                or headers.get("sec-websocket-accept") != expected_accept
-                or not self._header_has_token(headers, "connection", "upgrade")
-                or not self._header_has_token(headers, "upgrade", "websocket")
-            ):
-                raise AppServerProtocolError("control socket rejected WebSocket upgrade")
-        except BaseException:
-            connection.close()
-            self.socket = None
-            raise
-
-    def close(self) -> None:
-        if self.socket is not None:
-            self.socket.close()
-            self.socket = None
-        self.buffer = b""
-        self.fragment = None
-
-    def request(self, method: str, params: dict[str, object]) -> object:
-        self.request_id += 1
-        request_id = self.request_id
-        self._send_frame(0x1, json.dumps({"id": request_id, "method": method, "params": params}))
-        deadline = time.monotonic() + self.timeout
-        while True:
-            response = self._receive_json(deadline)
-            if "method" in response:
-                self.notifications.append(response)
-                continue
-            if response.get("id") != request_id:
-                raise AppServerProtocolError("control socket returned an unexpected response id")
-            if "error" in response:
-                raise AppServerRpcError(f"App Server {method} error: {response['error']}")
-            if "result" not in response:
-                raise AppServerProtocolError(f"App Server {method} returned no result")
-            return response["result"]
-
-    def notify(self, method: str, params: dict[str, object]) -> None:
-        self._send_frame(0x1, json.dumps({"method": method, "params": params}))
-
-    def wait_for_turn_completion(self, thread_id: str, turn_id: str, timeout: float) -> bool:
-        deadline = time.monotonic() + timeout
-        while True:
-            if self.notifications:
-                message = self.notifications.pop(0)
-            else:
-                try:
-                    message = self._receive_json(deadline)
-                except AppServerTimeout:
-                    return False
-            params = message.get("params")
-            if (
-                message.get("method") == "turn/completed"
-                and isinstance(params, dict)
-                and params.get("threadId") == thread_id
-                and isinstance(params.get("turn"), dict)
-                and params["turn"].get("id") == turn_id
-            ):
-                return True
-
-    @staticmethod
-    def _header_has_token(headers: dict[str, str], name: str, expected: str) -> bool:
-        return expected in {token.strip().lower() for token in headers.get(name, "").split(",")}
-
-    @staticmethod
-    def _verify_peer_uid(connection: socket.socket) -> None:
-        try:
-            if sys.platform == "darwin":
-                peer_uid = macos_platform.peer_uid(connection.fileno())
-            elif hasattr(socket, "SO_PEERCRED"):
-                credentials = connection.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, struct.calcsize("3i"))
-                _peer_pid, peer_uid, _peer_gid = struct.unpack("3i", credentials)
-            else:
-                raise AppServerProtocolError("control-socket peer verification is unsupported on this platform")
-        except OSError as exc:
-            raise AppServerProtocolError(f"could not verify control-socket peer: {exc}") from exc
-        if peer_uid != os.geteuid():
-            raise AppServerProtocolError("control socket peer does not belong to this user")
-
-    def _read_headers(self, deadline: float) -> bytes:
-        while b"\r\n\r\n" not in self.buffer:
-            if len(self.buffer) >= 65_536:
-                raise AppServerProtocolError("control socket response headers exceed 64 KiB")
-            self.buffer += self._receive_bytes(4096, deadline)
-        header, self.buffer = self.buffer.split(b"\r\n\r\n", 1)
-        return header
-
-    def _receive_json(self, deadline: float) -> dict[str, object]:
-        opcode, payload = self._receive_message(deadline)
-        if opcode == 0x8:
-            raise AppServerProtocolError("control socket closed during request")
-        if opcode != 0x1:
-            raise AppServerProtocolError("control socket sent a non-text message")
-        try:
-            message = json.loads(payload.decode("utf-8"))
-        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-            raise AppServerProtocolError(f"invalid control-socket response: {exc}") from exc
-        if not isinstance(message, dict):
-            raise AppServerProtocolError("control socket response was not a JSON object")
-        if "method" in message and not isinstance(message["method"], str):
-            raise AppServerProtocolError("control socket notification method was not a string")
-        if "id" not in message and "method" not in message:
-            raise AppServerProtocolError("control socket response had neither id nor method")
-        return message
-
-    def _receive_message(self, deadline: float) -> tuple[int, bytes]:
-        # Both frame and message state must survive short completion polls.
-        while True:
-            final, opcode, payload = self._receive_frame(deadline)
-            if opcode in (0x9, 0xA):
-                if opcode == 0x9:
-                    self._send_frame(0xA, payload)
-                continue
-            if opcode == 0x8:
-                self.fragment = None
-                return opcode, payload
-            if self.fragment is None:
-                if opcode == 0x0:
-                    raise AppServerProtocolError("control socket sent an unexpected continuation")
-                if final:
-                    return opcode, payload
-                if opcode != 0x1:
-                    raise AppServerProtocolError("control socket started an unsupported fragmented message")
-                self.fragment = bytearray(payload)
-                continue
-            if opcode != 0x0:
-                raise AppServerProtocolError("control socket interrupted a fragmented message")
-            if len(self.fragment) + len(payload) > 1_048_576:
-                raise AppServerProtocolError("control socket message exceeds 1 MiB")
-            self.fragment.extend(payload)
-            if final:
-                message = bytes(self.fragment)
-                self.fragment = None
-                return 0x1, message
-
-    def _receive_frame(self, deadline: float) -> tuple[bool, int, bytes]:
-        header = self._peek_exact(2, deadline)
-        final = bool(header[0] & 0x80)
-        if header[0] & 0x70:
-            raise AppServerProtocolError("control socket frame used unsupported RSV bits")
-        opcode = header[0] & 0x0F
-        masked = bool(header[1] & 0x80)
-        length = header[1] & 0x7F
-        offset = 2
-        if length == 126:
-            length = struct.unpack("!H", self._peek_exact(4, deadline)[2:4])[0]
-            offset = 4
-        elif length == 127:
-            length = struct.unpack("!Q", self._peek_exact(10, deadline)[2:10])[0]
-            offset = 10
-        if opcode >= 0x8 and (not final or length > 125):
-            raise AppServerProtocolError("control socket sent an invalid control frame")
-        if length > 1_048_576:
-            raise AppServerProtocolError("control socket frame exceeds 1 MiB")
-        # RFC 6455 servers normally send unmasked frames. Some Codex Desktop
-        # App Server control-socket versions have emitted masked frames,
-        # however. The peer is a same-UID Unix socket verified during connect,
-        # so decode those frames for local compatibility instead of stranding
-        # a successfully started callback turn.
-        mask_size = 4 if masked else 0
-        frame = self._peek_exact(offset + mask_size + length, deadline)
-        mask = frame[offset:offset + mask_size] if masked else None
-        payload = frame[offset + mask_size:]
-        self.buffer = self.buffer[len(frame):]
-        if mask is not None:
-            payload = bytes(value ^ mask[index % 4] for index, value in enumerate(payload))
-        return final, opcode, payload
-
-    def _send_frame(self, opcode: int, text: str | bytes) -> None:
-        if self.socket is None:
-            raise AppServerProtocolError("control socket is not connected")
-        payload = text.encode("utf-8") if isinstance(text, str) else text
-        if len(payload) > 1_048_576:
-            raise AppServerProtocolError("control socket request exceeds 1 MiB")
-        if len(payload) < 126:
-            header = bytes([0x80 | opcode, 0x80 | len(payload)])
-        elif len(payload) <= 0xFFFF:
-            header = bytes([0x80 | opcode, 0x80 | 126]) + struct.pack("!H", len(payload))
-        else:
-            header = bytes([0x80 | opcode, 0x80 | 127]) + struct.pack("!Q", len(payload))
-        mask = secrets.token_bytes(4)
-        encoded = bytes(value ^ mask[index % 4] for index, value in enumerate(payload))
-        self.socket.sendall(header + mask + encoded)
-
-    def _read_exact(self, size: int, deadline: float) -> bytes:
-        value = self._peek_exact(size, deadline)
-        self.buffer = self.buffer[size:]
-        return value
-
-    def _peek_exact(self, size: int, deadline: float) -> bytes:
-        while len(self.buffer) < size:
-            self.buffer += self._receive_bytes(size - len(self.buffer), deadline)
-        return self.buffer[:size]
-
-    def _receive_bytes(self, size: int, deadline: float) -> bytes:
-        if self.socket is None:
-            raise AppServerProtocolError("control socket is not connected")
-        remaining = deadline - time.monotonic()
-        if remaining <= 0:
-            raise AppServerTimeout("control socket request timed out")
-        self.socket.settimeout(remaining)
-        try:
-            value = self.socket.recv(size)
-        except socket.timeout as exc:
-            raise AppServerTimeout("control socket request timed out") from exc
-        except OSError as exc:
-            raise AppServerProtocolError(f"control socket read failed: {exc}") from exc
-        if not value:
-            raise AppServerProtocolError("control socket closed unexpectedly")
-        return value
-
-
-class DesktopAppServerDelivery:
-    def __init__(self, connection: AppServerConnection | None, thread_id: str, turn_id: str | None) -> None:
-        self.connection = connection
-        self.thread_id = thread_id
-        self.turn_id = turn_id
-
-    def wait_for_completion(self, timeout: float) -> bool:
-        if self.connection is None or self.turn_id is None:
-            time.sleep(timeout)
-            return False
-        try:
-            return self.connection.wait_for_turn_completion(self.thread_id, self.turn_id, timeout)
-        except AppServerProtocolError as exc:
-            print(
-                f"atc: desktop App Server completion stream unavailable: {exc}; "
-                "waiting for ACK or timeout",
-                file=sys.stderr,
-            )
-            self.close()
-            return False
-
-    def close(self) -> None:
-        if self.connection is not None:
-            self.connection.close()
-            self.connection = None
-
-
-def desktop_delivery_context(payload: dict[str, object]) -> tuple[Path, dict[str, object]] | None:
-    """Return the durable queue identity supplied by a real delivery worker."""
-    request = payload.get("request")
-    root = payload.get("queue_dir")
-    if (isinstance(request, dict) and isinstance(request.get("id"), str)
-            and isinstance(root, str) and root):
-        return Path(root), request
-    return None
-
-
-def desktop_submission_pending(root: Path, request: dict[str, object]) -> bool:
-    """Recognize this callback's durable submission intent after worker loss.
-
-    A parent timeout or process crash can preempt the worker before it writes
-    its final JSON result. The pre-submission lease is then authoritative, not
-    the worker's OS exit code. Unreadable intent remains uncertain.
-    """
-    path = retained_target_lease_path(request)
-    if path is None:
-        return False
-    try:
-        record = json.loads(path.read_text(encoding="utf-8"))
-    except FileNotFoundError:
-        return False
-    except (OSError, ValueError):
-        return True
-    if not isinstance(record, dict):
-        return True
-    return (record.get("request_id") == request.get("id")
-            and record.get("queue_dir") == str(root.resolve()))
-
-
-def start_desktop_app_server_turn(payload: dict[str, object]) -> DesktopAppServerDelivery | None:
-    request = payload.get("request")
-    if not isinstance(request, dict):
-        return None
-    if request.get("callback_mode") == "manual":
-        raise CallbackTransportBlocked("manual callback mode does not launch an Agent")
-    if request_agent(request) != "codex":
-        return None  # The Desktop App Server delivery path is Codex-only.
-    try:
-        socket_path = desktop_app_server_socket(request)
-    except (OSError, ValueError) as exc:
-        if request.get("callback_mode") == "desktop":
-            raise CallbackTransportBlocked("configured Desktop bridge is unavailable; inspect and retry this callback only") from exc
-        raise
-    target = request.get("target")
-    sandbox_policy = desktop_sandbox_policy(request)
-    explicit_desktop = request.get("callback_mode") == "desktop" or isinstance(socket_path, (BridgeEndpoint, UnixBridgeEndpoint))
-    if socket_path is None or sandbox_policy is None or not isinstance(target, dict) or not isinstance(target.get("value"), str):
-        if explicit_desktop:
-            raise CallbackTransportBlocked("Desktop callbacks require a bound session, shared Core and workspace-write callback policy")
-        return None
-    connection = AppServerConnection(socket_path, min(15.0, max(1.0, float(payload["timeout"]))))
-    delivery_context = desktop_delivery_context(payload)
-    turn_start_submitted = False
-    try:
-        connection.connect()
-        connection.request(
-            "initialize",
-            {
-                "clientInfo": {"name": "agent-atc", "version": __version__},
-                "capabilities": {"experimentalApi": True},
-            },
-        )
-        connection.notify("initialized", {})
-        resumed = connection.request("thread/resume", {"threadId": target["value"], "excludeTurns": True})
-        thread = resumed.get("thread") if isinstance(resumed, dict) else None
-        status = thread.get("status") if isinstance(thread, dict) else None
-        if isinstance(status, dict) and status.get("type") == "active":
-            raise CallbackTargetBusy("original session still has an active turn")
-        turn_params: dict[str, object] = {
-            "threadId": target["value"],
-            "cwd": str(payload["cwd"]),
-            "input": [{"type": "text", "text": str(payload["prompt"])}],
-            "sandboxPolicy": sandbox_policy,
-        }
-        approval_policy = request.get("approval_policy")
-        if isinstance(approval_policy, str) and approval_policy:
-            turn_params["approvalPolicy"] = approval_policy
-        approvals_reviewer = request.get("approvals_reviewer")
-        if isinstance(approvals_reviewer, str) and approvals_reviewer:
-            turn_params["approvalsReviewer"] = approvals_reviewer
-        if delivery_context is not None:
-            root, callback = delivery_context
-            # The parent deadline begins before this worker's startup and RPC
-            # handshake. Persist before sending any turn/start bytes so an
-            # earlier parent timeout or worker crash cannot authorize replay.
-            retain_target_lease(root, callback)
-            if layout.ack_path(root, str(callback["id"])).exists() or queue_store.is_canceled(root, str(callback["id"])):
-                try:
-                    release_retained_target_lease(root, callback)
-                except (OSError, RuntimeError) as cleanup_error:
-                    # ACK/cancel is authoritative even when global cleanup is
-                    # unavailable. Do not fall through to another transport.
-                    print(f"atc: acknowledged/canceled Desktop intent cleanup deferred: {cleanup_error}", file=sys.stderr)
-                return DesktopAppServerDelivery(None, target["value"], None)
-        turn_start_submitted = True
-        started = connection.request("turn/start", turn_params)
-        turn_id = None
-        if isinstance(started, dict) and isinstance(started.get("turn"), dict):
-            candidate = started["turn"].get("id")
-            turn_id = candidate if isinstance(candidate, str) and candidate else None
-        if turn_id is None:
-            print(
-                "atc: desktop App Server accepted turn/start without a turn id; "
-                "waiting for ACK or timeout",
-                file=sys.stderr,
-            )
-            connection.close()
-            return DesktopAppServerDelivery(None, target["value"], None)
-        delivery = DesktopAppServerDelivery(connection, target["value"], turn_id)
-        connection = None
-        return delivery
-    except AppServerRpcError as exc:
-        if not turn_start_submitted and "already has an active writer" in str(exc):
-            raise CallbackTransportBlocked("bound session belongs to another Core; repair the connection before retrying") from exc
-        if turn_start_submitted:
-            if delivery_context is not None:
-                try:
-                    release_retained_target_lease(*delivery_context)
-                except (OSError, RuntimeError) as cleanup_error:
-                    print(
-                        f"atc: explicit Desktop rejection could not clear submission intent: {cleanup_error}; "
-                        "waiting for ACK or manual recovery without CLI fallback",
-                        file=sys.stderr,
-                    )
-                    return DesktopAppServerDelivery(None, target["value"], None)
-            if explicit_desktop:
-                raise CallbackTransportBlocked("explicit Desktop bridge rejected the callback; CLI fallback disabled") from exc
-            print(
-                f"atc: desktop App Server rejected turn/start: {exc}; falling back to CLI",
-                file=sys.stderr,
-            )
-        else:
-            if explicit_desktop:
-                raise CallbackTransportBlocked("explicit Desktop bridge could not resume the bound session; CLI fallback disabled") from exc
-            print(f"atc: desktop App Server delivery unavailable: {exc}; falling back to CLI", file=sys.stderr)
-        return None
-    except (OSError, ValueError, TypeError, AppServerProtocolError) as exc:
-        if turn_start_submitted:
-            print(
-                f"atc: desktop App Server turn/start outcome is unknown: {exc}; "
-                "waiting for ACK or timeout without CLI fallback",
-                file=sys.stderr,
-            )
-            return DesktopAppServerDelivery(None, target["value"], None)
-        if explicit_desktop:
-            raise CallbackTransportBlocked("explicit Desktop bridge is unavailable; CLI fallback disabled") from exc
-        print(f"atc: desktop App Server delivery unavailable: {exc}; falling back to CLI", file=sys.stderr)
-        return None
-    finally:
-        if connection is not None:
-            connection.close()
-
-
-def wait_for_remote_delivery(payload: dict, delivery, timeout: float) -> dict:
-    """Wait for native delivery without starting or killing its owner."""
-    delivery_context = desktop_delivery_context(payload)
-    delivery_name = "pi_live_session" if isinstance(delivery, pi_callback.PiDelivery) else "desktop_app_server"
-    deadline = time.monotonic() + timeout
-    while True:
-        acknowledged = Path(str(payload["ack_path"])).exists()
-        canceled = Path(str(payload["canceled_path"])).exists()
-        if acknowledged:
-            if delivery_context is not None:
-                release_retained_target_lease(*delivery_context)
-            result = {
-                "returncode": 0,
-                "delivery": delivery_name,
-                "skipped": "acknowledged",
-            }
-            break
-        if canceled:
-            if delivery_context is not None:
-                release_retained_target_lease(*delivery_context)
-            result = {"returncode": 0, "delivery": delivery_name, "skipped": "canceled"}
-            break
-        remaining = deadline - time.monotonic()
-        if remaining <= 0:
-            request = payload.get("request")
-            queue_root = payload.get("queue_dir")
-            if isinstance(request, dict) and isinstance(queue_root, str):
-                retain_target_lease(Path(queue_root), request)
-                if Path(str(payload["ack_path"])).exists() or Path(str(payload["canceled_path"])).exists():
-                    release_retained_target_lease(Path(queue_root), request)
-                    result = {
-                        "returncode": 0,
-                        "delivery": delivery_name,
-                        "skipped": "acknowledged_or_canceled_after_timeout",
-                    }
-                    break
-            result = {
-                "returncode": 125,
-                "timed_out": True,
-                "delivery": delivery_name,
-                "manual_recovery_required": True,
-            }
-            break
-        if delivery.wait_for_completion(min(0.1, remaining)):
-            acknowledged = Path(str(payload["ack_path"])).exists()
-            if delivery_context is not None:
-                # A matching turn/completed is a known outcome. Missing
-                # ACK may use the normal at-least-once callback policy.
-                release_retained_target_lease(*delivery_context)
-            result = {
-                "returncode": 0 if acknowledged else 1,
-                "delivery": delivery_name,
-                "turn_completed": True,
-            }
-            break
-    return result
-
-
-def delivery_worker_main() -> int:
-    """Own one callback delivery and keep its locks out of agent children."""
-    encoded_fds = os.environ.get("CODEX_LONG_TASK_DELIVERY_LOCK_FDS")
-    if os.name == "nt":
-        lock_fds = windows_process.inherited_lock_fds()
-        windows_process.enter_worker_job()
-    elif encoded_fds:
-        lock_fds = [int(value) for value in json.loads(encoded_fds)]
-    else:  # Backward compatibility with delivery workers launched by 0.4.1.
-        lock_fds = [int(os.environ["CODEX_LONG_TASK_DELIVERY_LOCK_FD"])]
-    payload = json.load(sys.stdin)
-    delivery_context = desktop_delivery_context(payload)
-    command = payload["command"]
-    prompt = str(payload["prompt"])
-    # Recheck here as well as in the parent: an ACK/cancel may arrive while the
-    # worker starts. A callback already skipped must not consume a sequence.
-    if not (Path(str(payload["ack_path"])).exists() or Path(str(payload["canceled_path"])).exists()):
-        prompt = select_delivery_prompt(payload)
-    timeout = max(1.0, float(payload["timeout"]))
-    result: dict[str, object] = {"returncode": 127}
-    process: subprocess.Popen[str] | None = None
-    desktop_delivery: DesktopAppServerDelivery | None = None
-    pi_delivery: pi_callback.PiDelivery | None = None
-
-    class WorkerInterrupted(Exception):
-        def __init__(self, signum: int) -> None:
-            self.signum = signum
-
-    def interrupt(signum: int, _frame: object) -> None:
-        raise WorkerInterrupted(signum)
-
-    signal.signal(signal.SIGTERM, interrupt)
-    signal.signal(signal.SIGINT, interrupt)
-    try:
-        if Path(str(payload["ack_path"])).exists():
-            result = {"returncode": 0, "skipped": "already_acknowledged"}
-        elif Path(str(payload["canceled_path"])).exists():
-            result = {"returncode": 0, "skipped": "canceled"}
-        elif (desktop_delivery := start_desktop_app_server_turn(payload)) is not None:
-            result = wait_for_remote_delivery(payload, desktop_delivery, timeout)
-        else:
-            request = payload.get("request")
-            if isinstance(request, dict) and request_agent(request) == "pi":
-                payload["prompt"] = prompt
-                pi_delivery = pi_callback.prepare_delivery(payload)
-                if not pi_delivery.online:
-                    command = pi_delivery.command
-            if pi_delivery is not None and (Path(str(payload["ack_path"])).exists() or Path(str(payload["canceled_path"])).exists()):
-                release_retained_target_lease(*delivery_context)
-                result = {"returncode": 0, "delivery": pi_delivery.delivery_name, "skipped": "acknowledged_or_canceled"}
-            elif pi_delivery is not None and pi_delivery.online:
-                # The live Pi process owns it now; the daemon supervises the ACK
-                # without blocking other callbacks and task launches.
-                result = {"returncode": pi_callback.PUBLISHED_RETURN_CODE, "delivery": pi_delivery.delivery_name}
-            else:
-                process = subprocess.Popen(
-                    commands.process_command([str(part) for part in command]),
-                    env=pi_delivery.environment if pi_delivery is not None else None,
-                    stdin=subprocess.PIPE,
-                    stdout=sys.stderr,
-                    stderr=sys.stderr,
-                    text=True,
-                    encoding="utf-8",
-                    cwd=str(payload["cwd"]),
-                    close_fds=True,
-                    **(windows_process.background_popen_kwargs() if os.name == "nt" else {"start_new_session": True}),
-                )
-                if pi_delivery is not None:
-                    pi_delivery.monitor_owner(process)
-                try:
-                    process.communicate(input=prompt, timeout=timeout)
-                    result = {"returncode": int(process.returncode)}
-                except subprocess.TimeoutExpired:
-                    terminate_process_group(process)
-                    result = {"returncode": 124, "timed_out": True}
-                if pi_delivery is not None:
-                    if Path(str(payload["ack_path"])).exists() or Path(str(payload["canceled_path"])).exists():
-                        release_retained_target_lease(*delivery_context)
-                        result = {"returncode": 0, "delivery": "pi_managed_resume"}
-                    else:
-                        result = {"returncode": 125, "delivery": "pi_managed_resume", "manual_recovery_required": True}
-    except CallbackTargetBusy:
-        result = {"returncode": 123, "delivery_state": "waiting_for_idle"}
-    except CallbackTransportBlocked as exc:
-        print(f"atc: callback blocked: {exc}", file=sys.stderr)
-        result = {"returncode": 126, "delivery_state": "blocked", "error": str(exc)}
-    except WorkerInterrupted as exc:
-        if process is not None:
-            terminate_process_group(process)
-        result = {"returncode": 128 + exc.signum, "interrupted": exc.signum}
-    except BaseException as exc:
-        if process is not None:
-            terminate_process_group(process)
-        result = {"returncode": 127, "error": f"{type(exc).__name__}: {exc}"}
-    finally:
-        if desktop_delivery is not None:
-            desktop_delivery.close()
-        if pi_delivery is not None:
-            pi_delivery.close()
-        # A Windows worker's Job may still be collecting Agent descendants.
-        # Keep its raw lease handles until OS process teardown, not before it.
-        for lock_fd in ([] if os.name == "nt" else lock_fds):
-            try:
-                os.close(lock_fd)
-            except OSError:
-                pass
-
-    try:
-        sys.stdout.write(json.dumps(result, ensure_ascii=False) + "\n")
-        sys.stdout.flush()
-    except BrokenPipeError:
-        pass
-    return 0
-
-
-def delivery_worker_command() -> list[str]:
-    return worker_command("_delivery-worker")
-
-
-def finish_delivery_worker(process: subprocess.Popen[str]) -> int:
-    process.wait()
-    output = ""
-    if process.stdout is not None:
-        output = process.stdout.read()
-        process.stdout.close()
-    for line in reversed(output.splitlines()):
-        try:
-            payload = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        returncode = payload.get("returncode") if isinstance(payload, dict) else None
-        if isinstance(returncode, int):
-            return returncode
-    return process.returncode if process.returncode != 0 else 127
-
-
-def stop_resume_process(process: subprocess.Popen[str]) -> None:
-    if process.poll() is None:
-        try:
-            process.terminate()
-        except ProcessLookupError:
-            pass
-    try:
-        process.wait(timeout=7.0)
-    except subprocess.TimeoutExpired:
-        try:
-            process.kill()
-        except ProcessLookupError:
-            pass
-        process.wait()
-    finish_delivery_worker(process)
-
-
-def run_resume_until_exit_or_ack(
-    root: Path,
-    request_id: str,
-    request: dict[str, object],
-    args: argparse.Namespace,
-) -> tuple[subprocess.CompletedProcess[str] | None, bool, bool]:
-    command = resume_command(request)
-    delivery_lock = queue_store.acquire_owner_lock(root, layout.delivery_lock_id(request_id), blocking=False)
-    if delivery_lock is None:
-        return None, layout.ack_path(root, request_id).exists(), True
-    if layout.ack_path(root, request_id).exists():
-        queue_store.release_owner_lock(delivery_lock, remove=False)
-        return subprocess.CompletedProcess(command, 0), True, False
-    if queue_store.is_canceled(root, request_id):
-        queue_store.release_owner_lock(delivery_lock, remove=False)
-        return None, False, False
-    target_lock = acquire_target_lock(request, blocking=False)
-    if target_lock is None:
-        queue_store.release_owner_lock(delivery_lock, remove=False)
-        raise TargetLeaseUnavailable(callback_target_key(request) or "unknown target")
-    if retained_target_lease_is_held(request):
-        queue_store.release_owner_lock(delivery_lock, remove=False)
-        queue_store.release_owner_lock(target_lock, remove=False)
-        raise TargetLeaseUnavailable(callback_target_key(request) or "unknown target")
-    if layout.ack_path(root, request_id).exists():
-        queue_store.release_owner_lock(delivery_lock, remove=False)
-        queue_store.release_owner_lock(target_lock, remove=False)
-        return subprocess.CompletedProcess(command, 0), True, False
-    if queue_store.is_canceled(root, request_id):
-        queue_store.release_owner_lock(delivery_lock, remove=False)
-        queue_store.release_owner_lock(target_lock, remove=False)
-        return None, False, False
-    delivery_handle, _ = delivery_lock
-    target_handle, _ = target_lock
-    timeout = max(1.0, float(getattr(args, "resume_timeout", DEFAULT_RESUME_TIMEOUT)))
-    deadline = time.monotonic() + timeout
-    payload = {
-        "command": command,
-        "prompt": str(request["prompt"]),
-        "callback_hook_path": str(layout.callback_hook_path()),
-        "cwd": resume_cwd(request),
-        "request": request,
-        "queue_dir": str(root),
-        "timeout": timeout,
-        "ack_path": str(layout.ack_path(root, request_id)),
-        "canceled_path": str(layout.request_path(root, "canceled", request_id)),
-    }
-    env = os.environ.copy()
-    if os.name == "nt":
-        env["PYTHONIOENCODING"] = "utf-8"
-    lock_fds = (delivery_handle.fileno(), target_handle.fileno())
-    env["CODEX_LONG_TASK_DELIVERY_LOCK_FDS"] = json.dumps(lock_fds)
-    env["CODEX_LONG_TASK_DELIVERY_LOCK_FD"] = str(delivery_handle.fileno())
-    try:
-        if os.name == "nt":
-            process = windows_process.spawn_delivery_worker(
-                delivery_worker_command(), lock_fds, env,
-                stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True, encoding="utf-8",
-            )
-        else:
-            process = subprocess.Popen(
-                delivery_worker_command(), stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                text=True, encoding="utf-8", close_fds=True, pass_fds=lock_fds, env=env,
-            )
-    except BaseException:
-        queue_store.release_owner_lock(delivery_lock, remove=False)
-        queue_store.release_owner_lock(target_lock, remove=False)
-        raise
-    queue_store.close_parent_lock_copy(delivery_lock)
-    queue_store.close_parent_lock_copy(target_lock)
-    try:
-        if process.stdin is not None:
-            try:
-                process.stdin.write(json.dumps(payload, ensure_ascii=False))
-                process.stdin.flush()
-            except BrokenPipeError:
-                pass
-            finally:
-                process.stdin.close()
-
-        while True:
-            acked = layout.ack_path(root, request_id).exists()
-            canceled = queue_store.is_canceled(root, request_id)
-            returncode = process.poll()
-            if acked or canceled:
-                if returncode is None:
-                    key = callback_target_key(request)
-                    if key is not None:
-                        _BACKGROUND_RESUMES[process.pid] = BackgroundResume(
-                            process=process,
-                            target_key=key,
-                            deadline=deadline,
-                            request_id=request_id,
-                        )
-                else:
-                    child_returncode = finish_delivery_worker(process)
-                    return subprocess.CompletedProcess(command, child_returncode), acked, False
-                result = subprocess.CompletedProcess(command, returncode if returncode is not None else 0) if acked else None
-                return result, acked, returncode is None
-            if returncode is not None:
-                child_returncode = finish_delivery_worker(process)
-                acked = layout.ack_path(root, request_id).exists()
-                if (not acked and child_returncode != pi_callback.PUBLISHED_RETURN_CODE
-                        and not queue_store.is_canceled(root, request_id) and desktop_submission_pending(root, request)):
-                    child_returncode = 125
-                return subprocess.CompletedProcess(command, child_returncode), acked, False
-            if time.monotonic() >= deadline:
-                stop_resume_process(process)
-                acked = layout.ack_path(root, request_id).exists()
-                code = (125 if not acked and not queue_store.is_canceled(root, request_id)
-                        and desktop_submission_pending(root, request) else 124)
-                return subprocess.CompletedProcess(command, code), acked, False
-            time.sleep(0.1)
-    except BaseException:
-        stop_resume_process(process)
-        raise
 
 
 def active_prompt(args: argparse.Namespace) -> str:
@@ -2225,7 +1018,7 @@ def cancel_one(root: Path, request_id: str, message: str | None = None) -> bool:
         queue_store.write_request(canceled, data)
         queue_store.remove_live_request_copies(root, request_id)
         try:
-            release_retained_target_lease(root, data)
+            delivery_engine.release_retained_target_lease(root, data)
         except (OSError, RuntimeError) as exc:
             print(
                 f"atc: warning: could not release retained target lease for "
@@ -2250,186 +1043,6 @@ def cancel_all(root: Path, message: str | None = None) -> int:
             canceled += 1
     print(f"atc: canceled {canceled} active callback(s) in {root}", file=sys.stderr)
     return canceled
-
-
-def process_one(root: Path, args: argparse.Namespace) -> bool:
-    queue_store.ensure_daemon_dirs(root)
-    path = select_pending(root, time.time())
-    if path is None:
-        return False
-
-    request_id = path.stem
-    if queue_store.is_canceled(root, request_id):
-        queue_store.remove_live_request_copies(root, request_id)
-        return True
-    try:
-        running = queue_store.move_request(path, root / "running")
-    except FileNotFoundError:
-        return True
-    except Exception as exc:
-        print(f"atc: warning: could not claim {path.name}: {exc}", file=sys.stderr)
-        return True
-    if queue_store.is_canceled(root, request_id):
-        queue_store.remove_live_request_copies(root, request_id)
-        return True
-
-    try:
-        request = load_request(running)
-        request_id = str(request.get("id", running.stem))
-        if layout.ack_path(root, request_id).exists():
-            queue_store.move_request(running, root / "done")
-            return True
-        attempts = int(request.get("attempts", 0)) + 1
-        request["attempts"] = attempts
-        request.pop("next_attempt_at", None)
-        queue_store.write_request(running, request)
-        try:
-            result, acked, resume_still_running = run_resume_until_exit_or_ack(root, request_id, request, args)
-        except TargetLeaseUnavailable as exc:
-            # A daemon for another queue won the cross-queue race after this
-            # request was selected. Put it back without consuming a retry.
-            request["attempts"] = max(0, attempts - 1)
-            request["last_deferred_reason"] = f"target lease held: {exc}"
-            if not running.exists() or queue_store.is_canceled(root, request_id):
-                return True
-            queue_store.write_request(running, request)
-            queue_store.move_request(running, root / "pending")
-            return True
-        if resume_still_running:
-            return True
-        if result is None:
-            return True
-        if result.returncode == pi_callback.PUBLISHED_RETURN_CODE and not acked:
-            # Not a failed attempt: the retained target lease keeps later
-            # callbacks for this session in order until ACK or recovery.
-            now = time.time()
-            request["attempts"] = max(0, attempts - 1)
-            request.setdefault("pi_published_at", now)
-            request.setdefault("live_delivered_at", now)
-            request["last_deferred_reason"] = pi_callback.PUBLISHED_REASON
-            if running.exists() and not queue_store.is_canceled(root, request_id):
-                queue_store.write_request(running, request)
-                queue_store.move_request(running, root / "pending")
-            return True
-        if result.returncode == 123 and not acked:
-            request["attempts"] = max(0, attempts - 1)
-            request["next_attempt_at"] = time.time() + 10
-            request["last_deferred_reason"] = "original session has an active turn"
-            if running.exists() and not queue_store.is_canceled(root, request_id):
-                queue_store.write_request(running, request)
-                queue_store.move_request(running, root / "pending")
-            return True
-        if result.returncode == 124 and not acked:
-            request["last_error"] = "agent resume timed out"
-            print(
-                f"atc: warning: daemon callback {running.name} timed out",
-                file=sys.stderr,
-            )
-        if result.returncode == 126 and not acked:
-            request["delivery_state"] = "blocked"
-            request["last_error"] = "callback transport blocked; repair the original session connection, then use atc retry --id " + request_id
-        if result.returncode == 125 and not acked:
-            delivery_name = "Pi" if request_agent(request) == "pi" else "Desktop"
-            request["last_error"] = delivery_name + " callback outcome is unknown; automatic retry suppressed to prevent duplicate delivery"
-            request["retain_target_lease"] = True
-            destination_dir = root / "failed"
-            print(
-                f"atc: warning: daemon callback {running.name} has an unknown {delivery_name} outcome; "
-                "manual recovery is required to avoid duplicate delivery",
-                file=sys.stderr,
-            )
-            if running.exists():
-                queue_store.write_request(running, request)
-            else:
-                return True
-        else:
-            if result.returncode == 125 and acked:
-                release_retained_target_lease(root, request)
-            destination_dir = root / ("done" if acked else "failed")
-        if result.returncode != 0:
-            print(
-                f"atc: warning: daemon callback {running.name} exited with {result.returncode}",
-                file=sys.stderr,
-            )
-        if not acked and result.returncode not in (125, 126):
-            request.setdefault("last_error", f"missing acknowledgement marker after exit {result.returncode}")
-            max_retries = max(0, int(getattr(args, "retries", DEFAULT_RETRIES)))
-            if attempts <= max_retries:
-                delay = retry_delay(args, attempts)
-                request["next_attempt_at"] = time.time() + delay
-                if not running.exists():
-                    print(
-                        f"atc: callback {request_id} disappeared from running; assuming it was canceled",
-                        file=sys.stderr,
-                    )
-                    return True
-                queue_store.write_request(running, request)
-                queue_store.move_request(running, root / "pending")
-                print(
-                    f"atc: warning: daemon callback {running.name} was not acknowledged; "
-                    f"retry {attempts}/{max_retries} in {delay:.1f}s",
-                    file=sys.stderr,
-                )
-                return True
-        if result.returncode == 126 and running.exists():
-            queue_store.write_request(running, request)
-    except Exception as exc:
-        destination_dir = root / "failed"
-        print(f"atc: warning: daemon failed to process {running.name}: {exc}", file=sys.stderr)
-
-    if not running.exists():
-        print(f"atc: callback {running.stem} disappeared from running; assuming it was canceled", file=sys.stderr)
-        return True
-    try:
-        finalized = queue_store.move_request(running, destination_dir)
-        # Close the final-attempt race with ack(): the marker may become
-        # durable after ack() looked for failed/<id>, but just before this
-        # process moved running/<id> there.  Once failed/ is visible, either
-        # this reconciliation or ack() itself will converge it to done/.
-        if destination_dir == root / "failed" and layout.ack_path(root, request_id).exists():
-            try:
-                queue_store.move_request(finalized, root / "done")
-                if request.get("retain_target_lease") is True:
-                    release_retained_target_lease(root, request)
-            except FileNotFoundError:
-                pass
-    except FileNotFoundError:
-        return True
-    except Exception as exc:
-        print(f"atc: warning: could not finalize {running.name}: {exc}", file=sys.stderr)
-    return True
-
-
-def recover_running(root: Path) -> None:
-    queue_store.ensure_daemon_dirs(root)
-    for path in sorted((root / "running").glob("*.json")):
-        if queue_store.delivery_lock_is_held(root, path.stem):
-            continue
-        try:
-            request = load_request(path)
-            request_id = str(request.get("id", path.stem))
-            destination = root / ("done" if layout.ack_path(root, request_id).exists() else "pending")
-            queue_store.move_request(path, destination)
-        except FileNotFoundError:
-            if queue_store.is_canceled(root, path.stem):
-                continue
-            print(
-                f"atc: running callback {path.stem} changed state during recovery",
-                file=sys.stderr,
-            )
-        except Exception as exc:
-            print(f"atc: warning: failed to recover {path.name}: {exc}", file=sys.stderr)
-            if not path.exists():
-                continue
-            try:
-                queue_store.move_request(path, root / "failed")
-            except FileNotFoundError:
-                continue
-            except Exception as move_exc:
-                print(
-                    f"atc: warning: could not quarantine {path.name}: {move_exc}",
-                    file=sys.stderr,
-                )
 
 
 def process_goal_reminders(root: Path) -> bool:
@@ -2519,7 +1132,7 @@ def daemon_reexec_command(args: argparse.Namespace) -> list[str]:
 
 
 def daemon_has_live_delivery_workers(root: Path) -> bool:
-    if _BACKGROUND_RESUMES:
+    if delivery_engine._BACKGROUND_RESUMES:
         return True
     for path in (root / "running").glob("*.json"):
         if queue_store.delivery_lock_is_held(root, path.stem):
@@ -2557,7 +1170,7 @@ def daemon(args: argparse.Namespace) -> int:
     try:
         load_service_proxy_environment()
         write_daemon_runtime(root)
-        recover_running(root)
+        delivery_engine.recover_running(root)
         print(f"atc: daemon watching {root}", file=sys.stderr)
 
         processed = 0
@@ -2568,7 +1181,7 @@ def daemon(args: argparse.Namespace) -> int:
             if consume_daemon_reload_request(root):
                 reload_requested = True
             if reload_requested:
-                reap_background_resumes()
+                delivery_engine.reap_background_resumes()
                 if daemon_has_live_delivery_workers(root):
                     if not reload_deferred_reported:
                         print(
@@ -2597,10 +1210,10 @@ def daemon(args: argparse.Namespace) -> int:
                         return 75
                     os.execv(sys.executable, daemon_reexec_command(args))
                     raise RuntimeError("daemon reload exec unexpectedly returned")
-            reap_background_resumes()
-            recover_running(root)
-            reconcile_acknowledged_retained_leases(root)
-            pi_callback.reconcile_publications(root, max(1.0, float(getattr(args, "resume_timeout", DEFAULT_RESUME_TIMEOUT))))
+            delivery_engine.reap_background_resumes()
+            delivery_engine.recover_running(root)
+            delivery_engine.reconcile_acknowledged_retained_leases(root)
+            pi_callback.reconcile_publications(root, max(1.0, float(getattr(args, "resume_timeout", delivery_engine.DEFAULT_RESUME_TIMEOUT))))
             managed_work = recover_managed_tasks(root)
             recover_active(root)
             if managed_work:
@@ -2612,7 +1225,7 @@ def daemon(args: argparse.Namespace) -> int:
                 continue
             if process_blocked_goal_email(root):
                 continue
-            did_work = process_one(root, args)
+            did_work = delivery_engine.process_one(root, args)
             if did_work:
                 processed += 1
                 if args.max_items is not None and processed >= args.max_items:
@@ -3224,7 +1837,7 @@ def agent_wrapped_command(
         reasoning_effort=reasoning_effort,
         system_prompt_path=system_prompt_path,
     )
-    return get_child_agent(worker).child_command(options, agent_environment(worker))
+    return get_child_agent(worker).child_command(options, delivery_engine.agent_environment(worker))
 
 
 def child_agent_environment(environment: dict[str, str]) -> dict[str, str]:
@@ -3880,177 +2493,6 @@ def run_supervisorctl(args: list[str]) -> int:
     return result.returncode
 
 
-def read_callback_prompt_policy(path: Path | None = None) -> dict[str, int]:
-    source = path or layout.daemon_state_dir() / CALLBACK_PROMPT_POLICY_FILE_NAME
-    try:
-        data = yaml.safe_load(source.read_text(encoding="utf-8"))
-    except FileNotFoundError:
-        return dict(DEFAULT_CALLBACK_PROMPT_POLICY)
-    if not isinstance(data, dict) or any(key not in DEFAULT_CALLBACK_PROMPT_POLICY for key in data):
-        raise ValueError("callback prompt policy accepts only system_every and user_every")
-    policy = dict(DEFAULT_CALLBACK_PROMPT_POLICY)
-    policy.update(data)
-    if any(type(value) is not int or value < 1 for value in policy.values()):
-        raise ValueError("callback prompt intervals must be positive integers (1 means every callback)")
-    return policy
-
-
-def positive_prompt_interval(value: str) -> int:
-    try:
-        parsed = int(value)
-    except ValueError as exc:
-        raise argparse.ArgumentTypeError("interval must be a positive integer") from exc
-    if parsed < 1:
-        raise argparse.ArgumentTypeError("interval must be a positive integer")
-    return parsed
-
-
-def callback_prompt_policy(args: argparse.Namespace) -> int:
-    path = layout.daemon_state_dir() / CALLBACK_PROMPT_POLICY_FILE_NAME
-    updates = {key: getattr(args, key, None) for key in DEFAULT_CALLBACK_PROMPT_POLICY}
-    updates = {key: value for key, value in updates.items() if value is not None}
-    lock = None
-    try:
-        if updates:
-            if any(type(value) is not int or value < 1 for value in updates.values()):
-                raise ValueError("callback prompt intervals must be positive integers")
-            lock = queue_store.acquire_path_lock(path.with_suffix(".lock"), blocking=True)
-        policy = read_callback_prompt_policy(path)
-        if updates:
-            policy.update(updates)
-            queue_store.write_private_text(path, yaml.safe_dump(policy, sort_keys=True))
-        print(f"Callback prompt policy: {path}")
-        print(yaml.safe_dump(policy, sort_keys=True), end="")
-        return 0
-    except (OSError, ValueError, yaml.YAMLError) as exc:
-        print(f"atc: could not configure callback prompts: {exc}", file=sys.stderr)
-        return 2
-    finally:
-        if lock is not None:
-            queue_store.release_owner_lock(lock, remove=False)
-
-
-def allocate_prompt_cadence(
-    root: Path, request: dict[str, object], policy_path: Path | None = None,
-) -> dict[str, object] | None:
-    """Allocate once per callback at first delivery, under an atomic ledger lock.
-
-    The ledger stores both the sequence and decisions in one atomic replacement,
-    so a crash/retry cannot consume a second ordinal or change reminder decisions.
-    """
-    target = request.get("target")
-    request_id = request.get("id")
-    if (not isinstance(target, dict) or target.get("kind") != "session"
-            or not isinstance(target.get("value"), str) or not target["value"]
-            or not isinstance(request_id, str) or not request_id):
-        return None  # --last cannot safely share a conversation counter.
-    agent = request_agent(request)
-    session = target["value"]
-    digest = hashlib.sha256(json.dumps([agent, session]).encode("utf-8")).hexdigest()
-    path = root / "prompt-counters" / f"{digest}.json"
-    lock = None
-    try:
-        lock = queue_store.acquire_owner_lock(root, f"prompt-cadence-{digest}", blocking=True)
-        try:
-            state = json.loads(path.read_text(encoding="utf-8"))
-        except FileNotFoundError:
-            state = {"version": 1, "agent": agent, "session": session, "count": 0, "callbacks": {}}
-        if (not isinstance(state, dict) or state.get("version") != 1
-                or state.get("agent") != agent or state.get("session") != session
-                or type(state.get("count")) is not int or state["count"] < 0
-                or not isinstance(state.get("callbacks"), dict)):
-            raise ValueError(f"invalid callback prompt counter {path}")
-        callbacks = state["callbacks"]
-        sequences = set()
-        for allocation in callbacks.values():
-            if (not isinstance(allocation, dict)
-                    or any(type(allocation.get(key)) is not int or allocation[key] < 1
-                           for key in ("sequence", "system_every", "user_every"))):
-                raise ValueError(f"invalid callback prompt allocation in {path}")
-            if allocation["sequence"] > state["count"]:
-                raise ValueError(f"invalid callback prompt sequence in {path}")
-            for category in ("system", "user"):
-                due = (allocation["sequence"] - 1) % allocation[f"{category}_every"] == 0
-                if type(allocation.get(f"{category}_due")) is not bool or allocation[f"{category}_due"] != due:
-                    raise ValueError(f"invalid callback prompt decision in {path}")
-            sequences.add(allocation["sequence"])
-        if len(callbacks) != state["count"] or len(sequences) != state["count"]:
-            raise ValueError(f"inconsistent callback prompt counter {path}")
-        if request_id in callbacks:
-            return dict(callbacks[request_id])
-        policy = read_callback_prompt_policy(policy_path)
-        sequence = state["count"] + 1
-        allocation = {
-            "sequence": sequence, **policy,
-            "system_due": (sequence - 1) % policy["system_every"] == 0,
-            "user_due": (sequence - 1) % policy["user_every"] == 0,
-        }
-        state["count"] = sequence
-        callbacks[request_id] = allocation
-        queue_store.write_request(path, state)
-        return allocation
-    except (OSError, ValueError, RuntimeError, yaml.YAMLError) as exc:
-        print(f"atc: prompt cadence unavailable; keeping full reminders: {exc}", file=sys.stderr)
-        return None
-    finally:
-        if lock is not None:
-            queue_store.release_owner_lock(lock, remove=False)
-
-
-def select_delivery_prompt(payload: dict[str, object]) -> str:
-    prompt = str(payload["prompt"])
-    request = payload.get("request")
-    queue_root = payload.get("queue_dir")
-    hook_path = payload.get("callback_hook_path")
-    cadence = None
-    if isinstance(request, dict) and isinstance(queue_root, str) and queue_root:
-        policy_path = Path(hook_path).parent / CALLBACK_PROMPT_POLICY_FILE_NAME if isinstance(hook_path, str) and hook_path else None
-        cadence = allocate_prompt_cadence(Path(queue_root), request, policy_path)
-    if cadence is not None:
-        if not cadence["system_due"] and request.get("prompt_format") != "full" and isinstance(request.get("prompt_compact"), str):
-            prompt = request["prompt_compact"]
-        if request.get("prompt_format") != callbacks.FORMAT:
-            prompt += (f"\n\nReminder cadence: callback #{cadence['sequence']}; "
-                       f"system every {cadence['system_every']}; user every {cadence['user_every']}.")
-    if (cadence is None or cadence["user_due"]) and isinstance(hook_path, str) and hook_path:
-        prompt = attach_callback_hook(prompt, Path(hook_path))
-    payload["prompt"] = prompt  # Both Desktop and CLI transports use this choice.
-    return prompt
-
-
-def ensure_callback_hook_file() -> Path:
-    path = layout.callback_hook_path()
-    if os.name == "nt":
-        queue_store.private_directory(path.parent)
-        try:
-            windows_io.open_private_text(path).close()
-        except FileExistsError:
-            pass
-        print(f"Callback prompt hook: {path}")
-        return path
-    path.parent.mkdir(parents=True, exist_ok=True)
-    try:
-        path.open("x", encoding="utf-8").close()
-    except FileExistsError:
-        pass
-    print(f"Callback prompt hook: {path}")
-    return path
-
-
-def attach_callback_hook(prompt: str, path: Path | None = None) -> str:
-    source = path or layout.callback_hook_path()
-    try:
-        hook = source.read_text(encoding="utf-8")
-    except FileNotFoundError:
-        return prompt
-    except (OSError, UnicodeError) as exc:
-        print(f"atc: warning: could not load callback prompt hook {source}: {exc}", file=sys.stderr)
-        return prompt
-    if not hook.strip():
-        return prompt
-    return f"{prompt.rstrip()}\n\n{CALLBACK_HOOK_SECTION}\n{hook.rstrip()}"
-
-
 def parse_proxy_environment_file(path: Path) -> dict[str, str]:
     values: dict[str, str] = {}
     try:
@@ -4169,7 +2611,7 @@ def daemon_environment(args: argparse.Namespace, *, include_proxy_values: bool =
         CLAUDE_BIN_ENV: claude_bin_path(args),
         PI_BIN_ENV: pi_bin_path(args),
         SCREEN_BIN_ENV: screen_binary() or "screen",
-        DESKTOP_APP_SERVER_ENV: os.environ.get(DESKTOP_APP_SERVER_ENV, "1"),
+        app_server.DESKTOP_APP_SERVER_ENV: os.environ.get(app_server.DESKTOP_APP_SERVER_ENV, "1"),
         "PATH": getattr(args, "path", None) or os.environ.get("PATH", ""),
         PROXY_ENV_FILE_ENV: str(layout.service_proxy_env_path()),
         layout.ATC_HOME_ENV: str(layout.daemon_state_dir().resolve()),
@@ -4594,7 +3036,7 @@ def setup(args: argparse.Namespace) -> int:
         except (OSError, ValueError) as exc:
             print(f"atc: could not install the Pi extension: {exc}", file=sys.stderr)
             return 2
-    ensure_callback_hook_file()
+    reminder_policy.ensure_callback_hook_file()
     report_claude_agent_readiness(args)
     try:
         desktop.install_for_setup(layout.codex_home(), args)
@@ -4610,7 +3052,7 @@ def setup(args: argparse.Namespace) -> int:
         retries=args.retries,
         retry_delay=args.retry_delay,
         retry_backoff=args.retry_backoff,
-        resume_timeout=getattr(args, "resume_timeout", DEFAULT_RESUME_TIMEOUT),
+        resume_timeout=getattr(args, "resume_timeout", delivery_engine.DEFAULT_RESUME_TIMEOUT),
         restart_sec=args.restart_sec,
         exec_start=args.exec_start,
         codex_bin=args.codex_bin,
@@ -4667,7 +3109,7 @@ def ack(args: argparse.Namespace) -> int:
                                                               or request.get("live_delivered_at"))):
                 queue_store.move_request(source, root / "done")
             try:
-                release_retained_target_lease(root, request)
+                delivery_engine.release_retained_target_lease(root, request)
             except (OSError, RuntimeError) as exc:
                 print(
                     f"atc: warning: callback {args.id} is durably acknowledged; "
@@ -4701,10 +3143,10 @@ def retry_callback(args: argparse.Namespace) -> int:
             raise ValueError("callback is already pending")
         if layout.ack_path(root, args.id).exists() or queue_store.is_canceled(root, args.id):
             raise ValueError("acknowledged or canceled callbacks cannot be retried")
-        if request.get("retain_target_lease") is True or desktop_submission_pending(root, request):
+        if request.get("retain_target_lease") is True or delivery_engine.desktop_submission_pending(root, request):
             raise ValueError("previous submission outcome is unknown; inspect the original session before recovery")
-        target_lock = acquire_target_lock(request, blocking=False)
-        if target_lock is None or retained_target_lease_is_held(request):
+        target_lock = delivery_engine.acquire_target_lock(request, blocking=False)
+        if target_lock is None or delivery_engine.retained_target_lease_is_held(request):
             raise ValueError("the bound session has an active or unresolved delivery")
         if args.callback_mode:
             options = argparse.Namespace(callback_mode=args.callback_mode, agent=request_agent(request))
@@ -5207,8 +3649,8 @@ def main() -> int:
     doctor_target.add_argument("--last", action="store_true", help="Inspect an already explicitly chosen unsafe last-session target")
 
     prompt_policy_parser = sub.add_parser("prompt-policy", help="Show or set callback reminder intervals")
-    prompt_policy_parser.add_argument("--system-every", type=positive_prompt_interval, help="Show standard reminders every N distinct callbacks (default: 4)")
-    prompt_policy_parser.add_argument("--user-every", type=positive_prompt_interval, help="Show callback-hook reminders every N distinct callbacks (default: 3)")
+    prompt_policy_parser.add_argument("--system-every", type=reminder_policy.positive_prompt_interval, help="Show standard reminders every N distinct callbacks (default: 4)")
+    prompt_policy_parser.add_argument("--user-every", type=reminder_policy.positive_prompt_interval, help="Show callback-hook reminders every N distinct callbacks (default: 3)")
 
     retry_parser = sub.add_parser("retry", help="Requeue a failed/manual callback without rerunning its workload")
     retry_parser.add_argument("--id", required=True)
@@ -5275,20 +3717,20 @@ def main() -> int:
     daemon_parser.add_argument("--interval", type=float, default=2.0, help="Polling interval in seconds")
     daemon_parser.add_argument("--once", action="store_true", help="Exit after the queue is empty")
     daemon_parser.add_argument("--max-items", type=int, help="Exit after processing this many queued requests")
-    daemon_parser.add_argument("--retries", type=int, default=DEFAULT_RETRIES, help="Retries after a callback is not acknowledged")
-    daemon_parser.add_argument("--retry-delay", type=float, default=DEFAULT_RETRY_DELAY, help="Initial retry delay in seconds")
-    daemon_parser.add_argument("--retry-backoff", type=float, default=DEFAULT_RETRY_BACKOFF, help="Retry delay multiplier")
-    daemon_parser.add_argument("--resume-timeout", type=float, default=DEFAULT_RESUME_TIMEOUT, help="Maximum seconds for one Codex resume before retrying")
+    daemon_parser.add_argument("--retries", type=int, default=delivery_engine.DEFAULT_RETRIES, help="Retries after a callback is not acknowledged")
+    daemon_parser.add_argument("--retry-delay", type=float, default=delivery_engine.DEFAULT_RETRY_DELAY, help="Initial retry delay in seconds")
+    daemon_parser.add_argument("--retry-backoff", type=float, default=delivery_engine.DEFAULT_RETRY_BACKOFF, help="Retry delay multiplier")
+    daemon_parser.add_argument("--resume-timeout", type=float, default=delivery_engine.DEFAULT_RESUME_TIMEOUT, help="Maximum seconds for one Codex resume before retrying")
 
     for service in ("systemd", "launchd", "windows-task"):
         service_parser = sub.add_parser(f"install-{service}", help=f"Install a user-level {service} coordinator")
         service_parser.add_argument("--name", default="agent-atc", help="Service name / LaunchAgent label")
         service_parser.add_argument("--queue-dir", help="Wakeup queue directory")
         service_parser.add_argument("--interval", type=float, default=2.0, help="Daemon polling interval in seconds")
-        service_parser.add_argument("--retries", type=int, default=DEFAULT_RETRIES)
-        service_parser.add_argument("--retry-delay", type=float, default=DEFAULT_RETRY_DELAY)
-        service_parser.add_argument("--retry-backoff", type=float, default=DEFAULT_RETRY_BACKOFF)
-        service_parser.add_argument("--resume-timeout", type=float, default=DEFAULT_RESUME_TIMEOUT)
+        service_parser.add_argument("--retries", type=int, default=delivery_engine.DEFAULT_RETRIES)
+        service_parser.add_argument("--retry-delay", type=float, default=delivery_engine.DEFAULT_RETRY_DELAY)
+        service_parser.add_argument("--retry-backoff", type=float, default=delivery_engine.DEFAULT_RETRY_BACKOFF)
+        service_parser.add_argument("--resume-timeout", type=float, default=delivery_engine.DEFAULT_RESUME_TIMEOUT)
         service_parser.add_argument("--restart-sec", type=float, default=5.0, help="Restart delay in seconds")
         service_parser.add_argument("--exec-start", help="Path to ATC executable")
         service_parser.add_argument("--codex-bin", help="Path to codex executable used by the daemon")
@@ -5354,10 +3796,10 @@ def main() -> int:
     setup_parser.add_argument("--name", default="agent-atc", help="Service name / LaunchAgent label")
     setup_parser.add_argument("--queue-dir", help="Wakeup queue directory")
     setup_parser.add_argument("--interval", type=float, default=2.0, help="Daemon polling interval in seconds")
-    setup_parser.add_argument("--retries", type=int, default=DEFAULT_RETRIES, help="Retries after a callback is not acknowledged")
-    setup_parser.add_argument("--retry-delay", type=float, default=DEFAULT_RETRY_DELAY, help="Initial retry delay in seconds")
-    setup_parser.add_argument("--retry-backoff", type=float, default=DEFAULT_RETRY_BACKOFF, help="Retry delay multiplier")
-    setup_parser.add_argument("--resume-timeout", type=float, default=DEFAULT_RESUME_TIMEOUT, help="Maximum seconds for one Codex resume before retrying")
+    setup_parser.add_argument("--retries", type=int, default=delivery_engine.DEFAULT_RETRIES, help="Retries after a callback is not acknowledged")
+    setup_parser.add_argument("--retry-delay", type=float, default=delivery_engine.DEFAULT_RETRY_DELAY, help="Initial retry delay in seconds")
+    setup_parser.add_argument("--retry-backoff", type=float, default=delivery_engine.DEFAULT_RETRY_BACKOFF, help="Retry delay multiplier")
+    setup_parser.add_argument("--resume-timeout", type=float, default=delivery_engine.DEFAULT_RESUME_TIMEOUT, help="Maximum seconds for one Codex resume before retrying")
     setup_parser.add_argument("--restart-sec", type=float, default=5.0, help="Service restart delay in seconds")
     setup_parser.add_argument("--exec-start", help="Path to agent-atc executable")
     setup_parser.add_argument("--codex-bin", help="Path to codex executable used by the daemon")
@@ -5492,7 +3934,7 @@ def main() -> int:
     if args.mode == "_task-worker":
         return run_task_worker(args)
     if args.mode == "_delivery-worker":
-        return delivery_worker_main()
+        return delivery_engine.delivery_worker_main()
     if args.mode == "_windows-coordinator":
         from .install import windows_service
         return windows_service.run_coordinator(Path(args.config_file))
@@ -5520,7 +3962,7 @@ def main() -> int:
     if args.mode == "setup":
         return setup(args)
     if args.mode == "prompt-policy":
-        return callback_prompt_policy(args)
+        return reminder_policy.callback_prompt_policy(args)
     if args.mode == "ack":
         return ack(args)
     if args.mode == "wait":

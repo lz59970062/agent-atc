@@ -12,6 +12,8 @@ import unittest
 from unittest import mock
 
 from agent_atc import callback_transport as transport, cli
+from agent_atc.engine import delivery as delivery_engine
+from agent_atc.harness.codex import app_server
 from agent_atc.store import records as queue_store
 from agent_atc.store import layout
 
@@ -67,8 +69,8 @@ class CallbackModeTests(unittest.TestCase):
     def test_probe_only_reads_and_follows_pagination(self):
         client = mock.Mock()
         client.request.side_effect = [{}, {"data": ["other"], "nextCursor": "next"}, {"data": ["original"]}]
-        with mock.patch.object(cli, "desktop_app_server_socket", return_value=self.root / "socket"), \
-                mock.patch.object(cli, "AppServerConnection", return_value=client):
+        with mock.patch.object(app_server, "desktop_app_server_socket", return_value=self.root / "socket"), \
+                mock.patch.object(app_server, "AppServerConnection", return_value=client):
             result = transport.inspect_route(self.request("desktop"))
         self.assertEqual(result["status"], "owner_reachable")
         self.assertFalse(result["end_to_end_verified"])
@@ -80,7 +82,7 @@ class CallbackModeTests(unittest.TestCase):
         queue = self.root / "queue"
         queue_store.ensure_daemon_dirs(queue)
         queue_store.write_request(queue / "pending/fixture.json", self.request())
-        self.assertIsNone(cli.select_pending(queue, 10**12))
+        self.assertIsNone(delivery_engine.select_pending(queue, 10**12))
         self.assertEqual(cli.ack(argparse.Namespace(queue_dir=str(queue), id="fixture", message=None)), 0)
         self.assertTrue((queue / "done/fixture.json").is_file())
         self.assertFalse((queue / "pending/fixture.json").exists())
@@ -89,11 +91,11 @@ class CallbackModeTests(unittest.TestCase):
         request = self.request("cli")
         request.update(sandbox_mode="workspace-write", queue_dir=str(self.root))
         client = mock.Mock()
-        client.request.side_effect = [{}, cli.AppServerRpcError("thread original already has an active writer")]
-        with mock.patch.object(cli, "desktop_app_server_socket", return_value=self.root / "socket"), \
-                mock.patch.object(cli, "AppServerConnection", return_value=client):
-            with self.assertRaises(cli.CallbackTransportBlocked):
-                cli.start_desktop_app_server_turn({"request": request, "timeout": 2})
+        client.request.side_effect = [{}, app_server.AppServerRpcError("thread original already has an active writer")]
+        with mock.patch.object(app_server, "desktop_app_server_socket", return_value=self.root / "socket"), \
+                mock.patch.object(app_server, "AppServerConnection", return_value=client):
+            with self.assertRaises(app_server.CallbackTransportBlocked):
+                delivery_engine.start_desktop_app_server_turn({"request": request, "timeout": 2})
         self.assertEqual(len(client.request.call_args_list), 2)
 
     def test_explicit_desktop_never_falls_back_even_for_a_plain_socket(self):
@@ -101,10 +103,10 @@ class CallbackModeTests(unittest.TestCase):
         request.update(sandbox_mode="workspace-write", queue_dir=str(self.root))
         client = mock.Mock()
         client.connect.side_effect = OSError("socket unavailable")
-        with mock.patch.object(cli, "desktop_app_server_socket", return_value=self.root / "socket"), \
-                mock.patch.object(cli, "AppServerConnection", return_value=client):
-            with self.assertRaises(cli.CallbackTransportBlocked):
-                cli.start_desktop_app_server_turn({"request": request, "timeout": 2})
+        with mock.patch.object(app_server, "desktop_app_server_socket", return_value=self.root / "socket"), \
+                mock.patch.object(app_server, "AppServerConnection", return_value=client):
+            with self.assertRaises(app_server.CallbackTransportBlocked):
+                delivery_engine.start_desktop_app_server_turn({"request": request, "timeout": 2})
         client.request.assert_not_called()
 
     def test_active_turn_is_deferred_before_sending_callback(self):
@@ -112,10 +114,10 @@ class CallbackModeTests(unittest.TestCase):
         request.update(sandbox_mode="workspace-write", queue_dir=str(self.root))
         client = mock.Mock()
         client.request.side_effect = [{}, {"thread": {"status": {"type": "active"}}}]
-        with mock.patch.object(cli, "desktop_app_server_socket", return_value=self.root / "socket"), \
-                mock.patch.object(cli, "AppServerConnection", return_value=client):
-            with self.assertRaises(cli.CallbackTargetBusy):
-                cli.start_desktop_app_server_turn({"request": request, "timeout": 2})
+        with mock.patch.object(app_server, "desktop_app_server_socket", return_value=self.root / "socket"), \
+                mock.patch.object(app_server, "AppServerConnection", return_value=client):
+            with self.assertRaises(app_server.CallbackTargetBusy):
+                delivery_engine.start_desktop_app_server_turn({"request": request, "timeout": 2})
         self.assertEqual(len(client.request.call_args_list), 2)
 
     def test_busy_delivery_waits_without_spending_retry_budget(self):
@@ -123,8 +125,8 @@ class CallbackModeTests(unittest.TestCase):
         queue_store.ensure_daemon_dirs(queue)
         request = self.request("cli")
         queue_store.write_request(queue / "pending/fixture.json", request)
-        with mock.patch.object(cli, "run_resume_until_exit_or_ack", return_value=(subprocess.CompletedProcess([], 123), False, False)):
-            self.assertTrue(cli.process_one(queue, argparse.Namespace(retries=0)))
+        with mock.patch.object(delivery_engine, "run_resume_until_exit_or_ack", return_value=(subprocess.CompletedProcess([], 123), False, False)):
+            self.assertTrue(delivery_engine.process_one(queue, argparse.Namespace(retries=0)))
         saved = cli.load_request(queue / "pending/fixture.json")
         self.assertEqual(saved["attempts"], request["attempts"])
         self.assertIn("next_attempt_at", saved)
@@ -134,8 +136,8 @@ class CallbackModeTests(unittest.TestCase):
         queue = self.root / "queue"
         queue_store.ensure_daemon_dirs(queue)
         queue_store.write_request(queue / "pending/fixture.json", self.request("cli"))
-        with mock.patch.object(cli, "run_resume_until_exit_or_ack", return_value=(subprocess.CompletedProcess([], 126), False, False)):
-            self.assertTrue(cli.process_one(queue, argparse.Namespace(retries=10)))
+        with mock.patch.object(delivery_engine, "run_resume_until_exit_or_ack", return_value=(subprocess.CompletedProcess([], 126), False, False)):
+            self.assertTrue(delivery_engine.process_one(queue, argparse.Namespace(retries=10)))
         record = cli.load_request(queue / "failed/fixture.json")
         self.assertEqual(record["delivery_state"], "blocked")
         self.assertFalse((queue / "pending/fixture.json").exists())

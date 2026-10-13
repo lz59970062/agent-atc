@@ -40,6 +40,7 @@ def bridge_file(profile: Path) -> Path:
 
 def selection(args: argparse.Namespace) -> dict[str, str]:
     from . import cli
+    from .harness.codex import app_server
     from .store import layout
 
     frozen = getattr(args, "_callback_route", None)
@@ -65,6 +66,7 @@ def selection(args: argparse.Namespace) -> dict[str, str]:
 
 def inspect_route(request: dict[str, object], *, timeout: float = 2) -> dict[str, object]:
     from . import cli
+    from .harness.codex import app_server
     from .store import layout
 
     mode = request.get("callback_mode", "cli")
@@ -79,12 +81,12 @@ def inspect_route(request: dict[str, object], *, timeout: float = 2) -> dict[str
         return dict(report, transport="cli_resume", reason="session_delivery_not_probed")
     connection = None
     try:
-        endpoint = cli.desktop_app_server_socket(request)
+        endpoint = app_server.desktop_app_server_socket(request)
         if endpoint is None:
             if mode == "desktop":
                 raise ValueError("Desktop bridge not selected")
             return dict(report, transport="cli_resume", reason="session_delivery_not_probed")
-        connection = cli.AppServerConnection(endpoint, timeout)
+        connection = app_server.AppServerConnection(endpoint, timeout)
         connection.connect()
         connection.request("initialize", {"clientInfo": {"name": "atc-capability-check", "version": cli.__version__},
                                           "capabilities": {"experimentalApi": True}})
@@ -117,6 +119,7 @@ def inspect_route(request: dict[str, object], *, timeout: float = 2) -> dict[str
 
 def preflight(args: argparse.Namespace) -> bool:
     from . import cli
+    from .harness.codex import app_server
     from .store import layout
 
     try:

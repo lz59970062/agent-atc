@@ -205,7 +205,7 @@ def preflight(config: dict[str, object]) -> dict[str, object]:
 
 
 def command(args: argparse.Namespace) -> int:
-    from ....cli import codex_home
+    from ....store.layout import codex_home
 
     try:
         if sys.platform != "darwin":

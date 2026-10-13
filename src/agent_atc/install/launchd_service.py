@@ -22,6 +22,7 @@ def agent_directory() -> Path:
 
 def service_text(args: argparse.Namespace) -> str:
     from .. import cli
+    from ..harness.codex import app_server
     from ..store import records as queue_store
     from ..store import layout
 
@@ -36,7 +37,7 @@ def service_text(args: argparse.Namespace) -> str:
     environment = cli.daemon_environment(args, include_proxy_values=False)
     environment.update(CODEX_HOME=str(layout.codex_home().resolve()),
                        CLAUDE_CONFIG_DIR=str(layout.claude_home().resolve()))
-    for name in (layout.TARGET_LOCK_DIR_ENV, cli.APP_SERVER_SOCKET_ENV, cli.ALLOW_APP_SERVER_SOCKET_OVERRIDE_ENV):
+    for name in (layout.TARGET_LOCK_DIR_ENV, app_server.APP_SERVER_SOCKET_ENV, app_server.ALLOW_APP_SERVER_SOCKET_OVERRIDE_ENV):
         if name in os.environ:
             environment[name] = os.environ[name]
     log = str(layout.daemon_state_dir().resolve() / "daemon.log")
@@ -50,6 +51,7 @@ def service_text(args: argparse.Namespace) -> str:
 
 def install(args: argparse.Namespace) -> int:
     from .. import cli
+    from ..harness.codex import app_server
     from ..store import records as queue_store
     from ..store import layout
 

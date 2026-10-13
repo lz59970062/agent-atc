@@ -224,6 +224,8 @@ def _session_of(request: Mapping[str, object]) -> str | None:
 
 def live_watcher_dir(session: str) -> Path:
     from ... import cli
+    from ...engine import delivery as delivery_engine
+    from ...engine import reminders as reminder_policy
     from ...store import records as queue_store
     from ...store import layout
 
@@ -238,6 +240,8 @@ def register_live_watcher(session: str, *, prefix: str = "") -> tuple[object, Pa
     daemon never observes an unlocked live file.
     """
     from ... import cli
+    from ...engine import delivery as delivery_engine
+    from ...engine import reminders as reminder_policy
     from ...store import records as queue_store
     from ...store import layout
 
@@ -255,6 +259,8 @@ def register_live_watcher(session: str, *, prefix: str = "") -> tuple[object, Pa
 
 def release_live_watcher(lock: tuple[object, Path]) -> None:
     from ... import cli
+    from ...engine import delivery as delivery_engine
+    from ...engine import reminders as reminder_policy
     from ...store import records as queue_store
     from ...store import layout
 
@@ -278,6 +284,8 @@ def channel_is_held(session: str) -> bool:
 
 def _held(session: str, prefix: str) -> bool:
     from ... import cli
+    from ...engine import delivery as delivery_engine
+    from ...engine import reminders as reminder_policy
     from ...store import records as queue_store
     from ...store import layout
 
@@ -297,6 +305,8 @@ def _held(session: str, prefix: str) -> bool:
 def _claim(root: Path, path: Path) -> str | None:
     """Move one callback through running/ and return the prompt to print."""
     from ... import cli
+    from ...engine import delivery as delivery_engine
+    from ...engine import reminders as reminder_policy
     from ...store import records as queue_store
     from ...store import layout
 
@@ -311,7 +321,7 @@ def _claim(root: Path, path: Path) -> str | None:
             request = cli.load_request(path)
         except FileNotFoundError:
             return None
-        target_lock = cli.acquire_target_lock(request, blocking=False)
+        target_lock = delivery_engine.acquire_target_lock(request, blocking=False)
         if target_lock is None:
             return None  # The daemon is delivering to this session right now.
         try:
@@ -323,7 +333,7 @@ def _claim(root: Path, path: Path) -> str | None:
             return None  # The finally block returns it; the daemon finalizes it.
         payload = {"prompt": str(request["prompt"]), "callback_hook_path": str(layout.callback_hook_path()),
                    "request": request, "queue_dir": str(root)}
-        prompt = cli.select_delivery_prompt(payload)
+        prompt = reminder_policy.select_delivery_prompt(payload)
         now = time.time()
         request["live_delivered_at"] = now
         request["next_attempt_at"] = now + LIVE_ACK_GRACE_SECONDS
@@ -364,6 +374,8 @@ def wait(args: argparse.Namespace) -> int:
     the OS releases the waiter's lock and the daemon delivers as usual.
     """
     from ... import cli
+    from ...engine import delivery as delivery_engine
+    from ...engine import reminders as reminder_policy
     from ...store import records as queue_store
     from ...store import layout
 

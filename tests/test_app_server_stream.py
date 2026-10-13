@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from agent_atc.cli import AppServerConnection, AppServerProtocolError, AppServerTimeout
+from agent_atc.harness.codex.app_server import AppServerConnection, AppServerProtocolError, AppServerTimeout
 
 
 def frame(payload, opcode=1, final=True, masked=False):

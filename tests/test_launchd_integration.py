@@ -20,6 +20,7 @@ import unittest
 from unittest import mock
 
 from agent_atc import cli
+from agent_atc.harness.codex import app_server
 from agent_atc.owners import host
 from agent_atc.store import layout
 from agent_atc.install import diagnostics, launchd_service
@@ -83,6 +84,7 @@ class RealLaunchdTests(unittest.TestCase):
                 from pathlib import Path
                 sys.path.insert(0, {source!r})
                 from agent_atc import cli
+                from agent_atc.harness.codex import app_server
                 from agent_atc.owners import host
                 from agent_atc.store import layout
                 cli.recover_managed_tasks(Path(sys.argv[1]))
@@ -125,7 +127,7 @@ class RealLaunchdTests(unittest.TestCase):
             fake.write_text("#!/bin/sh\nexit 97\n")
             fake.chmod(0o700)
             env = {"CODEX_HOME": str(home), "ATC_HOME": str(home / "atc-home"), "CLAUDE_CONFIG_DIR": str(directory / "claude"),
-                   layout.TARGET_LOCK_DIR_ENV: str(directory / "locks"), cli.DESKTOP_APP_SERVER_ENV: "0",
+                   layout.TARGET_LOCK_DIR_ENV: str(directory / "locks"), app_server.DESKTOP_APP_SERVER_ENV: "0",
                    "ATC_CODEX_BIN": str(fake)}
             argv = ["atc", "setup", "--callback-only", "--name", name, "--queue-dir", str(queue),
                     "--service", "launchd", "--skill-target", "codex", "--codex-bin", str(fake),

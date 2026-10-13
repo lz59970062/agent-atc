@@ -21,6 +21,8 @@ import unittest
 from unittest import mock
 
 from agent_atc import cli
+from agent_atc.engine import delivery as delivery_engine
+from agent_atc.harness.codex import app_server
 from agent_atc.store import records as queue_store
 from agent_atc.system import commands
 from agent_atc.store import layout
@@ -167,7 +169,7 @@ def callback(runtime, session, callback_id, delivery=None):
         request.pop('pi_delivery')
     provider.callbacks[token] = shlex.join(worker_command('ack','--queue-dir',str(queue_dir),'--id',callback_id))
     payload={'request':request,'queue_dir':str(queue_dir),'prompt':token,'ack_path':str(layout.ack_path(queue_dir,callback_id)),
-        'canceled_path':str(layout.request_path(queue_dir,'canceled',callback_id)), 'command':cli.resume_command(request),
+        'canceled_path':str(layout.request_path(queue_dir,'canceled',callback_id)), 'command':delivery_engine.resume_command(request),
         'cwd':str(directory),'timeout':20}
     return request, payload
 
@@ -211,7 +213,7 @@ class NativePiCallbackTests(unittest.TestCase):
                 canceled, canceled_payload = callback(self.runtime, session, 'canceled-steer', 'steer')
                 queue_store.write_request(Path(canceled_payload['canceled_path']), canceled)
                 canceled_plan = bridge.prepare_delivery(canceled_payload)
-                assert cli.wait_for_remote_delivery(canceled_payload, canceled_plan, 20)['returncode'] == 0
+                assert delivery_engine.wait_for_remote_delivery(canceled_payload, canceled_plan, 20)['returncode'] == 0
             request, payload = callback(self.runtime, session, callback_id, delivery)
             plan = bridge.prepare_delivery(payload)
             receipts = owner_path.parent/'receipts'
@@ -237,7 +239,7 @@ class NativePiCallbackTests(unittest.TestCase):
                 assert not Path(payload['ack_path']).exists()
                 assert receipt() is None
             (directory/'tool-SECOND-release').touch()
-            assert cli.wait_for_remote_delivery(payload, plan, 20)['returncode'] == 0
+            assert delivery_engine.wait_for_remote_delivery(payload, plan, 20)['returncode'] == 0
             wait_for(lambda: receipt().get('state') in ('session_observed', 'acknowledged'))
             data = entries(session)
             users = [str(e['message']['content']) for e in data if e.get('type') == 'message' and e['message']['role'] == 'user']
@@ -284,16 +286,16 @@ class NativePiCallbackTests(unittest.TestCase):
             with mock.patch.dict(os.environ, {'ATC_PI_BIN':str(directory/'must-not-launch-pi')}):
                 queue_store.write_request(root/'pending'/f"{request['id']}.json",request)
                 started=time.monotonic()
-                assert cli.process_one(root,argparse.Namespace(resume_timeout=20,retries=0,retry_delay=0,retry_backoff=1))
+                assert delivery_engine.process_one(root,argparse.Namespace(resume_timeout=20,retries=0,retry_delay=0,retry_backoff=1))
             # Publication hands the callback to the live Pi; the daemon does not
             # wait for the ACK, which then finalizes the pending record directly.
             assert time.monotonic()-started < 10
             def reaped():
-                cli.reap_background_resumes()
-                return not cli._BACKGROUND_RESUMES
+                delivery_engine.reap_background_resumes()
+                return not delivery_engine._BACKGROUND_RESUMES
             wait_for(reaped)
             wait_for(lambda: (root/'done'/f"{request['id']}.json").exists())
-            assert not cli.retained_target_lease_is_held(request)
+            assert not delivery_engine.retained_target_lease_is_held(request)
             assert bridge.read_record(owner_path)['owner_pid']==owner_pid
             # Wait until native Pi itself completes its tool turn before starting busy.
             def idle():
@@ -308,7 +310,7 @@ class NativePiCallbackTests(unittest.TestCase):
             assert not Path(payload['ack_path']).exists()
             assert not any('CALLBACK_busy' in str(e.get('message',{})) for e in entries(session))
             provider.release.set()
-            assert cli.wait_for_remote_delivery(payload,plan,20)['returncode']==0
+            assert delivery_engine.wait_for_remote_delivery(payload,plan,20)['returncode']==0
             assert bridge.read_record(owner_path)['owner_pid']==owner_pid
             # Native veto must reject new/switch before any new file is opened.
             rpc.send({'id':'new','type':'new_session'})
@@ -323,17 +325,17 @@ class NativePiCallbackTests(unittest.TestCase):
             assert rpc.response('same')['data']['cancelled']
             request,payload=callback(runtime,session,'same')
             plan=bridge.prepare_delivery(payload)
-            assert cli.wait_for_remote_delivery(payload,plan,20)['returncode']==0
+            assert delivery_engine.wait_for_remote_delivery(payload,plan,20)['returncode']==0
         finally: rpc.close()
         assert not cli.pid_is_running(owner_pid)
         request,payload=callback(runtime,session,'offline')
         assert bridge.inspect_route(request)['status']=='offline_candidate'
         root=Path(payload['queue_dir']); request=cli.prepare_request_for_queue(root,request,payload['prompt'])
         queue_store.write_request(root/'pending'/f"{request['id']}.json",request)
-        assert cli.process_one(root,argparse.Namespace(resume_timeout=20,retries=0,retry_delay=0,retry_backoff=1))
-        wait_for(reaped); cli.recover_running(root)
+        assert delivery_engine.process_one(root,argparse.Namespace(resume_timeout=20,retries=0,retry_delay=0,retry_backoff=1))
+        wait_for(reaped); delivery_engine.recover_running(root)
         assert (root/'done'/f"{request['id']}.json").exists()
-        assert not cli.retained_target_lease_is_held(request)
+        assert not delivery_engine.retained_target_lease_is_held(request)
         owner=bridge.read_record(owner_path)
         assert bridge.confirmed_owner_dead(owner)  # another short recovery stays available
         data=entries(session)
@@ -359,10 +361,10 @@ class NativePiCallbackTests(unittest.TestCase):
             request,payload=callback(runtime,session,'ordinary')
             plan=bridge.prepare_delivery(payload)
             assert plan.online
-            assert cli.wait_for_remote_delivery(payload,plan,20)['returncode']==0
+            assert delivery_engine.wait_for_remote_delivery(payload,plan,20)['returncode']==0
         finally: rpc.close()
         assert bridge.inspect_route(request)['status']=='blocked'
-        with self.assertRaises(cli.CallbackTransportBlocked): bridge.prepare_delivery(payload)
+        with self.assertRaises(app_server.CallbackTransportBlocked): bridge.prepare_delivery(payload)
 
 
 
@@ -385,7 +387,7 @@ class NativePiCallbackTests(unittest.TestCase):
             cancel_request,cancel_payload=callback(runtime,session,'cancel')
             cancel_plan=bridge.prepare_delivery(cancel_payload)
             queue_store.write_request(Path(cancel_payload['canceled_path']),cancel_request)
-            assert cli.wait_for_remote_delivery(cancel_payload,cancel_plan,1)['returncode']==0
+            assert delivery_engine.wait_for_remote_delivery(cancel_payload,cancel_plan,1)['returncode']==0
             request,payload=callback(runtime,session,'orphan')
             plan=bridge.prepare_delivery(payload)
             # Crash only our managed wrapper; leave the actual Pi alive deliberately.
@@ -393,11 +395,11 @@ class NativePiCallbackTests(unittest.TestCase):
             assert cli.pid_is_running(owner_pid)
             assert bridge.inspect_route(request)['status']=='blocked'
             provider.release.set()
-            assert cli.wait_for_remote_delivery(payload,plan,0.5)['returncode']==125
-            assert cli.retained_target_lease_is_held(request)
+            assert delivery_engine.wait_for_remote_delivery(payload,plan,0.5)['returncode']==125
+            assert delivery_engine.retained_target_lease_is_held(request)
             assert not any('CALLBACK_cancel' in str(e.get('message',{})) or
                            'CALLBACK_orphan' in str(e.get('message',{})) for e in entries(session))
-            with self.assertRaises(cli.CallbackTransportBlocked): bridge.prepare_delivery(payload)
+            with self.assertRaises(app_server.CallbackTransportBlocked): bridge.prepare_delivery(payload)
         finally:
             provider.release.set()
             if owner_pid and cli.pid_is_running(owner_pid): os.kill(owner_pid,signal.SIGTERM)
@@ -433,7 +435,7 @@ class NativePiCallbackTests(unittest.TestCase):
             assert process.returncode==0,stderr
             assert len(provider.requests)==requests_before
             assert not any('CALLBACK_cancel-offline' in str(e.get('message',{})) for e in entries(session))
-            cli.release_retained_target_lease(Path(payload['queue_dir']),request)
+            delivery_engine.release_retained_target_lease(Path(payload['queue_dir']),request)
         finally:
             if process.poll() is None: process.kill(); process.wait()
             plan.close()

@@ -13,6 +13,7 @@ from pathlib import Path
 from unittest import mock
 
 from agent_atc import cli
+from agent_atc.engine import delivery as delivery_engine
 from agent_atc.store import records as queue_store
 from agent_atc.store import layout
 from agent_atc.install import diagnostics
@@ -66,7 +67,7 @@ class DiagnosticBoundaryTests(unittest.TestCase):
             (["cancel", "--id", "fixture"], (cli, "cancel")),
             (["_screen-worker", "--task-file", "/fixture/task.json", "--token=fixture"], (cli, "run_screen_worker")),
             (["_task-worker", "--task-file", "/fixture/task.json", "--attempt", "1"], (cli, "run_task_worker")),
-            (["_delivery-worker"], (cli, "delivery_worker_main")),
+            (["_delivery-worker"], (delivery_engine, "delivery_worker_main")),
         ):
             with self.subTest(argv=argv), mock.patch.object(sys, "argv", ["atc", *argv]), mock.patch.object(
                 *handler, return_value=0

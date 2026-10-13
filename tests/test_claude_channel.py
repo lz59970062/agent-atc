@@ -15,6 +15,7 @@ from unittest import mock
 
 from agent_atc.harness.claude import channel as claude_channel, session as claude_code
 from agent_atc import cli
+from agent_atc.engine import delivery as delivery_engine
 from agent_atc.store import records as queue_store
 from agent_atc.store import layout
 
@@ -130,7 +131,7 @@ class ChannelServerTests(unittest.TestCase):
         self.assertTrue(claude_code.channel_is_held(SESSION))
         self.assertFalse(claude_code.channel_is_held(OTHER_SESSION))
         # The daemon only sees callbacks the channel does not own.
-        selected = cli.select_pending(self.root, time.time() + 2 * claude_code.LIVE_ACK_GRACE_SECONDS)
+        selected = delivery_engine.select_pending(self.root, time.time() + 2 * claude_code.LIVE_ACK_GRACE_SECONDS)
         self.assertIn(selected, (codex, layout.request_path(self.root, "pending", "cb-other")))
         self.assertNotEqual(selected, mine)
         # A stray `atc wait` in the channel session exits instead of printing a duplicate.

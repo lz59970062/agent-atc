@@ -12,6 +12,7 @@ import unittest
 from unittest import mock
 
 from agent_atc import cli
+from agent_atc.engine import delivery as delivery_engine
 from agent_atc.system import commands
 
 
@@ -64,7 +65,7 @@ class CodexCompatibilityTests(unittest.TestCase):
                             self.assertNotIn("--model", task["wrapped_command"])
 
     def test_installed_codex_accepts_flags_before_no_model_startup_guard(self):
-        binary = shutil.which(cli.codex_command())
+        binary = shutil.which(delivery_engine.codex_command())
         if binary is None:
             self.skipTest("Codex executable not installed")
         with tempfile.TemporaryDirectory() as tmp:

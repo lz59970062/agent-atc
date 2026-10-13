@@ -15,6 +15,8 @@ import unittest
 from unittest import mock
 
 from agent_atc import cli
+from agent_atc.engine import delivery as delivery_engine
+from agent_atc.harness.codex import app_server
 from agent_atc.store import layout
 from agent_atc.install import windows_service
 from agent_atc.harness.codex.desktop.connection import BridgeEndpoint, load_bridge_endpoint
@@ -69,20 +71,20 @@ class BridgeClientTests(unittest.TestCase):
 
     def test_windows_requires_explicit_bridge_and_pins_it_for_service(self):
         request = {"target": {"kind": "session", "value": "original-session"}}
-        with mock.patch.dict(os.environ, {cli.DESKTOP_APP_SERVER_ENV: "1"}, clear=True):
-            self.assertIsNone(cli.desktop_app_server_socket(request))
+        with mock.patch.dict(os.environ, {app_server.DESKTOP_APP_SERVER_ENV: "1"}, clear=True):
+            self.assertIsNone(app_server.desktop_app_server_socket(request))
         self.write_metadata()
-        with mock.patch.dict(os.environ, {cli.DESKTOP_APP_SERVER_ENV: "1",
-                                         cli.APP_SERVER_BRIDGE_FILE_ENV: str(self.metadata)}, clear=True), \
+        with mock.patch.dict(os.environ, {app_server.DESKTOP_APP_SERVER_ENV: "1",
+                                         app_server.APP_SERVER_BRIDGE_FILE_ENV: str(self.metadata)}, clear=True), \
                 mock.patch.object(layout, "codex_home", return_value=self.profile):
-            self.assertIsInstance(cli.desktop_app_server_socket(request), BridgeEndpoint)
+            self.assertIsInstance(app_server.desktop_app_server_socket(request), BridgeEndpoint)
             with mock.patch.object(layout, "queue_dir", return_value=self.directory / "queue"), \
                     mock.patch.object(cli, "daemon_command", return_value=["python.exe", "daemon"]), \
                     mock.patch.object(layout, "claude_home", return_value=self.directory / "claude"), \
                     mock.patch.object(cli, "daemon_environment", return_value={}):
                 from argparse import Namespace
                 config = windows_service.configuration(Namespace(name="test", restart_sec=2))
-            self.assertEqual(config["environment"][cli.APP_SERVER_BRIDGE_FILE_ENV], str(self.metadata))
+            self.assertEqual(config["environment"][app_server.APP_SERVER_BRIDGE_FILE_ENV], str(self.metadata))
 
     def listener(self):
         server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -108,7 +110,7 @@ class BridgeClientTests(unittest.TestCase):
         thread = threading.Thread(target=serve)
         thread.start()
         wrong = BridgeEndpoint(endpoint.port, endpoint.pid, dict(endpoint.identity, creation_time=0))
-        client = cli.AppServerConnection(wrong, 2)
+        client = app_server.AppServerConnection(wrong, 2)
         with self.assertRaises(OSError):
             client.connect()
         thread.join(3)
@@ -171,8 +173,8 @@ class BridgeClientTests(unittest.TestCase):
         payload = {"request": {"target": {"kind": "session", "value": "original-session"},
                                "sandbox_mode": "workspace-write", "queue_dir": str(self.directory / "queue")},
                    "cwd": str(self.directory), "prompt": "fixture callback", "timeout": 2}
-        with mock.patch.object(cli, "desktop_app_server_socket", return_value=endpoint):
-            delivery = cli.start_desktop_app_server_turn(payload)
+        with mock.patch.object(app_server, "desktop_app_server_socket", return_value=endpoint):
+            delivery = delivery_engine.start_desktop_app_server_turn(payload)
         self.assertIsNotNone(delivery)
         try:
             self.assertTrue(delivery.wait_for_completion(2))
@@ -188,11 +190,11 @@ class BridgeClientTests(unittest.TestCase):
                                "sandbox_mode": "workspace-write", "queue_dir": str(self.directory / "queue")},
                    "cwd": str(self.directory), "prompt": "fixture callback", "timeout": 1}
         endpoint = BridgeEndpoint(49152, os.getpid(), self.identity)
-        for error in (OSError("unavailable"), cli.AppServerRpcError("writer conflict")):
-            with self.subTest(error=error), mock.patch.object(cli, "desktop_app_server_socket", return_value=endpoint), \
-                    mock.patch.object(cli.AppServerConnection, "connect", side_effect=error):
-                with self.assertRaisesRegex(cli.AppServerProtocolError, "CLI fallback disabled"):
-                    cli.start_desktop_app_server_turn(payload)
+        for error in (OSError("unavailable"), app_server.AppServerRpcError("writer conflict")):
+            with self.subTest(error=error), mock.patch.object(app_server, "desktop_app_server_socket", return_value=endpoint), \
+                    mock.patch.object(app_server.AppServerConnection, "connect", side_effect=error):
+                with self.assertRaisesRegex(app_server.AppServerProtocolError, "CLI fallback disabled"):
+                    delivery_engine.start_desktop_app_server_turn(payload)
 
 
 if __name__ == "__main__":

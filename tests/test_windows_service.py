@@ -13,6 +13,7 @@ import unittest
 from unittest import mock
 
 from agent_atc import cli
+from agent_atc.engine import delivery as delivery_engine
 from agent_atc.store import records as queue_store
 from agent_atc.store import layout
 from agent_atc.install import windows_service
@@ -162,12 +163,12 @@ class WindowsServiceTests(unittest.TestCase):
         try:
             # The parent coordinator died after ACK, so the replacement has no
             # Popen bookkeeping and the callback is no longer in running/.
-            with mock.patch.dict(cli._BACKGROUND_RESUMES, {}, clear=True):
+            with mock.patch.dict(delivery_engine._BACKGROUND_RESUMES, {}, clear=True):
                 self.assertTrue(queue_store.delivery_lock_is_held(self.root, request_id))
                 self.assertTrue(cli.daemon_has_live_delivery_workers(self.root))
         finally:
             queue_store.release_owner_lock(lock, remove=False)
-        with mock.patch.dict(cli._BACKGROUND_RESUMES, {}, clear=True):
+        with mock.patch.dict(delivery_engine._BACKGROUND_RESUMES, {}, clear=True):
             self.assertFalse(cli.daemon_has_live_delivery_workers(self.root))
 
     def test_draining_never_launches_new_tasks_or_deliveries(self):
@@ -176,11 +177,11 @@ class WindowsServiceTests(unittest.TestCase):
                 cli, "write_daemon_runtime"
             ), mock.patch.object(cli, "clear_daemon_runtime"), mock.patch.object(
                 cli, "consume_daemon_reload_request", side_effect=lambda root, filename="daemon-reload.json": filename == operation
-            ), mock.patch.object(cli, "reap_background_resumes"), mock.patch.object(
+            ), mock.patch.object(delivery_engine, "reap_background_resumes"), mock.patch.object(
                 cli, "daemon_has_live_delivery_workers", side_effect=[True, False]
-            ) as alive, mock.patch.object(cli, "recover_running"), mock.patch.object(
+            ) as alive, mock.patch.object(delivery_engine, "recover_running"), mock.patch.object(
                 cli, "recover_managed_tasks"
-            ) as tasks, mock.patch.object(cli, "process_one") as deliveries, mock.patch.object(
+            ) as tasks, mock.patch.object(delivery_engine, "process_one") as deliveries, mock.patch.object(
                 cli.time, "sleep"
             ) as sleep, mock.patch.object(cli.os, "execv") as execute:
                 args = argparse.Namespace(queue_dir=str(self.root), once=False, interval=0.01, max_items=None)

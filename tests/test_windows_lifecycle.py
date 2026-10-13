@@ -16,6 +16,7 @@ import unittest
 from unittest import mock
 
 from agent_atc import cli
+from agent_atc.engine import delivery as delivery_engine
 from agent_atc.owners import host
 from agent_atc import runtime as atc_runtime
 from agent_atc.store import records as queue_store
@@ -182,14 +183,14 @@ class WindowsLifecycleTests(unittest.TestCase):
 
     def test_ack_is_durable_when_global_retained_lease_is_not_writable(self):
         request = self.request(self.root, "queue-only-ack", state="failed")
-        cli.retain_target_lease(self.root, request)
-        lease = cli.retained_target_lease_path(request)
-        with mock.patch.object(cli, "acquire_retained_target_lease_lock", side_effect=PermissionError("global lease denied")), contextlib.redirect_stderr(io.StringIO()):
+        delivery_engine.retain_target_lease(self.root, request)
+        lease = delivery_engine.retained_target_lease_path(request)
+        with mock.patch.object(delivery_engine, "acquire_retained_target_lease_lock", side_effect=PermissionError("global lease denied")), contextlib.redirect_stderr(io.StringIO()):
             self.assertEqual(cli.ack(argparse.Namespace(queue_dir=str(self.root), id=request["id"], message="inspected")), 0)
         self.assertTrue(layout.ack_path(self.root, request["id"]).exists())
         self.assertTrue(layout.request_path(self.root, "done", request["id"]).exists())
         self.assertTrue(lease.exists())
-        cli.reconcile_acknowledged_retained_leases(self.root)
+        delivery_engine.reconcile_acknowledged_retained_leases(self.root)
         self.assertFalse(lease.exists())
 
     def test_generated_ack_runs_in_powershell_with_chinese_spaces_and_quotes(self):
@@ -223,8 +224,8 @@ class WindowsLifecycleTests(unittest.TestCase):
         coordinator_program = (
             "import argparse,json,sys\nfrom pathlib import Path\nfrom agent_atc import cli\n"
             f"root=Path({str(self.root)!r})\nrequest=json.loads({json.dumps(owner)!r})\n"
-            f"cli.resume_command=lambda request:[sys.executable,{str(fixture)!r}]\n"
-            "cli.run_resume_until_exit_or_ack(root,'owner',request,argparse.Namespace(resume_timeout=25))\n"
+            f"delivery_engine.resume_command=lambda request:[sys.executable,{str(fixture)!r}]\n"
+            "delivery_engine.run_resume_until_exit_or_ack(root,'owner',request,argparse.Namespace(resume_timeout=25))\n"
         )
         log_path = self.directory / "coordinator.log"
         worker_pid = None
@@ -239,19 +240,19 @@ class WindowsLifecycleTests(unittest.TestCase):
                 coordinator.kill()
                 coordinator.wait(timeout=5)
                 self.assertTrue(queue_store.delivery_lock_is_held(self.root, "owner"))
-                self.assertTrue(cli.target_lock_is_held(contender))
-                self.assertIsNone(cli.select_pending(other_root, time.time()))
-                cli.recover_running(self.root)
+                self.assertTrue(delivery_engine.target_lock_is_held(contender))
+                self.assertIsNone(delivery_engine.select_pending(other_root, time.time()))
+                delivery_engine.recover_running(self.root)
                 self.assertTrue(layout.request_path(self.root, "running", "owner").exists())
-                with mock.patch.object(cli, "resume_command", return_value=[sys.executable, str(fixture)]):
-                    with self.assertRaises(cli.TargetLeaseUnavailable):
-                        cli.run_resume_until_exit_or_ack(other_root, "contender", contender, argparse.Namespace(resume_timeout=5))
+                with mock.patch.object(delivery_engine, "resume_command", return_value=[sys.executable, str(fixture)]):
+                    with self.assertRaises(delivery_engine.TargetLeaseUnavailable):
+                        delivery_engine.run_resume_until_exit_or_ack(other_root, "contender", contender, argparse.Namespace(resume_timeout=5))
                 self.assertEqual(len(launched.read_text(encoding="utf-8").splitlines()), 1)
                 self.assertFalse(finished.exists())
                 release.touch()
                 self.wait_for(lambda: finished.exists() and not queue_store.delivery_lock_is_held(self.root, "owner"))
-                self.assertFalse(cli.target_lock_is_held(contender))
-                self.assertEqual(cli.select_pending(other_root, time.time()).stem, "contender")
+                self.assertFalse(delivery_engine.target_lock_is_held(contender))
+                self.assertEqual(delivery_engine.select_pending(other_root, time.time()).stem, "contender")
             finally:
                 release.touch()
                 if coordinator.poll() is None:
