@@ -78,6 +78,8 @@ def queue_writable(root: Path) -> bool:
 def coordinator_issue(root: Path) -> dict[str, str] | None:
     """Observe the existing singleton inode without creating a new lock file."""
     from .. import cli
+    from ..owners import host
+    from ..store import records as queue_store
     from ..store import layout
 
     path = layout.owner_lock_path(root, "daemon-singleton")
@@ -113,6 +115,8 @@ def coordinator_issue(root: Path) -> dict[str, str] | None:
 def environment_profile() -> dict[str, object]:
     """Describe this runtime; supported backends determine useful checks."""
     from .. import cli
+    from ..owners import host
+    from ..store import records as queue_store
     from ..store import layout
 
     operating_system = {"linux": "linux", "darwin": "macos", "win32": "windows"}.get(sys.platform, "other")
@@ -129,12 +133,14 @@ def runtime_issues(root: Path) -> list[dict[str, object]]:
     a manager outage does not flood the calling Agent with one block per task.
     """
     from .. import cli
+    from ..owners import host
+    from ..store import records as queue_store
     from ..store import layout
 
     grouped: dict[tuple[str, str], dict[str, object]] = {}
     now = time.time()
-    machine = cli.current_machine_id()
-    boot = cli.current_boot_id()
+    machine = host.current_machine_id()
+    boot = host.current_boot_id()
 
     def add(code: str, task_id: str, backend: str, action: str) -> None:
         item = grouped.setdefault((code, backend), {
@@ -266,6 +272,8 @@ def _work(args: argparse.Namespace) -> dict[str, object]:
 def inspect(args: argparse.Namespace) -> dict[str, object]:
     """Check supported environment, configuration and observed lifecycle state."""
     from .. import cli
+    from ..owners import host
+    from ..store import records as queue_store
     from ..store import layout
 
     operation = _operation(args)
@@ -479,6 +487,8 @@ def delivery_issues(root: Path) -> list[dict[str, object]]:
     each group. Commands, prompts and recorded exception text are never emitted.
     """
     from .. import cli
+    from ..owners import host
+    from ..store import records as queue_store
     from ..store import layout
 
     actions = {
@@ -515,7 +525,7 @@ def delivery_issues(root: Path) -> list[dict[str, object]]:
             group["callback_ids"].append(callback_id)
 
     def settled(callback_id: str) -> bool:
-        return layout.ack_path(root, callback_id).exists() or cli.is_canceled(root, callback_id)
+        return layout.ack_path(root, callback_id).exists() or queue_store.is_canceled(root, callback_id)
 
     try:
         with os.scandir(root / "failed") as entries:

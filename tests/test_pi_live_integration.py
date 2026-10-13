@@ -21,6 +21,8 @@ import unittest
 from unittest import mock
 
 from agent_atc import cli
+from agent_atc.store import records as queue_store
+from agent_atc.system import commands
 from agent_atc.store import layout
 from agent_atc.harness.pi import channel as bridge
 from agent_atc.runtime import worker_command
@@ -155,7 +157,7 @@ def runtime_fixture(tmp_path):
 
 def callback(runtime, session, callback_id, delivery=None):
     provider, _, directory, _ = runtime
-    queue_dir = directory/'queue'; cli.ensure_daemon_dirs(queue_dir)
+    queue_dir = directory/'queue'; queue_store.ensure_daemon_dirs(queue_dir)
     token = 'CALLBACK_'+callback_id
     args=argparse.Namespace(agent='pi',session=str(session),last=False,cwd=str(directory),task=token,callback_mode='cli')
     request=cli.make_request(args, token); request['id']=callback_id
@@ -207,7 +209,7 @@ class NativePiCallbackTests(unittest.TestCase):
             callback_id = 'loop'
             if delivery == 'steer':
                 canceled, canceled_payload = callback(self.runtime, session, 'canceled-steer', 'steer')
-                cli.write_request(Path(canceled_payload['canceled_path']), canceled)
+                queue_store.write_request(Path(canceled_payload['canceled_path']), canceled)
                 canceled_plan = bridge.prepare_delivery(canceled_payload)
                 assert cli.wait_for_remote_delivery(canceled_payload, canceled_plan, 20)['returncode'] == 0
             request, payload = callback(self.runtime, session, callback_id, delivery)
@@ -270,7 +272,7 @@ class NativePiCallbackTests(unittest.TestCase):
             owner=wait_for(lambda: (v if (v:=bridge.read_record(owner_path)).get('state')=='active' and v.get('owner_identity') else None))
             session=Path(owner['session_file']); owner_pid=owner['owner_pid']
             assert owner_pid != rpc.process.pid  # launcher and one actual Pi
-            assert cli.acquire_path_lock(bridge.writer_lock_path(str(session)),blocking=False) is None
+            assert queue_store.acquire_path_lock(bridge.writer_lock_path(str(session)),blocking=False) is None
             rpc.send({'id':'initial','type':'prompt','message':'baseline'})
             assert rpc.response('initial')['success']
             wait_for(lambda: any(e.get('type')=='message' and e['message']['role']=='assistant' for e in entries(session)))
@@ -280,7 +282,7 @@ class NativePiCallbackTests(unittest.TestCase):
             # Exercise the actual ATC delivery worker. An online callback must not
             # execute this deliberately invalid Pi binary.
             with mock.patch.dict(os.environ, {'ATC_PI_BIN':str(directory/'must-not-launch-pi')}):
-                cli.write_request(root/'pending'/f"{request['id']}.json",request)
+                queue_store.write_request(root/'pending'/f"{request['id']}.json",request)
                 started=time.monotonic()
                 assert cli.process_one(root,argparse.Namespace(resume_timeout=20,retries=0,retry_delay=0,retry_backoff=1))
             # Publication hands the callback to the live Pi; the daemon does not
@@ -327,7 +329,7 @@ class NativePiCallbackTests(unittest.TestCase):
         request,payload=callback(runtime,session,'offline')
         assert bridge.inspect_route(request)['status']=='offline_candidate'
         root=Path(payload['queue_dir']); request=cli.prepare_request_for_queue(root,request,payload['prompt'])
-        cli.write_request(root/'pending'/f"{request['id']}.json",request)
+        queue_store.write_request(root/'pending'/f"{request['id']}.json",request)
         assert cli.process_one(root,argparse.Namespace(resume_timeout=20,retries=0,retry_delay=0,retry_backoff=1))
         wait_for(reaped); cli.recover_running(root)
         assert (root/'done'/f"{request['id']}.json").exists()
@@ -382,7 +384,7 @@ class NativePiCallbackTests(unittest.TestCase):
             assert rpc.response('hold')['success']; assert provider.busy.wait(20)
             cancel_request,cancel_payload=callback(runtime,session,'cancel')
             cancel_plan=bridge.prepare_delivery(cancel_payload)
-            cli.write_request(Path(cancel_payload['canceled_path']),cancel_request)
+            queue_store.write_request(Path(cancel_payload['canceled_path']),cancel_request)
             assert cli.wait_for_remote_delivery(cancel_payload,cancel_plan,1)['returncode']==0
             request,payload=callback(runtime,session,'orphan')
             plan=bridge.prepare_delivery(payload)
@@ -421,9 +423,9 @@ class NativePiCallbackTests(unittest.TestCase):
         request,payload=callback(runtime,session,'cancel-offline')
         plan=bridge.prepare_delivery(payload); assert not plan.online
         # Cancellation after recovery preparation, before print's input hook.
-        cli.write_request(Path(payload['canceled_path']),request)
+        queue_store.write_request(Path(payload['canceled_path']),request)
         requests_before=len(provider.requests)
-        process=subprocess.Popen(cli.process_command(plan.command),env=plan.environment,cwd=directory,
+        process=subprocess.Popen(commands.process_command(plan.command),env=plan.environment,cwd=directory,
                                  stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True)
         try:
             plan.monitor_owner(process)

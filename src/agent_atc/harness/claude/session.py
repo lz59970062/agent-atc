@@ -224,6 +224,7 @@ def _session_of(request: Mapping[str, object]) -> str | None:
 
 def live_watcher_dir(session: str) -> Path:
     from ... import cli
+    from ...store import records as queue_store
     from ...store import layout
 
     digest = hashlib.sha256(f"session:{session}".encode("utf-8")).hexdigest()
@@ -237,12 +238,13 @@ def register_live_watcher(session: str, *, prefix: str = "") -> tuple[object, Pa
     daemon never observes an unlocked live file.
     """
     from ... import cli
+    from ...store import records as queue_store
     from ...store import layout
 
     directory = live_watcher_dir(session)
     directory.mkdir(parents=True, exist_ok=True)
     name = f"{prefix}{os.getpid()}-{secrets.token_hex(6)}"
-    lock = cli.acquire_path_lock(directory / f".{name}.staging", blocking=False)
+    lock = queue_store.acquire_path_lock(directory / f".{name}.staging", blocking=False)
     if lock is None:
         raise RuntimeError("could not lock a fresh live waiter file")
     handle, staging = lock
@@ -253,13 +255,14 @@ def register_live_watcher(session: str, *, prefix: str = "") -> tuple[object, Pa
 
 def release_live_watcher(lock: tuple[object, Path]) -> None:
     from ... import cli
+    from ...store import records as queue_store
     from ...store import layout
 
     try:
         lock[1].unlink()
     except FileNotFoundError:
         pass
-    cli.release_owner_lock(lock, remove=False)
+    queue_store.release_owner_lock(lock, remove=False)
 
 
 def live_watcher_is_held(request: Mapping[str, object]) -> bool:
@@ -275,6 +278,7 @@ def channel_is_held(session: str) -> bool:
 
 def _held(session: str, prefix: str) -> bool:
     from ... import cli
+    from ...store import records as queue_store
     from ...store import layout
 
     directory = live_watcher_dir(session)
@@ -282,7 +286,7 @@ def _held(session: str, prefix: str) -> bool:
         return False
     held = False
     for path in directory.glob(f"{prefix}*.lock"):
-        lock = cli.acquire_path_lock(path, blocking=False)
+        lock = queue_store.acquire_path_lock(path, blocking=False)
         if lock is None:
             held = True
         else:
@@ -293,10 +297,11 @@ def _held(session: str, prefix: str) -> bool:
 def _claim(root: Path, path: Path) -> str | None:
     """Move one callback through running/ and return the prompt to print."""
     from ... import cli
+    from ...store import records as queue_store
     from ...store import layout
 
     request_id = path.stem
-    delivery_lock = cli.acquire_owner_lock(root, layout.delivery_lock_id(request_id), blocking=False)
+    delivery_lock = queue_store.acquire_owner_lock(root, layout.delivery_lock_id(request_id), blocking=False)
     if delivery_lock is None:
         return None
     target_lock = None
@@ -310,11 +315,11 @@ def _claim(root: Path, path: Path) -> str | None:
         if target_lock is None:
             return None  # The daemon is delivering to this session right now.
         try:
-            running = cli.move_request(path, root / "running")
+            running = queue_store.move_request(path, root / "running")
         except FileNotFoundError:
             return None
         request = cli.load_request(running)
-        if layout.ack_path(root, request_id).exists() or cli.is_canceled(root, request_id):
+        if layout.ack_path(root, request_id).exists() or queue_store.is_canceled(root, request_id):
             return None  # The finally block returns it; the daemon finalizes it.
         payload = {"prompt": str(request["prompt"]), "callback_hook_path": str(layout.callback_hook_path()),
                    "request": request, "queue_dir": str(root)}
@@ -323,16 +328,16 @@ def _claim(root: Path, path: Path) -> str | None:
         request["live_delivered_at"] = now
         request["next_attempt_at"] = now + LIVE_ACK_GRACE_SECONDS
         request["last_deferred_reason"] = "delivered to the live session by atc wait; awaiting ACK"
-        cli.write_request(running, request)
+        queue_store.write_request(running, request)
         return prompt
     finally:
         if running is not None and running.exists():
             try:
-                cli.move_request(running, root / "pending")
+                queue_store.move_request(running, root / "pending")
             except OSError as exc:
                 print(f"atc: warning: could not return callback {request_id} to pending: {exc}", file=sys.stderr)
-        cli.release_owner_lock(target_lock, remove=False)
-        cli.release_owner_lock(delivery_lock, remove=False)
+        queue_store.release_owner_lock(target_lock, remove=False)
+        queue_store.release_owner_lock(delivery_lock, remove=False)
 
 
 def _matches(request: Mapping[str, object], session: str, task: str | None) -> bool:
@@ -359,6 +364,7 @@ def wait(args: argparse.Namespace) -> int:
     the OS releases the waiter's lock and the daemon delivers as usual.
     """
     from ... import cli
+    from ...store import records as queue_store
     from ...store import layout
 
     session = args.session or os.environ.get(SESSION_ENV, "").strip()
@@ -367,7 +373,7 @@ def wait(args: argparse.Namespace) -> int:
               "Other agents receive callbacks from the daemon and should not run it.", file=sys.stderr)
         return 2
     root = layout.queue_dir(args).expanduser().absolute()
-    cli.ensure_daemon_dirs(root)
+    queue_store.ensure_daemon_dirs(root)
     try:
         if args.task and not layout.managed_task_path(root, args.task).exists():
             raise ValueError(f"unknown task {args.task} in {root}")

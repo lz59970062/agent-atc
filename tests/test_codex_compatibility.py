@@ -12,6 +12,7 @@ import unittest
 from unittest import mock
 
 from agent_atc import cli
+from agent_atc.system import commands
 
 
 class CodexCompatibilityTests(unittest.TestCase):
@@ -78,7 +79,7 @@ class CodexCompatibilityTests(unittest.TestCase):
             profile.mkdir()
             environment["CODEX_HOME"] = str(profile)
             environment["ATC_HOME"] = str(profile / "atc-home")
-            command = cli.process_command(command, environment)
+            command = commands.process_command(command, environment)
             result = subprocess.run(command, input="", text=True, capture_output=True, timeout=20,
                                     cwd=tmp, env=environment)
             output = (result.stdout + result.stderr).lower()

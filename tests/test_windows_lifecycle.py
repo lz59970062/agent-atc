@@ -16,6 +16,9 @@ import unittest
 from unittest import mock
 
 from agent_atc import cli
+from agent_atc.owners import host
+from agent_atc import runtime as atc_runtime
+from agent_atc.store import records as queue_store
 from agent_atc.store import layout
 from agent_atc.owners import LaunchError, OwnerState
 from agent_atc.owners.windows import WindowsBackend
@@ -39,8 +42,8 @@ class WindowsLifecycleTests(unittest.TestCase):
             "PYTHONIOENCODING": "utf-8",
         }))
         self.stack.enter_context(mock.patch.object(WindowsBackend, "available", return_value=True))
-        self.stack.enter_context(mock.patch.object(cli, "current_machine_id", return_value="fixture-host"))
-        self.stack.enter_context(mock.patch.object(cli, "current_boot_id", return_value="fixture-boot"))
+        self.stack.enter_context(mock.patch.object(host, "current_machine_id", return_value="fixture-host"))
+        self.stack.enter_context(mock.patch.object(host, "current_boot_id", return_value="fixture-boot"))
         self.stack.enter_context(mock.patch.object(WindowsBackend, "collect", return_value=False))
 
     def submit(self):
@@ -68,8 +71,8 @@ class WindowsLifecycleTests(unittest.TestCase):
             "target_source": "explicit", "prompt": "Model-free Windows lifecycle fixture",
             "queue_dir": str(root), "lifecycle_state": state, "attempts": 0,
         }
-        cli.ensure_daemon_dirs(root)
-        cli.write_request(layout.request_path(root, state, ident), request)
+        queue_store.ensure_daemon_dirs(root)
+        queue_store.write_request(layout.request_path(root, state, ident), request)
         return request
 
     def wait_for(self, predicate, timeout=10):
@@ -94,7 +97,7 @@ class WindowsLifecycleTests(unittest.TestCase):
             with self.subTest(change=change), mock.patch.object(WindowsBackend, "admits_worker", return_value=True), mock.patch.object(
                 cli, "run_managed_worker_locked", return_value=7
             ) as workload, mock.patch.object(windows_process, "enter_worker_job") as enter, contextlib.redirect_stderr(io.StringIO()):
-                cli.write_request(path, dict(task, **change))
+                queue_store.write_request(path, dict(task, **change))
                 self.assertEqual(cli.run_task_worker(args), 125 if change else 7)
                 self.assertEqual(workload.call_count, 0 if change else 1)
                 self.assertEqual(enter.call_count, 0 if change else 1)
@@ -104,7 +107,7 @@ class WindowsLifecycleTests(unittest.TestCase):
         self.launching(path)
         for admitted, boot in ((False, "fixture-boot"), (True, None)):
             with self.subTest(admitted=admitted, boot=boot), mock.patch.object(WindowsBackend, "admits_worker", return_value=admitted), mock.patch.object(
-                cli, "current_boot_id", return_value=boot
+                host, "current_boot_id", return_value=boot
             ), mock.patch.object(cli, "run_managed_worker_locked") as workload, contextlib.redirect_stderr(io.StringIO()):
                 self.assertEqual(cli.run_task_worker(argparse.Namespace(task_file=str(path), attempt=1)), 125)
                 workload.assert_not_called()
@@ -137,7 +140,7 @@ class WindowsLifecycleTests(unittest.TestCase):
         cli.write_managed_task(self.root, task)
         with mock.patch.object(WindowsBackend, "launch") as launch, mock.patch.object(
             WindowsBackend, "probe", return_value=OwnerState.UNKNOWN
-        ), mock.patch.object(cli, "current_boot_id", return_value=None):
+        ), mock.patch.object(host, "current_boot_id", return_value=None):
             cli.recover_managed_tasks(self.root)
             cli.recover_managed_tasks(self.root)
         launch.assert_not_called()
@@ -193,7 +196,7 @@ class WindowsLifecycleTests(unittest.TestCase):
         powershell = shutil.which("powershell.exe") or shutil.which("pwsh.exe")
         self.assertIsNotNone(powershell)
         request = self.request(self.root, "powershell-ack", state="running")
-        command = cli.control_command("ack", "--queue-dir", str(self.root), "--id", request["id"])
+        command = atc_runtime.control_command("ack", "--queue-dir", str(self.root), "--id", request["id"])
         result = subprocess.run([powershell, "-NoProfile", "-NonInteractive", "-Command", command],
                                 capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=20,
                                 **windows_process.background_popen_kwargs())
@@ -235,7 +238,7 @@ class WindowsLifecycleTests(unittest.TestCase):
                 self.assertIn("Model-free Windows", first["prompt"])
                 coordinator.kill()
                 coordinator.wait(timeout=5)
-                self.assertTrue(cli.delivery_lock_is_held(self.root, "owner"))
+                self.assertTrue(queue_store.delivery_lock_is_held(self.root, "owner"))
                 self.assertTrue(cli.target_lock_is_held(contender))
                 self.assertIsNone(cli.select_pending(other_root, time.time()))
                 cli.recover_running(self.root)
@@ -246,7 +249,7 @@ class WindowsLifecycleTests(unittest.TestCase):
                 self.assertEqual(len(launched.read_text(encoding="utf-8").splitlines()), 1)
                 self.assertFalse(finished.exists())
                 release.touch()
-                self.wait_for(lambda: finished.exists() and not cli.delivery_lock_is_held(self.root, "owner"))
+                self.wait_for(lambda: finished.exists() and not queue_store.delivery_lock_is_held(self.root, "owner"))
                 self.assertFalse(cli.target_lock_is_held(contender))
                 self.assertEqual(cli.select_pending(other_root, time.time()).stem, "contender")
             finally:
@@ -257,7 +260,7 @@ class WindowsLifecycleTests(unittest.TestCase):
                 # Wait for the short fixture to finish and the native delivery
                 # worker to close its inherited handles before temp cleanup.
                 deadline = time.monotonic() + 5
-                while worker_pid is not None and time.monotonic() < deadline and cli.delivery_lock_is_held(self.root, "owner"):
+                while worker_pid is not None and time.monotonic() < deadline and queue_store.delivery_lock_is_held(self.root, "owner"):
                     time.sleep(0.025)
 
 

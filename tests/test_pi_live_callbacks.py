@@ -11,6 +11,7 @@ import time
 import unittest
 
 from agent_atc import callback_transport, cli
+from agent_atc.store import records as queue_store
 from agent_atc.store import layout
 from agent_atc.harness.pi import channel as bridge
 
@@ -28,7 +29,7 @@ def build_bound(tmp_path):
                               task='fixture', callback_mode='cli')
     request = cli.make_request(args, 'Wake the same Pi')
     request['id'] = 'fixture'
-    queue = tmp_path / 'queue'; cli.ensure_daemon_dirs(queue)
+    queue = tmp_path / 'queue'; queue_store.ensure_daemon_dirs(queue)
     directory = bridge.channel_dir(str(session), Path(request['pi_channel_root']))
     bridge.ensure_private_directory(Path(request['pi_channel_root']))
     bridge.ensure_private_directory(directory)
@@ -36,7 +37,7 @@ def build_bound(tmp_path):
              'profile_dir': request['pi_profile_dir'], 'channel_dir': str(directory),
              'owner_nonce': 'fixture-owner', 'owner_pid': os.getpid(), 'managed': False, 'state': 'active',
              'delivery_modes': ['follow-up', 'steer']}
-    cli.write_request(directory / 'owner.json', owner)
+    queue_store.write_request(directory / 'owner.json', owner)
     payload = {'request': request, 'queue_dir': str(queue), 'prompt': request['prompt'],
                'ack_path': str(layout.ack_path(queue, 'fixture')),
                'canceled_path': str(layout.request_path(queue, 'canceled', 'fixture')),
@@ -47,7 +48,7 @@ def build_bound(tmp_path):
 def dead_managed(owner, directory):
     owner.update(owner_pid=99999999, managed=True, state='closed',
                  owner_identity=cli.daemon_process_identity(os.getpid()))
-    cli.write_request(directory / 'owner.json', owner)
+    queue_store.write_request(directory / 'owner.json', owner)
 
 
 class PiLiveCallbackTests(unittest.TestCase):
@@ -67,13 +68,13 @@ class PiLiveCallbackTests(unittest.TestCase):
         assert steer['version'] == 4 and steer['pi_delivery'] == 'steer'
         steer['id'] = 'fixture'
         path = queue/'pending/fixture.json'
-        cli.write_request(path, steer)
+        queue_store.write_request(path, steer)
         assert cli.load_request(path)['pi_delivery'] == 'steer'
         task = dict(steer, version=5, queue_dir=str(queue), execution_backend='screen',
                     screen_session='atc-fixture', state='completed', command='/bin/true',
                     wrapped_command=['/bin/true'], log_path=str(self.directory/'task.log'))
         task_path = self.directory/'fixture/task.json'
-        cli.write_request(task_path, task)
+        queue_store.write_request(task_path, task)
         loaded = cli.load_managed_task(task_path)
         with mock.patch.dict(os.environ, {bridge.PROFILE_ENV: str(self.directory/'other-profile')}):
             restored = cli.managed_callback_request(loaded, 'Saved result')
@@ -88,10 +89,10 @@ class PiLiveCallbackTests(unittest.TestCase):
         legacy.pop('pi_delivery')
         legacy['version'] = 3
         path = queue/'pending/fixture.json'
-        cli.write_request(path, legacy)
+        queue_store.write_request(path, legacy)
         assert cli.load_request(path)['version'] == 3
         assert bridge.inspect_route(legacy)['status'] == 'owner_registered'
-        cli.write_request(path, dict(request, pi_delivery='invalid'))
+        queue_store.write_request(path, dict(request, pi_delivery='invalid'))
         with self.assertRaisesRegex(ValueError, 'Pi delivery'):
             cli.load_request(path)
         args = argparse.Namespace(agent='codex', callback_mode='cli')
@@ -99,7 +100,7 @@ class PiLiveCallbackTests(unittest.TestCase):
 
     def test_retry_keeps_steer_and_original_profile(self):
         request, _, _, queue, _ = self.bound
-        cli.write_request(queue/'failed/fixture.json', request)
+        queue_store.write_request(queue/'failed/fixture.json', request)
         args = argparse.Namespace(queue_dir=str(queue), id='fixture', callback_mode='cli')
         with mock.patch.dict(os.environ, {bridge.PROFILE_ENV: str(self.directory/'other-profile')}):
             assert cli.retry_callback(args) == 0
@@ -112,14 +113,14 @@ class PiLiveCallbackTests(unittest.TestCase):
         request, owner, directory, queue, payload = self.bound
         request.update(version=4, pi_delivery='steer')
         owner.pop('delivery_modes')
-        cli.write_request(directory/'owner.json', owner)
+        queue_store.write_request(directory/'owner.json', owner)
         assert bridge.inspect_route(request)['status'] == 'blocked'
         with self.assertRaisesRegex(cli.CallbackTransportBlocked, 'does not support steer'):
             bridge.prepare_delivery(payload)
         assert not (directory/'inbox').exists()
         assert not cli.retained_target_lease_is_held(request)
         owner['delivery_modes'] = ['follow-up', 'steer']
-        cli.write_request(directory/'owner.json', owner)
+        queue_store.write_request(directory/'owner.json', owner)
         assert bridge.inspect_route(request)['status'] == 'owner_registered'
         assert bridge.prepare_delivery(payload).online
         file = next((directory/'inbox').glob('*.json'))
@@ -129,7 +130,7 @@ class PiLiveCallbackTests(unittest.TestCase):
         with self.assertRaisesRegex(cli.CallbackTransportBlocked, 'different delivery policy'):
             bridge.prepare_delivery(payload)
         assert bridge.read_record(file, versions=(1, 2)) == envelope
-        cli.write_request(layout.ack_path(queue, 'fixture'), {'id': 'fixture'})
+        queue_store.write_request(layout.ack_path(queue, 'fixture'), {'id': 'fixture'})
         cli.release_retained_target_lease(queue, request)
 
     def test_online_publication_retains_lease_and_never_spawns_pi(self):
@@ -142,7 +143,7 @@ class PiLiveCallbackTests(unittest.TestCase):
         envelope = json.loads(next((directory / 'inbox').glob('*.json')).read_text())
         assert envelope['prompt'] == payload['prompt']
         assert cli.retained_target_lease_is_held(request)
-        cli.write_request(layout.ack_path(queue, 'fixture'), {'id': 'fixture'})
+        queue_store.write_request(layout.ack_path(queue, 'fixture'), {'id': 'fixture'})
         assert cli.wait_for_remote_delivery(payload, delivery, 1)['returncode'] == 0
         assert not cli.retained_target_lease_is_held(request)
 
@@ -155,8 +156,8 @@ class PiLiveCallbackTests(unittest.TestCase):
         delivery = bridge.prepare_delivery(payload)
         assert cli.wait_for_remote_delivery(payload, delivery, 0.01)['returncode'] == 125
         assert cli.retained_target_lease_is_held(request)
-        cli.write_request(queue / 'failed/fixture.json', request)
-        cli.write_request(layout.ack_path(queue, 'fixture'), {'id': 'fixture'})
+        queue_store.write_request(queue / 'failed/fixture.json', request)
+        queue_store.write_request(layout.ack_path(queue, 'fixture'), {'id': 'fixture'})
         cli.reconcile_acknowledged_retained_leases(queue)
         assert not cli.retained_target_lease_is_held(request)
 
@@ -165,7 +166,7 @@ class PiLiveCallbackTests(unittest.TestCase):
     def queue_published(self):
         request, owner, directory, queue, payload = self.bound
         request = cli.prepare_request_for_queue(queue, request, payload['prompt'])
-        cli.write_request(queue / 'pending' / 'fixture.json', request)
+        queue_store.write_request(queue / 'pending' / 'fixture.json', request)
         args = argparse.Namespace(resume_timeout=3600, retries=3, retry_delay=0, retry_backoff=1)
         started = time.monotonic()
         assert cli.process_one(queue, args)
@@ -184,7 +185,7 @@ class PiLiveCallbackTests(unittest.TestCase):
                                    task='other', callback_mode='cli')
         other_request = cli.make_request(other, 'Wake another session')
         other_request['id'] = 'other'
-        cli.write_request(queue / 'pending' / 'other.json', other_request)
+        queue_store.write_request(queue / 'pending' / 'other.json', other_request)
         # Another session's callback is not stuck behind the unacknowledged Pi one.
         assert cli.select_pending(queue, time.time() + 7200) == queue / 'pending' / 'other.json'
         (queue / 'pending' / 'other.json').unlink()
@@ -200,9 +201,9 @@ class PiLiveCallbackTests(unittest.TestCase):
                 request, owner, directory, queue = self.queue_published()
                 timeout = 3600
                 if case == 'exited':
-                    cli.write_request(directory / 'owner.json', dict(owner, state='closed'))
+                    queue_store.write_request(directory / 'owner.json', dict(owner, state='closed'))
                 elif case == 'replaced':
-                    cli.write_request(directory / 'owner.json', dict(owner, owner_nonce='another-owner'))
+                    queue_store.write_request(directory / 'owner.json', dict(owner, owner_nonce='another-owner'))
                 else:
                     timeout = 0.001
                 bridge.reconcile_publications(queue, timeout)
@@ -217,7 +218,7 @@ class PiLiveCallbackTests(unittest.TestCase):
                     (queue / state / 'fixture.json').unlink()
                 for envelope in (directory / 'inbox').glob('*.json'):
                     envelope.unlink()
-                cli.write_request(directory / 'owner.json', owner)
+                queue_store.write_request(directory / 'owner.json', owner)
 
     def test_publication_failure_still_retains_unknown(self):
         bound = self.bound
@@ -238,7 +239,7 @@ class PiLiveCallbackTests(unittest.TestCase):
         tmp_path = self.directory
         request, owner, directory, _, payload = bound
         owner['owner_pid'] = 99999999; owner['state'] = 'closed'
-        cli.write_request(directory / 'owner.json', owner)
+        queue_store.write_request(directory / 'owner.json', owner)
         assert bridge.inspect_route(request)['status'] == 'blocked'
         with self.assertRaises(cli.CallbackTransportBlocked): bridge.prepare_delivery(payload)
         dead_managed(owner, directory)
@@ -246,7 +247,7 @@ class PiLiveCallbackTests(unittest.TestCase):
         delivery = bridge.prepare_delivery(payload)
         assert not delivery.online
         assert delivery.command[-2:] == ['--extension', str(bridge.extension_path())]
-        assert cli.acquire_path_lock(bridge.writer_lock_path(request['target']['value']), blocking=False) is None
+        assert queue_store.acquire_path_lock(bridge.writer_lock_path(request['target']['value']), blocking=False) is None
         delivery.close()
 
 
@@ -293,11 +294,11 @@ class PiLiveCallbackTests(unittest.TestCase):
         request, owner, directory, _, payload = bound
         os.environ['PI_CODING_AGENT_DIR'] = '/different/current/profile'
         assert bridge.owner_record(request)[1] == owner
-        owner['profile_dir'] = '/another/profile'; cli.write_request(directory / 'owner.json', owner)
+        owner['profile_dir'] = '/another/profile'; queue_store.write_request(directory / 'owner.json', owner)
         with self.assertRaises(cli.CallbackTransportBlocked): bridge.prepare_delivery(payload)
         owner['profile_dir'] = request['pi_profile_dir']
         owner.update(managed=True, lease_pid=99999999, lease_identity=cli.daemon_process_identity(os.getpid()))
-        cli.write_request(directory / 'owner.json', owner)
+        queue_store.write_request(directory / 'owner.json', owner)
         assert bridge.inspect_route(request)['status'] == 'blocked'
 
 
@@ -322,7 +323,7 @@ class PiLiveCallbackTests(unittest.TestCase):
         tmp_path = self.directory
         request, _, directory, _, payload = bound
         bridge.prepare_delivery(payload)
-        queue2 = tmp_path / 'queue2'; cli.ensure_daemon_dirs(queue2)
+        queue2 = tmp_path / 'queue2'; queue_store.ensure_daemon_dirs(queue2)
         # A different queue must never overwrite the first retained target lease.
         with self.assertRaises(RuntimeError): bridge.prepare_delivery(dict(payload, queue_dir=str(queue2)))
         assert len(list((directory / 'inbox').glob('*.json'))) == 1
@@ -362,7 +363,7 @@ class PiLiveCallbackTests(unittest.TestCase):
         tmp_path = self.directory
         request,owner,directory,_,_=bound
         dead_managed(owner,directory); owner['owner_identity']['machine_id']='foreign-machine'
-        cli.write_request(directory/'owner.json',owner)
+        queue_store.write_request(directory/'owner.json',owner)
         args=argparse.Namespace(cwd=request['cwd'],session=request['target']['value'],pi_args=[])
         with mock.patch.object(subprocess,'Popen',side_effect=AssertionError('spawned')):
             with self.assertRaisesRegex(ValueError, 'Cannot confirm'): bridge.managed_pi(args)

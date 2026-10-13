@@ -19,6 +19,7 @@ import unittest
 from unittest import mock
 
 from agent_atc import cli
+from agent_atc.store import records as queue_store
 from agent_atc.store import layout
 
 
@@ -46,13 +47,14 @@ class DesktopDeliveryTimeoutTests(unittest.TestCase):
             "PYTHONIOENCODING": "utf-8",
         }))
         self.errors = self.stack.enter_context(contextlib.redirect_stderr(io.StringIO()))
-        cli.ensure_daemon_dirs(self.root)
+        queue_store.ensure_daemon_dirs(self.root)
 
     def worker_command(self, mode):
         program = textwrap.dedent("""
             import argparse,json,os,sys,time
             from pathlib import Path
             from agent_atc import cli
+            from agent_atc.store import records as queue_store
             from agent_atc.store import layout
             root=Path(ROOT)
             request=json.loads(REQUEST)
@@ -129,7 +131,7 @@ class DesktopDeliveryTimeoutTests(unittest.TestCase):
         self.assertFalse(self.cli_calls.exists())
 
     def test_unknown_submission_enters_failed_without_retry_and_blocks_other_queue(self):
-        cli.write_request(layout.request_path(self.root, "pending", self.request["id"]), self.request)
+        queue_store.write_request(layout.request_path(self.root, "pending", self.request["id"]), self.request)
         args = argparse.Namespace(resume_timeout=1, retries=3, retry_delay=0, retry_backoff=1)
         with mock.patch.object(cli, "delivery_worker_command", return_value=self.worker_command("unknown")), mock.patch.object(
             cli, "resume_command", return_value=self.fallback_command()
@@ -141,8 +143,8 @@ class DesktopDeliveryTimeoutTests(unittest.TestCase):
         self.assertEqual(failed["attempts"], 1)
         self.assertFalse(layout.request_path(self.root, "pending", self.request["id"]).exists())
         other = self.directory / "other-queue"
-        cli.ensure_daemon_dirs(other)
-        cli.write_request(layout.request_path(other, "pending", "contender"), dict(self.request, id="contender", queue_dir=str(other)))
+        queue_store.ensure_daemon_dirs(other)
+        queue_store.write_request(layout.request_path(other, "pending", "contender"), dict(self.request, id="contender", queue_dir=str(other)))
         self.assertIsNone(cli.select_pending(other, time.time()))
         self.assert_submission_recorded_once()
 

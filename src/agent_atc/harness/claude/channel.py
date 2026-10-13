@@ -178,6 +178,7 @@ class ChannelServer:
 
     def poll(self) -> None:
         from ... import cli
+        from ...store import records as queue_store
         from ...store import layout
 
         if self.stepped_aside:
@@ -238,10 +239,11 @@ class ChannelServer:
 def serve(args: argparse.Namespace) -> int:
     """Hidden `atc _claude-channel`: started by Claude Code, never by hand."""
     from ... import cli
+    from ...store import records as queue_store
     from ...store import layout
 
     root = layout.queue_dir(args).expanduser().absolute()
-    cli.ensure_daemon_dirs(root)
+    queue_store.ensure_daemon_dirs(root)
     server = ChannelServer(root, parent_pid=args.parent_pid or os.getppid(), environment=os.environ,
                            poll_interval=args.poll_interval, ack_grace=claude_code.LIVE_ACK_GRACE_SECONDS)
     return server.run(sys.stdin)
@@ -250,6 +252,7 @@ def serve(args: argparse.Namespace) -> int:
 def mcp_config(root: Path, environment: Mapping[str, str]) -> str:
     """Server entry for --mcp-config; it must find the same locks as the daemon."""
     from ... import cli
+    from ...store import records as queue_store
     from ...store import layout
 
     command = worker_command("_claude-channel", "--queue-dir", str(root))
@@ -270,6 +273,7 @@ def launch_command(claude: str, root: Path, claude_args: list[str],
 def launch(args: argparse.Namespace) -> int:
     """`atc claude [claude args]`: interactive Claude Code with the ATC channel."""
     from ... import cli
+    from ...store import records as queue_store
     from ...store import layout
 
     root = layout.queue_dir(args).expanduser().absolute()

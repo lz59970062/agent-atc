@@ -15,6 +15,8 @@ from unittest import mock
 
 from agent_atc.harness.claude import session as claude_code
 from agent_atc import cli
+from agent_atc import runtime as atc_runtime
+from agent_atc.store import records as queue_store
 from agent_atc.store import layout
 
 SRC = str(Path(__file__).resolve().parents[1] / "src")
@@ -179,7 +181,7 @@ class LiveWaiterTests(unittest.TestCase):
         patcher = mock.patch.dict(os.environ, self.environment)
         patcher.start()
         self.addCleanup(patcher.stop)
-        cli.ensure_daemon_dirs(self.root)
+        queue_store.ensure_daemon_dirs(self.root)
 
     def enqueue(self, ident: str, *, session: str = SESSION, agent: str = "claude", **extra: object) -> Path:
         args = argparse.Namespace(
@@ -286,7 +288,7 @@ class LiveWaiterTests(unittest.TestCase):
         self.assertEqual(self.run_wait(task="00000000")[0], 2)
 
     def test_wait_recovers_a_callback_whose_headless_retries_failed(self) -> None:
-        cli.move_request(self.enqueue("cb-failed"), self.root / "failed")
+        queue_store.move_request(self.enqueue("cb-failed"), self.root / "failed")
         status, output, _ = self.run_wait()
         self.assertEqual(status, 0)
         self.assertIn("cb-failed", output)
@@ -298,7 +300,7 @@ class LiveWaiterTests(unittest.TestCase):
         try:
             self.assertEqual(self.run_wait(timeout=0.2)[0], 3)
         finally:
-            cli.release_owner_lock(target_lock, remove=False)
+            queue_store.release_owner_lock(target_lock, remove=False)
         self.assertEqual(self.run_wait()[0], 0)
 
     def test_background_waiter_process_wakes_when_callback_arrives(self) -> None:
@@ -331,8 +333,8 @@ class LiveWaiterTests(unittest.TestCase):
 
 class ControlCommandTests(unittest.TestCase):
     def test_ack_command_is_runnable_without_atc_on_path(self) -> None:
-        with mock.patch.object(cli, "console_script_path", return_value=None):
-            command = cli.control_command("ack", "--id", "x")
+        with mock.patch.object(atc_runtime, "console_script_path", return_value=None):
+            command = atc_runtime.control_command("ack", "--id", "x")
         self.assertEqual(command.split()[:2], [sys.executable, str(Path(cli.__file__).with_name("_entry.py"))])
         self.assertTrue(command.endswith("ack --id x"))
 

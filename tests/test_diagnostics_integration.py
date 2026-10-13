@@ -21,6 +21,7 @@ import unittest
 from unittest import mock
 
 from agent_atc import cli
+from agent_atc.store import records as queue_store
 from agent_atc.store import layout
 from agent_atc.owners import SystemdUserBackend
 from agent_atc.runtime import worker_command
@@ -150,9 +151,9 @@ class RealDiagnosticsRepairTests(unittest.TestCase):
                     self.assertEqual(runtime["queue_dir"], str(root.resolve()))
                     self.assertEqual(runtime["process_identity"], cli.daemon_process_identity(daemon.pid))
                     self.assertEqual(int((state / "daemon.pid").read_text()), daemon.pid)
-                    lock = cli.acquire_owner_lock(root, "daemon-singleton", blocking=False)
+                    lock = queue_store.acquire_owner_lock(root, "daemon-singleton", blocking=False)
                     if lock is not None:
-                        cli.release_owner_lock(lock, remove=False)
+                        queue_store.release_owner_lock(lock, remove=False)
                     self.assertIsNone(lock, "the actual coordinator must own this queue")
                     self.assertTrue((codex_home / "skills" / "agent-atc" / "SKILL.md").is_file())
                     self.assertFalse((claude_home / "skills").exists(), "repair should install only the selected Agent skill")

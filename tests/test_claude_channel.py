@@ -15,6 +15,7 @@ from unittest import mock
 
 from agent_atc.harness.claude import channel as claude_channel, session as claude_code
 from agent_atc import cli
+from agent_atc.store import records as queue_store
 from agent_atc.store import layout
 
 SRC = str(Path(__file__).resolve().parents[1] / "src")
@@ -59,7 +60,7 @@ class ChannelServerTests(unittest.TestCase):
         patcher = mock.patch.dict(os.environ, self.environment)
         patcher.start()
         self.addCleanup(patcher.stop)
-        cli.ensure_daemon_dirs(self.root)
+        queue_store.ensure_daemon_dirs(self.root)
         self.set_session(SESSION)
 
     def set_session(self, session: str) -> None:

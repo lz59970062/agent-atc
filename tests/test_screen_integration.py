@@ -20,6 +20,7 @@ from pathlib import Path
 from unittest import mock
 
 from agent_atc import cli
+from agent_atc.store import records as queue_store
 from agent_atc.store import layout
 from agent_atc.install import diagnostics
 from agent_atc.owners import SystemdUserBackend
@@ -92,9 +93,9 @@ class RealStandaloneScreenTests(unittest.TestCase):
                     self.assertIsNone(sleeper.poll())
                     self.assertEqual(int((state / "daemon.pid").read_text()), daemon.pid)
                     self.assertTrue(cli.daemon_supports_hot_reload(daemon.pid, expected_queue=root))
-                    lock = cli.acquire_owner_lock(root, "daemon-singleton", blocking=False)
+                    lock = queue_store.acquire_owner_lock(root, "daemon-singleton", blocking=False)
                     if lock is not None:
-                        cli.release_owner_lock(lock, remove=False)
+                        queue_store.release_owner_lock(lock, remove=False)
                     self.assertIsNone(lock, "new coordinator must own the requested queue")
                     self.assertEqual(list((root / "pending").glob("*.json")), [])
             finally:
@@ -167,6 +168,7 @@ class RealStandaloneScreenTests(unittest.TestCase):
                 from pathlib import Path
                 sys.path.insert(0, {source!r})
                 from agent_atc import cli
+                from agent_atc.store import records as queue_store
                 from agent_atc.store import layout
                 cli.recover_managed_tasks(Path(sys.argv[1]))
                 Path(sys.argv[2]).write_text("launched")

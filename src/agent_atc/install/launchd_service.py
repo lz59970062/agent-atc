@@ -22,6 +22,7 @@ def agent_directory() -> Path:
 
 def service_text(args: argparse.Namespace) -> str:
     from .. import cli
+    from ..store import records as queue_store
     from ..store import layout
 
     label = macos.validate_label(args.name)
@@ -49,6 +50,7 @@ def service_text(args: argparse.Namespace) -> str:
 
 def install(args: argparse.Namespace) -> int:
     from .. import cli
+    from ..store import records as queue_store
     from ..store import layout
 
     try:
@@ -66,7 +68,7 @@ def install(args: argparse.Namespace) -> int:
         state_dir = layout.daemon_state_dir()
         state_dir.mkdir(parents=True, exist_ok=True)
         os.chmod(state_dir, 0o700)
-        cli.write_private_text(target, text)
+        queue_store.write_private_text(target, text)
         print(f"Installed launchd LaunchAgent to {target}")
         if not (args.enable or args.now):
             return 0
@@ -90,7 +92,7 @@ def install(args: argparse.Namespace) -> int:
             return 1
 
         queue = layout.queue_dir(args)
-        admission = cli.acquire_owner_lock(queue, "daemon-singleton", blocking=False)
+        admission = queue_store.acquire_owner_lock(queue, "daemon-singleton", blocking=False)
         if admission is None:
             runtime = cli.read_daemon_runtime()
             pid = runtime.get("pid") if runtime else None
@@ -99,7 +101,7 @@ def install(args: argparse.Namespace) -> int:
                 return 0
             print("atc: another coordinator owns the queue; LaunchAgent activation was deferred", file=sys.stderr)
             return 1
-        cli.release_owner_lock(admission, remove=False)
+        queue_store.release_owner_lock(admission, remove=False)
         if registered:
             result = macos.launchctl(["bootout", service])
             if result.returncode != 0:

@@ -13,6 +13,8 @@ from pathlib import Path
 from unittest import mock
 
 from agent_atc import cli
+from agent_atc.owners import host
+from agent_atc.store import records as queue_store
 from agent_atc.store import layout
 from agent_atc.owners import LaunchError, OwnerState, ScreenBackend, SystemdUserBackend
 
@@ -49,7 +51,7 @@ class NativeTaskLifecycleTests(unittest.TestCase):
         with mock.patch.object(SystemdUserBackend, "launch"):
             cli.recover_managed_tasks(self.root)
         task = cli.load_managed_task(path)
-        task.update(state="running", boot_id=cli.current_boot_id(), started_at=time.time())
+        task.update(state="running", boot_id=host.current_boot_id(), started_at=time.time())
         cli.write_managed_task(self.root, task)
         return task
 
@@ -121,7 +123,7 @@ class NativeTaskLifecycleTests(unittest.TestCase):
         path = self.submit()
         task = self.mark_running(path)
         result = {"version": 1, "id": task["id"], "exit_code": 7, "completed_at": time.time()}
-        cli.write_request(layout.managed_result_path(self.root, str(task["id"])), result)
+        queue_store.write_request(layout.managed_result_path(self.root, str(task["id"])), result)
         with mock.patch.object(SystemdUserBackend, "probe", return_value=OwnerState.UNKNOWN), mock.patch.object(
             SystemdUserBackend, "launch"
         ) as launch:
@@ -144,7 +146,7 @@ class NativeTaskLifecycleTests(unittest.TestCase):
         task = self.mark_running(path)
         task["started_at"] = 100.0
         cli.write_managed_task(self.root, task)
-        cli.write_request(layout.managed_result_path(self.root, str(task["id"])), {
+        queue_store.write_request(layout.managed_result_path(self.root, str(task["id"])), {
             "version": 1, "id": task["id"], "exit_code": 0,
             "completed_at": 225.5,
         })
@@ -158,7 +160,7 @@ class NativeTaskLifecycleTests(unittest.TestCase):
     def test_foreign_result_identity_cannot_mark_task_complete(self) -> None:
         path = self.submit()
         task = self.mark_running(path)
-        cli.write_request(layout.managed_result_path(self.root, str(task["id"])), {
+        queue_store.write_request(layout.managed_result_path(self.root, str(task["id"])), {
             "version": 1, "id": "different-task", "exit_code": 0,
         })
         with mock.patch.object(SystemdUserBackend, "probe", return_value=OwnerState.ABSENT), mock.patch.object(
@@ -174,7 +176,7 @@ class NativeTaskLifecycleTests(unittest.TestCase):
         task = self.mark_running(path)
         task["boot_id"] = "prior-host-boot"
         cli.write_managed_task(self.root, task)
-        with mock.patch.object(cli, "current_boot_id", return_value="new-host-boot"), mock.patch.object(
+        with mock.patch.object(host, "current_boot_id", return_value="new-host-boot"), mock.patch.object(
             SystemdUserBackend, "launch"
         ) as launch:
             cli.recover_managed_tasks(self.root)
@@ -187,7 +189,7 @@ class NativeTaskLifecycleTests(unittest.TestCase):
         path = self.submit()
         task = cli.load_managed_task(path)
         task.pop("execution_backend")
-        task.update(version=1, state="running", boot_id=cli.current_boot_id())
+        task.update(version=1, state="running", boot_id=host.current_boot_id())
         cli.write_managed_task(self.root, task)
         with mock.patch.object(cli, "screen_owner_state", return_value=cli.OwnerState.ALIVE) as screen, mock.patch.object(
             SystemdUserBackend, "probe"
@@ -202,7 +204,7 @@ class NativeTaskLifecycleTests(unittest.TestCase):
     def test_unknown_screen_owner_is_not_evidence_to_interrupt_or_relaunch(self) -> None:
         path = self.submit()
         task = cli.load_managed_task(path)
-        task.update(version=1, execution_backend="screen", state="running", boot_id=cli.current_boot_id())
+        task.update(version=1, execution_backend="screen", state="running", boot_id=host.current_boot_id())
         cli.write_managed_task(self.root, task)
         with mock.patch.object(cli, "screen_owner_state", return_value=OwnerState.UNKNOWN), mock.patch.object(
             cli, "launch_managed_screen"
@@ -304,7 +306,7 @@ class NativeTaskLifecycleTests(unittest.TestCase):
     def test_recovery_reloads_state_after_lock_before_launching_stale_snapshot(self) -> None:
         path = self.submit()
         task = cli.load_managed_task(path)
-        real_acquire = cli.acquire_owner_lock
+        real_acquire = queue_store.acquire_owner_lock
         changed = False
 
         def finish_before_lock(root, request_id, *, blocking):
@@ -316,7 +318,7 @@ class NativeTaskLifecycleTests(unittest.TestCase):
                 cli.write_managed_task(root, completed)
             return real_acquire(root, request_id, blocking=blocking)
 
-        with mock.patch.object(cli, "acquire_owner_lock", side_effect=finish_before_lock), mock.patch.object(
+        with mock.patch.object(queue_store, "acquire_owner_lock", side_effect=finish_before_lock), mock.patch.object(
             SystemdUserBackend, "launch"
         ) as launch:
             cli.recover_managed_tasks(self.root)
@@ -334,7 +336,7 @@ class NativeTaskLifecycleTests(unittest.TestCase):
         worker = argparse.Namespace(task_file=str(path), attempt=1)
         with mock.patch.dict(os.environ, {"INVOCATION_ID": "fixture-invocation"}, clear=True), mock.patch.object(
             cli.subprocess, "run", return_value=subprocess.CompletedProcess([], 7)
-        ), mock.patch.object(cli, "write_private_text", side_effect=OSError("details directory unavailable")):
+        ), mock.patch.object(queue_store, "write_private_text", side_effect=OSError("details directory unavailable")):
             self.assertEqual(cli.run_task_worker(worker), 7)
         task = cli.load_managed_task(path)
         self.assertEqual(task["state"], "completed")

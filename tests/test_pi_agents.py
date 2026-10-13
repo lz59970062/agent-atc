@@ -21,6 +21,7 @@ import unittest
 from unittest import mock
 
 from agent_atc import cli
+from agent_atc.store import records as queue_store
 from agent_atc.store import layout
 from agent_atc.install import diagnostics
 from agent_atc.harness.pi import channel as pi_callback
@@ -489,7 +490,7 @@ class PiAgentContractTests(unittest.TestCase):
                  "channel_dir": str(channel), "profile_dir": request["pi_profile_dir"],
                  "owner_nonce": "fixture", "owner_pid": 99999999, "managed": True,
                  "state": "closed", "owner_identity": cli.daemon_process_identity(os.getpid())}
-        cli.write_request(channel / "owner.json", owner)
+        queue_store.write_request(channel / "owner.json", owner)
         environment = {
             "ATC_PI_BIN": str(fake_pi),
             "ATC_TEST_PI_CALLBACK_CAPTURE": str(capture),

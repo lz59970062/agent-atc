@@ -12,6 +12,7 @@ import unittest
 from unittest import mock
 
 from agent_atc import callback_transport as transport, cli
+from agent_atc.store import records as queue_store
 from agent_atc.store import layout
 
 
@@ -77,8 +78,8 @@ class CallbackModeTests(unittest.TestCase):
 
     def test_manual_callback_is_never_selected_and_ack_finishes_it(self):
         queue = self.root / "queue"
-        cli.ensure_daemon_dirs(queue)
-        cli.write_request(queue / "pending/fixture.json", self.request())
+        queue_store.ensure_daemon_dirs(queue)
+        queue_store.write_request(queue / "pending/fixture.json", self.request())
         self.assertIsNone(cli.select_pending(queue, 10**12))
         self.assertEqual(cli.ack(argparse.Namespace(queue_dir=str(queue), id="fixture", message=None)), 0)
         self.assertTrue((queue / "done/fixture.json").is_file())
@@ -119,9 +120,9 @@ class CallbackModeTests(unittest.TestCase):
 
     def test_busy_delivery_waits_without_spending_retry_budget(self):
         queue = self.root / "queue"
-        cli.ensure_daemon_dirs(queue)
+        queue_store.ensure_daemon_dirs(queue)
         request = self.request("cli")
-        cli.write_request(queue / "pending/fixture.json", request)
+        queue_store.write_request(queue / "pending/fixture.json", request)
         with mock.patch.object(cli, "run_resume_until_exit_or_ack", return_value=(subprocess.CompletedProcess([], 123), False, False)):
             self.assertTrue(cli.process_one(queue, argparse.Namespace(retries=0)))
         saved = cli.load_request(queue / "pending/fixture.json")
@@ -131,8 +132,8 @@ class CallbackModeTests(unittest.TestCase):
 
     def test_definite_block_is_retained_without_automatic_retries(self):
         queue = self.root / "queue"
-        cli.ensure_daemon_dirs(queue)
-        cli.write_request(queue / "pending/fixture.json", self.request("cli"))
+        queue_store.ensure_daemon_dirs(queue)
+        queue_store.write_request(queue / "pending/fixture.json", self.request("cli"))
         with mock.patch.object(cli, "run_resume_until_exit_or_ack", return_value=(subprocess.CompletedProcess([], 126), False, False)):
             self.assertTrue(cli.process_one(queue, argparse.Namespace(retries=10)))
         record = cli.load_request(queue / "failed/fixture.json")
@@ -141,15 +142,15 @@ class CallbackModeTests(unittest.TestCase):
 
     def test_retry_preserves_target_and_rejects_unknown_outcome(self):
         queue = self.root / "queue"
-        cli.ensure_daemon_dirs(queue)
+        queue_store.ensure_daemon_dirs(queue)
         request = self.request("cli")
         request.update(retain_target_lease=True)
-        cli.write_request(queue / "failed/fixture.json", request)
+        queue_store.write_request(queue / "failed/fixture.json", request)
         args = argparse.Namespace(queue_dir=str(queue), id="fixture", callback_mode="manual")
         self.assertEqual(cli.retry_callback(args), 2)
         request.pop("retain_target_lease")
         request["last_error"] = "original failure"
-        cli.write_request(queue / "failed/fixture.json", request)
+        queue_store.write_request(queue / "failed/fixture.json", request)
         with mock.patch.object(cli, "submit_managed_run") as launch:
             self.assertEqual(cli.retry_callback(args), 0)
         launch.assert_not_called()

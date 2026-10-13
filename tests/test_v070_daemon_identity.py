@@ -16,6 +16,7 @@ from pathlib import Path
 from unittest import mock
 
 from agent_atc import cli
+from agent_atc.store import records as queue_store
 from agent_atc.store import layout
 
 
@@ -36,8 +37,8 @@ class StandaloneDaemonIdentityTests(unittest.TestCase):
             for patcher in (
                 mock.patch.object(cli, "os", linux_os),
                 mock.patch.object(signal, "SIGHUP", 1, create=True),
-                mock.patch.object(cli, "fsync_directory", side_effect=cli.windows_io.fsync_directory),
-                mock.patch.object(cli, "acquire_owner_lock", side_effect=lambda root, ident, blocking:
+                mock.patch.object(queue_store, "fsync_directory", side_effect=cli.windows_io.fsync_directory),
+                mock.patch.object(queue_store, "acquire_owner_lock", side_effect=lambda root, ident, blocking:
                     cli.windows_io.acquire_path_lock(layout.owner_lock_path(root, ident), blocking=blocking)),
             ):
                 patcher.start()
@@ -69,9 +70,9 @@ class StandaloneDaemonIdentityTests(unittest.TestCase):
         return pid
 
     def hold_coordinator_lock(self):
-        lock = cli.acquire_owner_lock(self.queue, "daemon-singleton", blocking=True)
+        lock = queue_store.acquire_owner_lock(self.queue, "daemon-singleton", blocking=True)
         self.assertIsNotNone(lock)
-        self.addCleanup(cli.release_owner_lock, lock, remove=False)
+        self.addCleanup(queue_store.release_owner_lock, lock, remove=False)
 
     def start_with_spies(self, *, identity=IDENTITY, callbacks=False):
         process = mock.Mock(pid=91234)

@@ -13,6 +13,7 @@ from pathlib import Path
 from unittest import mock
 
 from agent_atc import cli
+from agent_atc.store import records as queue_store
 from agent_atc.store import layout
 from agent_atc.install import diagnostics
 
@@ -364,8 +365,8 @@ class DiagnosticFilesystemTests(unittest.TestCase):
             root = Path(temporary) / "queue"
             self.assertEqual(diagnostics.coordinator_issue(root)["code"], "daemon_not_running")
             self.assertFalse(root.exists())
-            lock = cli.acquire_owner_lock(root, "daemon-singleton", blocking=True)
-            cli.release_owner_lock(lock, remove=False)
+            lock = queue_store.acquire_owner_lock(root, "daemon-singleton", blocking=True)
+            queue_store.release_owner_lock(lock, remove=False)
             with mock.patch.object(cli, "read_daemon_runtime") as runtime:
                 self.assertEqual(diagnostics.coordinator_issue(root)["code"], "daemon_not_running")
             runtime.assert_not_called()
@@ -373,7 +374,7 @@ class DiagnosticFilesystemTests(unittest.TestCase):
     def test_held_singleton_needs_verified_matching_version_before_ready(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary) / "queue"
-            lock = cli.acquire_owner_lock(root, "daemon-singleton", blocking=True)
+            lock = queue_store.acquire_owner_lock(root, "daemon-singleton", blocking=True)
             try:
                 record = {"pid": 123, "queue_dir": str(root.resolve()), "version": "older-version"}
                 with mock.patch.object(cli, "read_daemon_runtime", return_value=record), mock.patch.object(
@@ -387,7 +388,7 @@ class DiagnosticFilesystemTests(unittest.TestCase):
                     record["version"] = cli.__version__
                     self.assertIsNone(diagnostics.coordinator_issue(root))
             finally:
-                cli.release_owner_lock(lock, remove=False)
+                queue_store.release_owner_lock(lock, remove=False)
 
 
 if __name__ == "__main__":

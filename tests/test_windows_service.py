@@ -13,6 +13,7 @@ import unittest
 from unittest import mock
 
 from agent_atc import cli
+from agent_atc.store import records as queue_store
 from agent_atc.store import layout
 from agent_atc.install import windows_service
 from agent_atc.owners import windows
@@ -53,7 +54,7 @@ class WindowsServiceTests(unittest.TestCase):
     def test_recycled_pid_does_not_block_queue_change(self):
         old_root = self.directory / "old-queue"
         runtime = self.runtime(old_root)
-        cli.write_request(self.target, dict(self.config, queue_dir=str(old_root)))
+        queue_store.write_request(self.target, dict(self.config, queue_dir=str(old_root)))
         with mock.patch.object(cli, "read_daemon_runtime", return_value=runtime), mock.patch.object(
             cli, "daemon_process_identity", return_value=dict(runtime["process_identity"], creation_time=200)
         ), mock.patch.object(windows, "scheduler_call", return_value={"registered": True}) as control:
@@ -73,7 +74,7 @@ class WindowsServiceTests(unittest.TestCase):
 
     def test_live_supervisor_prevents_changing_its_queue_even_without_runtime(self):
         old = dict(self.config, queue_dir=str(self.directory / "old-queue"))
-        cli.write_request(self.target, old)
+        queue_store.write_request(self.target, old)
         with mock.patch.object(windows_io, "probe_existing_lock", return_value=True), mock.patch.object(
             cli, "read_daemon_runtime", return_value=None
         ), mock.patch.object(windows, "scheduler_call") as control:
@@ -83,9 +84,9 @@ class WindowsServiceTests(unittest.TestCase):
 
     def test_reload_also_ensures_supervisor_after_an_orphan_daemon(self):
         runtime = self.runtime()
-        cli.write_request(self.target, self.config)
+        queue_store.write_request(self.target, self.config)
         with mock.patch.object(cli, "read_daemon_runtime", return_value=runtime), mock.patch.object(
-            cli, "acquire_owner_lock", return_value=None
+            queue_store, "acquire_owner_lock", return_value=None
         ), mock.patch.object(cli, "send_standalone_reload", return_value=True) as reload, mock.patch.object(
             windows, "scheduler_call", return_value={"registered": True}
         ) as control, mock.patch.object(os, "kill") as signal:
@@ -95,7 +96,7 @@ class WindowsServiceTests(unittest.TestCase):
         signal.assert_not_called()
 
     def test_uninstall_ignores_stale_runtime_when_queue_has_no_owner(self):
-        cli.write_request(self.target, self.config)
+        queue_store.write_request(self.target, self.config)
         with mock.patch.object(cli, "read_daemon_runtime", return_value=self.runtime()), mock.patch.object(
             cli, "daemon_process_identity", return_value=None
         ), mock.patch.object(windows, "scheduler_call", return_value={}) as control:
@@ -105,7 +106,7 @@ class WindowsServiceTests(unittest.TestCase):
         self.assertFalse((self.root / "daemon-stop.json").exists())
 
     def test_uninstall_refuses_to_modify_unverified_live_coordinator(self):
-        cli.write_request(self.target, self.config)
+        queue_store.write_request(self.target, self.config)
         runtime = self.runtime()
         with mock.patch.object(cli, "read_daemon_runtime", return_value=runtime), mock.patch.object(
             cli, "daemon_process_identity", return_value=dict(runtime["process_identity"], creation_time=200)
@@ -118,7 +119,7 @@ class WindowsServiceTests(unittest.TestCase):
         self.assertFalse((self.root / "daemon-stop.json").exists())
 
     def test_uninstall_live_owner_writes_identity_bound_stop_without_killing(self):
-        cli.write_request(self.target, self.config)
+        queue_store.write_request(self.target, self.config)
         runtime = self.runtime()
         with mock.patch.object(cli, "read_daemon_runtime", return_value=runtime), mock.patch.object(
             cli, "daemon_process_identity", return_value=runtime["process_identity"]
@@ -132,11 +133,11 @@ class WindowsServiceTests(unittest.TestCase):
         signal.assert_not_called()
 
     def test_replacement_supervisor_waits_for_existing_daemon_to_drain(self):
-        cli.write_request(self.target, self.config)
+        queue_store.write_request(self.target, self.config)
         child = mock.Mock()
 
         def finish():
-            cli.write_request(self.target, dict(self.config, run=False))
+            queue_store.write_request(self.target, dict(self.config, run=False))
             return 75
 
         child.wait.side_effect = finish
@@ -150,22 +151,22 @@ class WindowsServiceTests(unittest.TestCase):
         self.assertFalse(windows_io.probe_existing_lock(self.target.with_suffix(".supervisor.lock")))
 
     def test_draining_finds_orphan_delivery_after_ack_moved_callback_to_done(self):
-        cli.ensure_daemon_dirs(self.root)
+        queue_store.ensure_daemon_dirs(self.root)
         request_id = "acknowledged-orphan"
-        cli.write_request(layout.request_path(self.root, "done", request_id), {
+        queue_store.write_request(layout.request_path(self.root, "done", request_id), {
             "version": 1, "id": request_id, "cwd": str(self.directory), "prompt": "fixture",
             "agent": "codex", "target": {"kind": "session", "value": "fixture-session"},
         })
-        lock = cli.acquire_owner_lock(self.root, layout.delivery_lock_id(request_id), blocking=False)
+        lock = queue_store.acquire_owner_lock(self.root, layout.delivery_lock_id(request_id), blocking=False)
         self.assertIsNotNone(lock)
         try:
             # The parent coordinator died after ACK, so the replacement has no
             # Popen bookkeeping and the callback is no longer in running/.
             with mock.patch.dict(cli._BACKGROUND_RESUMES, {}, clear=True):
-                self.assertTrue(cli.delivery_lock_is_held(self.root, request_id))
+                self.assertTrue(queue_store.delivery_lock_is_held(self.root, request_id))
                 self.assertTrue(cli.daemon_has_live_delivery_workers(self.root))
         finally:
-            cli.release_owner_lock(lock, remove=False)
+            queue_store.release_owner_lock(lock, remove=False)
         with mock.patch.dict(cli._BACKGROUND_RESUMES, {}, clear=True):
             self.assertFalse(cli.daemon_has_live_delivery_workers(self.root))
 

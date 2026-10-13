@@ -19,6 +19,7 @@ from unittest import mock
 
 from agent_atc.core import envelope as callbacks
 from agent_atc import cli
+from agent_atc import runtime as atc_runtime
 from agent_atc.store import layout
 from test_cli import assert_private_file
 
@@ -98,7 +99,7 @@ class CompactCallbackTests(unittest.TestCase):
 
     def test_ack_line_can_be_executed_with_spaces_and_quotes_without_wrong_queue(self) -> None:
         launcher = "/opt/ATC user's tools/atc"
-        with mock.patch.object(cli, "console_script_path", return_value=launcher):
+        with mock.patch.object(atc_runtime, "console_script_path", return_value=launcher):
             prepared = self.prepare("ack-correct-queue")
         lines = prepared["prompt_compact"].splitlines()
         candidates = [line for line in lines if "--queue-dir" in line and "--id" in line]

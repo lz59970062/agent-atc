@@ -10,6 +10,8 @@ from pathlib import Path
 from unittest import mock
 
 from agent_atc import cli
+from agent_atc.owners import host
+from agent_atc.store import records as queue_store
 from agent_atc.store import layout
 from agent_atc.install import diagnostics
 from agent_atc.owners import OwnerState
@@ -24,8 +26,8 @@ class HealthArtifacts:
         self.root.mkdir()
         self.patches = contextlib.ExitStack()
         self.addCleanup(self.patches.close)
-        self.patches.enter_context(mock.patch.object(cli, "current_machine_id", return_value="this-machine"))
-        self.patches.enter_context(mock.patch.object(cli, "current_boot_id", return_value="this-boot"))
+        self.patches.enter_context(mock.patch.object(host, "current_machine_id", return_value="this-machine"))
+        self.patches.enter_context(mock.patch.object(host, "current_boot_id", return_value="this-boot"))
         self.patches.enter_context(mock.patch("agent_atc.install.diagnostics.time.time", return_value=1000.0))
 
     def write_json(self, path, value):
@@ -262,7 +264,7 @@ class DeliveryHealthTests(HealthArtifacts, unittest.TestCase):
     def observe_deliveries(self):
         before = self.snapshot()
         with mock.patch.object(cli, "retain_target_lease") as retain, mock.patch.object(
-            cli, "write_request"
+            queue_store, "write_request"
         ) as write:
             issues = diagnostics.delivery_issues(self.root)
         retain.assert_not_called()
@@ -340,7 +342,7 @@ class EnvironmentHealthTests(unittest.TestCase):
                     (diagnostics, "queue_writable"), (diagnostics, "coordinator_issue"),
                     (diagnostics, "runtime_issues"), (diagnostics, "delivery_issues"),
                     (cli, "select_execution_backend"), (cli, "running_in_container"),
-                    (cli, "current_machine_id"), (cli, "current_boot_id"), (diagnostics.shutil, "which"),
+                    (host, "current_machine_id"), (host, "current_boot_id"), (diagnostics.shutil, "which"),
                 )]
                 report = diagnostics.inspect(args)
             self.assertEqual(report["status"], "needs_configuration")

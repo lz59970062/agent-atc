@@ -30,6 +30,7 @@ def service_owner(name: str, profile: Path) -> str:
 
 def config_path(name: str) -> Path:
     from .. import cli
+    from ..store import records as queue_store
     from ..store import layout
     service_owner(name, layout.codex_home())  # Validate before making a path.
     return layout.daemon_state_dir() / f"windows-{name}.json"
@@ -37,6 +38,7 @@ def config_path(name: str) -> Path:
 
 def configuration(args: argparse.Namespace) -> dict[str, object]:
     from .. import cli
+    from ..store import records as queue_store
     from ..store import layout
     root = layout.queue_dir(args).resolve()
     command = cli.daemon_command(args)
@@ -63,6 +65,7 @@ def configuration(args: argparse.Namespace) -> dict[str, object]:
 
 def install(args: argparse.Namespace) -> int:
     from .. import cli
+    from ..store import records as queue_store
     from ..store import layout
     try:
         config = configuration(args)
@@ -92,14 +95,14 @@ def install(args: argparse.Namespace) -> int:
         # Pin the queue/profile and write configuration before registration.
         cli.configure_proxy_environment(args)
         windows_io.ensure_private_directory(target.parent)
-        cli.write_request(target, config)
+        queue_store.write_request(target, config)
         windows.scheduler_call("register", {"owner": config["owner"], "configuration": definition,
                                              "replace": bool(state.get("registered"))})
         print(f"Installed Windows coordinator {config['owner']}; private configuration: {target}")
         if not args.now:
             return 0
         root = Path(str(config["queue_dir"]))
-        admission = cli.acquire_owner_lock(root, "daemon-singleton", blocking=False)
+        admission = queue_store.acquire_owner_lock(root, "daemon-singleton", blocking=False)
         if admission is None:
             runtime = cli.read_daemon_runtime()
             pid = runtime.get("pid") if runtime else None
@@ -112,7 +115,7 @@ def install(args: argparse.Namespace) -> int:
                 return 0
             print("atc: existing coordinator identity is unverified; left running without replacement", file=sys.stderr)
             return 1
-        cli.release_owner_lock(admission, remove=False)
+        queue_store.release_owner_lock(admission, remove=False)
         # IgnoreNew and the supervisor/daemon locks arbitrate concurrent setup.
         windows.scheduler_call("run", {"owner": config["owner"]})
         print(f"Started coordinator; log: {config['log_path']}")
@@ -165,6 +168,7 @@ def run_coordinator(path: Path) -> int:
 def uninstall(args: argparse.Namespace) -> int:
     """Remove login registration, allowing live callback owners to drain."""
     from .. import cli
+    from ..store import records as queue_store
     from ..store import layout
     try:
         path = config_path(args.name)
@@ -175,9 +179,9 @@ def uninstall(args: argparse.Namespace) -> int:
         if active and (not runtime or not cli.daemon_supports_hot_reload(runtime.get("pid"), expected_queue=root)):
             raise ValueError("coordinator identity is unverified; inspect before removal")
         config["run"] = False
-        cli.write_request(path, config)
+        queue_store.write_request(path, config)
         if active:
-            cli.write_request(root / "daemon-stop.json", {"pid": runtime["pid"],
+            queue_store.write_request(root / "daemon-stop.json", {"pid": runtime["pid"],
                               "process_identity": runtime["process_identity"]})
         # Deleting a registration does not stop an already running instance.
         windows.scheduler_call("delete", {"owner": config["owner"]})

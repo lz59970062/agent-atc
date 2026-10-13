@@ -65,6 +65,10 @@ from .system import windows_io, windows_process
 from .owners.windows import WindowsBackend
 from .templates import TEMPLATES, REASONING_EFFORTS, load_template
 from .store import layout
+from .owners import host
+from . import runtime as atc_runtime
+from .store import records as queue_store
+from .system import commands
 
 DEFAULT_RETRIES = 3
 DEFAULT_RETRY_DELAY = 30.0
@@ -158,10 +162,6 @@ def build_prompt(
     return "\n".join(lines)
 
 
-def truthy_env(name: str) -> bool:
-    return os.environ.get(name, "").strip().lower() in {"1", "true", "yes", "on"}
-
-
 def resolve_agent(args: argparse.Namespace | None = None) -> str:
     """Choose the callback adapter once, using explicit selection first."""
     if args is not None:
@@ -235,41 +235,6 @@ def program_name(name: str) -> str:
     return name.removesuffix(".service")
 
 
-def console_script_path() -> str | None:
-    return shutil.which("atc")
-
-
-def format_command(arguments: list[str]) -> str:
-    """Render commands for the platform's documented interactive shell."""
-    if os.name == "nt":
-        return windows_process.format_command(arguments)
-    return shlex.join(arguments)
-
-
-def control_command(*arguments: str) -> str:
-    """A command an agent can paste; runnable even when ``atc`` is not on PATH.
-
-    OS-owned workers (launchd, systemd) usually lack the installation's bin
-    directory on PATH, so fall back to the interpreter plus private entry point
-    rather than a script path that is not executable on its own.
-    """
-    script = None if os.name == "nt" else console_script_path()
-    command = [script, *arguments] if script else worker_command(*arguments)
-    return format_command(command)
-
-
-def private_directory(path: Path) -> None:
-    if os.name == "nt":
-        windows_io.ensure_private_directory(path)
-    else:
-        path.mkdir(parents=True, exist_ok=True)
-        os.chmod(path, 0o700)
-
-
-def process_command(arguments: list[str], environment: dict[str, str] | None = None) -> list[str]:
-    return windows_process.prepare_command(arguments, env=environment) if os.name == "nt" else arguments
-
-
 def codex_bin_path(args: argparse.Namespace) -> str:
     if args.codex_bin:
         return str(Path(args.codex_bin).expanduser())
@@ -306,7 +271,7 @@ def report_claude_agent_readiness(args: argparse.Namespace) -> None:
     try:
         environment = child_agent_environment(dict(os.environ))
         result = subprocess.run(
-            process_command([command, "auth", "status", "--json"], environment),
+            commands.process_command([command, "auth", "status", "--json"], environment),
             check=False,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
@@ -561,7 +526,7 @@ def prepare_request_for_queue(root: Path, request: dict[str, object], prompt: st
     request_id = str(request["id"])
     request["queue_dir"] = str(root)
     request["lifecycle_state"] = "pending"
-    acknowledgement = control_command("ack", "--queue-dir", str(root), "--id", request_id)
+    acknowledgement = atc_runtime.control_command("ack", "--queue-dir", str(root), "--id", request_id)
     routed_prompt = attach_routing_text(prompt, request)
     request["prompt"] = f"{routed_prompt}\n\n{build_acknowledgement_text(acknowledgement, agent=request_agent(request))}"
     if request.get("prompt_format") == callbacks.FORMAT:
@@ -570,7 +535,7 @@ def prepare_request_for_queue(root: Path, request: dict[str, object], prompt: st
         if not re.fullmatch(r"[A-Za-z0-9_-]+", request_id):
             raise ValueError("callback id must be a safe filename")
         details_path = root.absolute() / "details" / f"{request_id}.md"
-        write_private_text(details_path, str(request["prompt"]))
+        queue_store.write_private_text(details_path, str(request["prompt"]))
         request["prompt_details_path"] = str(details_path)
         compact = callbacks.render(request, details_path, acknowledgement)
         request["prompt_compact"] = compact
@@ -599,7 +564,7 @@ def enqueue_existing_request(root: Path, request: dict[str, object], prompt: str
     target = layout.request_path(root, "pending", request_id)
     goal_lock: tuple[object, Path] | None = None
     try:
-        ensure_daemon_dirs(root)
+        queue_store.ensure_daemon_dirs(root)
         request = prepare_request_for_queue(root, request, prompt)
         goal_id = request.get("goal_id")
         goal: dict[str, object] | None = None
@@ -607,11 +572,11 @@ def enqueue_existing_request(root: Path, request: dict[str, object], prompt: str
             if not isinstance(goal_id, str):
                 raise ValueError("callback goal id must be a string")
             layout.goal_path(root, goal_id)
-            goal_lock = acquire_owner_lock(root, layout.goal_lock_id(goal_id), blocking=True)
+            goal_lock = queue_store.acquire_owner_lock(root, layout.goal_lock_id(goal_id), blocking=True)
             goal = load_goal(root, goal_id)
             if goal.get("state") != "active":
                 raise ValueError(f"goal {goal_id} is not active")
-        write_request(target, request)
+        queue_store.write_request(target, request)
         if goal is not None:
             goal["last_external_callback_at"] = float(request.get("created_at", time.time()))
             goal.pop("last_reminder_at", None)
@@ -621,7 +586,7 @@ def enqueue_existing_request(root: Path, request: dict[str, object], prompt: str
         return 1
     finally:
         if goal_lock is not None:
-            release_owner_lock(goal_lock, remove=False)
+            queue_store.release_owner_lock(goal_lock, remove=False)
 
     print(f"atc: queued callback {request_id} in {root}", file=sys.stderr)
     return 0
@@ -680,25 +645,6 @@ def queue_callback(args: argparse.Namespace, prompt: str) -> int:
     return 0
 
 
-def ensure_daemon_dirs(root: Path) -> None:
-    root_existed = root.exists()
-    if os.name == "nt":
-        private_directory(root)
-    else:
-        root.mkdir(parents=True, exist_ok=True)
-    if not root_existed:
-        fsync_directory(root.parent)
-    created = False
-    for name in (layout.ACTIVE_STATE, layout.LOCKS_STATE, "pending", "running", "done", "failed", "canceled", "acks", "goals"):
-        path = root / name
-        if path.exists():
-            continue
-        path.mkdir(parents=True, exist_ok=True)
-        created = True
-    if created:
-        fsync_directory(root)
-
-
 def load_goal(root: Path, goal_id: str) -> dict[str, object]:
     path = layout.goal_path(root, goal_id)
     data = json.loads(path.read_text(encoding="utf-8"))
@@ -711,7 +657,7 @@ def write_goal(root: Path, goal: dict[str, object]) -> None:
     goal_id = goal.get("id")
     if not isinstance(goal_id, str):
         raise ValueError("goal requires an id")
-    write_request(layout.goal_path(root, goal_id), goal)
+    queue_store.write_request(layout.goal_path(root, goal_id), goal)
 
 
 def read_goal_plan_file(path: Path) -> tuple[dict[str, object], str, str]:
@@ -868,7 +814,7 @@ def update_goal_from_callback(root: Path, request: dict[str, object]) -> None:
     goal_id = request.get("goal_id")
     if not isinstance(goal_id, str):
         return
-    lock = acquire_owner_lock(root, layout.goal_lock_id(goal_id), blocking=True)
+    lock = queue_store.acquire_owner_lock(root, layout.goal_lock_id(goal_id), blocking=True)
     try:
         goal = load_goal(root, goal_id)
         if goal.get("state") != "active":
@@ -877,7 +823,7 @@ def update_goal_from_callback(root: Path, request: dict[str, object]) -> None:
         goal.pop("last_reminder_at", None)
         write_goal(root, goal)
     finally:
-        release_owner_lock(lock, remove=False)
+        queue_store.release_owner_lock(lock, remove=False)
 
 
 def load_request(path: Path) -> dict[str, object]:
@@ -987,7 +933,7 @@ def acquire_retained_target_lease_lock(
     path = retained_target_lease_lock_path(request)
     if path is None:
         return None
-    return acquire_path_lock(path, blocking=blocking)
+    return queue_store.acquire_path_lock(path, blocking=blocking)
 
 
 def retained_target_lease_is_held(request: dict[str, object]) -> bool:
@@ -1015,12 +961,12 @@ def retained_target_lease_is_held(request: dict[str, object]) -> bool:
             return True
         try:
             path.unlink()
-            fsync_directory(path.parent)
+            queue_store.fsync_directory(path.parent)
         except OSError:
             return True
         return False
     finally:
-        release_owner_lock(lock, remove=False)
+        queue_store.release_owner_lock(lock, remove=False)
 
 
 def retain_target_lease(root: Path, request: dict[str, object]) -> None:
@@ -1050,9 +996,9 @@ def retain_target_lease(root: Path, request: dict[str, object]) -> None:
             ):
                 raise RuntimeError(f"retained target lease already exists: {path}")
             return
-        write_request(path, record)
+        queue_store.write_request(path, record)
     finally:
-        release_owner_lock(lock, remove=False)
+        queue_store.release_owner_lock(lock, remove=False)
 
 
 def release_retained_target_lease(root: Path, request: dict[str, object]) -> None:
@@ -1080,9 +1026,9 @@ def release_retained_target_lease(root: Path, request: dict[str, object]) -> Non
         if record.get("request_id") != request_id or record.get("queue_dir") != str(root.resolve()):
             return
         path.unlink()
-        fsync_directory(path.parent)
+        queue_store.fsync_directory(path.parent)
     finally:
-        release_owner_lock(lock, remove=False)
+        queue_store.release_owner_lock(lock, remove=False)
 
 
 def reconcile_acknowledged_retained_leases(root: Path) -> None:
@@ -1103,14 +1049,6 @@ def reconcile_acknowledged_retained_leases(root: Path) -> None:
                 )
 
 
-def acquire_path_lock(path: Path, *, blocking: bool) -> tuple[object, Path] | None:
-    if os.name == "nt":
-        return windows_io.acquire_path_lock(path, blocking=blocking)
-    if fcntl is None:  # pragma: no cover - supported deployments are POSIX
-        raise RuntimeError("durable callback ownership requires POSIX flock support")
-    return posix_platform.acquire_path_lock(path, blocking=blocking)
-
-
 def acquire_target_lock(
     request: dict[str, object],
     *,
@@ -1119,7 +1057,7 @@ def acquire_target_lock(
     path = target_lock_path(request)
     if path is None:
         return None
-    return acquire_path_lock(path, blocking=blocking)
+    return queue_store.acquire_path_lock(path, blocking=blocking)
 
 
 def target_lock_is_held(request: dict[str, object]) -> bool:
@@ -1128,10 +1066,10 @@ def target_lock_is_held(request: dict[str, object]) -> bool:
         return False
     if not path.exists():
         return False
-    lock = acquire_path_lock(path, blocking=False)
+    lock = queue_store.acquire_path_lock(path, blocking=False)
     if lock is None:
         return True
-    release_owner_lock(lock, remove=False)
+    queue_store.release_owner_lock(lock, remove=False)
     return False
 
 
@@ -1174,7 +1112,7 @@ def target_has_live_resume(root: Path, request: dict[str, object]) -> bool:
                 and callback_target_key(live_request) == key
                 and (
                     (state == "failed" and live_request.get("retain_target_lease") is True)
-                    or delivery_lock_is_held(root, path.stem)
+                    or queue_store.delivery_lock_is_held(root, path.stem)
                 )
             ):
                 return True
@@ -1254,13 +1192,13 @@ class CallbackTargetBusy(RuntimeError):
 
 def desktop_app_server_socket(request: dict[str, object]) -> Path | BridgeEndpoint | UnixBridgeEndpoint | None:
     target = request.get("target")
-    if DESKTOP_APP_SERVER_ENV in os.environ and not truthy_env(DESKTOP_APP_SERVER_ENV):
+    if DESKTOP_APP_SERVER_ENV in os.environ and not commands.truthy_env(DESKTOP_APP_SERVER_ENV):
         if request.get("callback_mode") == "desktop":
             raise CallbackTransportBlocked("Desktop App Server delivery is explicitly disabled")
         return None
     if (
         request.get("callback_mode") == "manual"
-        or (not truthy_env(DESKTOP_APP_SERVER_ENV) and request.get("callback_mode") not in ("cli", "desktop"))
+        or (not commands.truthy_env(DESKTOP_APP_SERVER_ENV) and request.get("callback_mode") not in ("cli", "desktop"))
         or not isinstance(target, dict)
         or target.get("kind") != "session"
         or not isinstance(target.get("value"), str)
@@ -1278,7 +1216,7 @@ def desktop_app_server_socket(request: dict[str, object]) -> Path | BridgeEndpoi
             return None
         return load_bridge_endpoint(Path(configured_bridge).expanduser(), layout.codex_home())
     configured = os.environ.get(APP_SERVER_SOCKET_ENV)
-    if configured and truthy_env(ALLOW_APP_SERVER_SOCKET_OVERRIDE_ENV):
+    if configured and commands.truthy_env(ALLOW_APP_SERVER_SOCKET_OVERRIDE_ENV):
         return Path(configured).expanduser()
     return layout.codex_home() / "app-server-control" / "app-server-control.sock"
 
@@ -1683,7 +1621,7 @@ def start_desktop_app_server_turn(payload: dict[str, object]) -> DesktopAppServe
             # handshake. Persist before sending any turn/start bytes so an
             # earlier parent timeout or worker crash cannot authorize replay.
             retain_target_lease(root, callback)
-            if layout.ack_path(root, str(callback["id"])).exists() or is_canceled(root, str(callback["id"])):
+            if layout.ack_path(root, str(callback["id"])).exists() or queue_store.is_canceled(root, str(callback["id"])):
                 try:
                     release_retained_target_lease(root, callback)
                 except (OSError, RuntimeError) as cleanup_error:
@@ -1864,7 +1802,7 @@ def delivery_worker_main() -> int:
                 result = {"returncode": pi_callback.PUBLISHED_RETURN_CODE, "delivery": pi_delivery.delivery_name}
             else:
                 process = subprocess.Popen(
-                    process_command([str(part) for part in command]),
+                    commands.process_command([str(part) for part in command]),
                     env=pi_delivery.environment if pi_delivery is not None else None,
                     stdin=subprocess.PIPE,
                     stdout=sys.stderr,
@@ -1968,30 +1906,30 @@ def run_resume_until_exit_or_ack(
     args: argparse.Namespace,
 ) -> tuple[subprocess.CompletedProcess[str] | None, bool, bool]:
     command = resume_command(request)
-    delivery_lock = acquire_owner_lock(root, layout.delivery_lock_id(request_id), blocking=False)
+    delivery_lock = queue_store.acquire_owner_lock(root, layout.delivery_lock_id(request_id), blocking=False)
     if delivery_lock is None:
         return None, layout.ack_path(root, request_id).exists(), True
     if layout.ack_path(root, request_id).exists():
-        release_owner_lock(delivery_lock, remove=False)
+        queue_store.release_owner_lock(delivery_lock, remove=False)
         return subprocess.CompletedProcess(command, 0), True, False
-    if is_canceled(root, request_id):
-        release_owner_lock(delivery_lock, remove=False)
+    if queue_store.is_canceled(root, request_id):
+        queue_store.release_owner_lock(delivery_lock, remove=False)
         return None, False, False
     target_lock = acquire_target_lock(request, blocking=False)
     if target_lock is None:
-        release_owner_lock(delivery_lock, remove=False)
+        queue_store.release_owner_lock(delivery_lock, remove=False)
         raise TargetLeaseUnavailable(callback_target_key(request) or "unknown target")
     if retained_target_lease_is_held(request):
-        release_owner_lock(delivery_lock, remove=False)
-        release_owner_lock(target_lock, remove=False)
+        queue_store.release_owner_lock(delivery_lock, remove=False)
+        queue_store.release_owner_lock(target_lock, remove=False)
         raise TargetLeaseUnavailable(callback_target_key(request) or "unknown target")
     if layout.ack_path(root, request_id).exists():
-        release_owner_lock(delivery_lock, remove=False)
-        release_owner_lock(target_lock, remove=False)
+        queue_store.release_owner_lock(delivery_lock, remove=False)
+        queue_store.release_owner_lock(target_lock, remove=False)
         return subprocess.CompletedProcess(command, 0), True, False
-    if is_canceled(root, request_id):
-        release_owner_lock(delivery_lock, remove=False)
-        release_owner_lock(target_lock, remove=False)
+    if queue_store.is_canceled(root, request_id):
+        queue_store.release_owner_lock(delivery_lock, remove=False)
+        queue_store.release_owner_lock(target_lock, remove=False)
         return None, False, False
     delivery_handle, _ = delivery_lock
     target_handle, _ = target_lock
@@ -2026,11 +1964,11 @@ def run_resume_until_exit_or_ack(
                 text=True, encoding="utf-8", close_fds=True, pass_fds=lock_fds, env=env,
             )
     except BaseException:
-        release_owner_lock(delivery_lock, remove=False)
-        release_owner_lock(target_lock, remove=False)
+        queue_store.release_owner_lock(delivery_lock, remove=False)
+        queue_store.release_owner_lock(target_lock, remove=False)
         raise
-    close_parent_lock_copy(delivery_lock)
-    close_parent_lock_copy(target_lock)
+    queue_store.close_parent_lock_copy(delivery_lock)
+    queue_store.close_parent_lock_copy(target_lock)
     try:
         if process.stdin is not None:
             try:
@@ -2043,7 +1981,7 @@ def run_resume_until_exit_or_ack(
 
         while True:
             acked = layout.ack_path(root, request_id).exists()
-            canceled = is_canceled(root, request_id)
+            canceled = queue_store.is_canceled(root, request_id)
             returncode = process.poll()
             if acked or canceled:
                 if returncode is None:
@@ -2064,132 +2002,19 @@ def run_resume_until_exit_or_ack(
                 child_returncode = finish_delivery_worker(process)
                 acked = layout.ack_path(root, request_id).exists()
                 if (not acked and child_returncode != pi_callback.PUBLISHED_RETURN_CODE
-                        and not is_canceled(root, request_id) and desktop_submission_pending(root, request)):
+                        and not queue_store.is_canceled(root, request_id) and desktop_submission_pending(root, request)):
                     child_returncode = 125
                 return subprocess.CompletedProcess(command, child_returncode), acked, False
             if time.monotonic() >= deadline:
                 stop_resume_process(process)
                 acked = layout.ack_path(root, request_id).exists()
-                code = (125 if not acked and not is_canceled(root, request_id)
+                code = (125 if not acked and not queue_store.is_canceled(root, request_id)
                         and desktop_submission_pending(root, request) else 124)
                 return subprocess.CompletedProcess(command, code), acked, False
             time.sleep(0.1)
     except BaseException:
         stop_resume_process(process)
         raise
-
-
-def fsync_directory(path: Path) -> None:
-    (windows_io if os.name == "nt" else posix_platform).fsync_directory(path)
-
-
-def write_request(path: Path, request: dict[str, object]) -> None:
-    storage.write_request(path, request, sync_directory=fsync_directory)
-
-
-def write_private_text(path: Path, text: str) -> None:
-    storage.write_private_text(path, text, sync_directory=fsync_directory)
-
-
-def move_request(source: Path, destination_dir: Path) -> Path:
-    destination_dir.mkdir(parents=True, exist_ok=True)
-    destination = destination_dir / source.name
-    if source == destination:
-        return destination
-    if destination.exists():
-        try:
-            source_data = json.loads(source.read_text(encoding="utf-8"))
-            destination_data = json.loads(destination.read_text(encoding="utf-8"))
-            source_id = source_data.get("id") if isinstance(source_data, dict) else None
-            destination_id = destination_data.get("id") if isinstance(destination_data, dict) else None
-        except Exception as exc:
-            raise FileExistsError(f"cannot validate callback collision at {destination}") from exc
-        if (
-            not isinstance(source_id, str)
-            or not isinstance(source_data, dict)
-            or not isinstance(destination_data, dict)
-            or source_data.get("version") not in (1, 2, 3, 4)
-            or destination_data.get("version") not in (1, 2, 3, 4)
-            or source_id != destination_id
-            or source_id != source.stem
-            or source_data != destination_data
-        ):
-            raise FileExistsError(f"refusing to collapse divergent callback records at {destination}")
-        try:
-            source.unlink()
-        except FileNotFoundError:
-            pass
-        else:
-            fsync_directory(source.parent)
-        return destination
-    if os.name == "nt":
-        windows_io.replace_file(source, destination)
-    else:
-        os.replace(source, destination)
-    if destination_dir != source.parent:
-        fsync_directory(destination_dir)
-    fsync_directory(source.parent)
-    return destination
-
-
-def acquire_owner_lock(root: Path, request_id: str, *, blocking: bool) -> tuple[object, Path] | None:
-    if os.name == "nt":
-        ensure_daemon_dirs(root)
-        return acquire_path_lock(layout.owner_lock_path(root, request_id), blocking=blocking)
-    if fcntl is None:  # pragma: no cover - supported deployments are POSIX
-        raise RuntimeError("durable callback ownership requires POSIX flock support")
-    ensure_daemon_dirs(root)
-    path = layout.owner_lock_path(root, request_id)
-    handle = path.open("a+", encoding="utf-8")
-    os.set_inheritable(handle.fileno(), False)
-    operation = fcntl.LOCK_EX | (0 if blocking else fcntl.LOCK_NB)
-    try:
-        fcntl.flock(handle.fileno(), operation)
-    except BlockingIOError:
-        handle.close()
-        return None
-    return handle, path
-
-
-def release_owner_lock(lock: tuple[object, Path] | None, *, remove: bool) -> None:
-    if lock is None:
-        return
-    handle, path = lock
-    try:
-        if os.name != "nt" and fcntl is not None:
-            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
-    finally:
-        handle.close()
-    if remove and os.name != "nt":
-        try:
-            path.unlink()
-            fsync_directory(path.parent)
-        except FileNotFoundError:
-            pass
-
-
-def delivery_lock_is_held(root: Path, request_id: str) -> bool:
-    lock = acquire_owner_lock(root, layout.delivery_lock_id(request_id), blocking=False)
-    if lock is None:
-        return True
-    release_owner_lock(lock, remove=False)
-    return False
-
-
-def close_parent_lock_copy(lock: tuple[object, Path]) -> None:
-    """Close without LOCK_UN after pass_fds transfers the lock to a child."""
-    handle, _ = lock
-    handle.close()
-
-
-def current_boot_id() -> str | None:
-    return host_platform().current_boot_id()
-
-
-def host_platform():
-    if sys.platform == "win32":
-        return windows_platform
-    return macos_platform if sys.platform == "darwin" else linux_platform
 
 
 def active_prompt(args: argparse.Namespace) -> str:
@@ -2215,35 +2040,11 @@ def make_active_request(args: argparse.Namespace, started_at: float) -> dict[str
             "command": args.command or " ".join(args.wrapped_command),
             "started_at": started_at,
             "wrapper_pid": os.getpid(),
-            "boot_id": current_boot_id(),
+            "boot_id": host.current_boot_id(),
             "launch_phase": "prelaunch",
         }
     )
     return request
-
-
-def request_already_transitioned(root: Path, request_id: str) -> bool:
-    return any(layout.request_path(root, state, request_id).exists() for state in ("pending", "running", "done", "failed", "canceled"))
-
-
-def is_canceled(root: Path, request_id: str) -> bool:
-    return layout.request_path(root, "canceled", request_id).exists()
-
-
-def remove_live_request_copies(root: Path, request_id: str) -> None:
-    """Remove dispatchable copies after a durable cancellation tombstone exists."""
-    for _ in range(2):
-        removed = False
-        for state in (layout.ACTIVE_STATE, "pending", "running", "failed"):
-            path = layout.request_path(root, state, request_id)
-            try:
-                path.unlink()
-            except FileNotFoundError:
-                continue
-            fsync_directory(path.parent)
-            removed = True
-        if not removed:
-            break
 
 
 def discard_unlaunched_active(root: Path, request_id: str) -> None:
@@ -2256,7 +2057,7 @@ def discard_unlaunched_active(root: Path, request_id: str) -> None:
         print(f"atc: warning: could not remove unlaunched callback {request_id}: {exc}", file=sys.stderr)
         return
     try:
-        fsync_directory(path.parent)
+        queue_store.fsync_directory(path.parent)
     except OSError as exc:
         print(
             f"atc: warning: removed unlaunched active callback {request_id} "
@@ -2275,7 +2076,7 @@ def best_effort_disarm(
     except Exception as exc:
         print(f"atc: warning: pre-arm record cleanup failed: {exc}", file=sys.stderr)
     try:
-        release_owner_lock(lock, remove=True)
+        queue_store.release_owner_lock(lock, remove=True)
     except Exception as exc:
         print(f"atc: warning: pre-arm lock cleanup failed: {exc}", file=sys.stderr)
 
@@ -2283,12 +2084,12 @@ def best_effort_disarm(
 def transition_active_to_pending(root: Path, request: dict[str, object], prompt: str) -> int:
     request_id = str(request["id"])
     source = layout.request_path(root, layout.ACTIVE_STATE, request_id)
-    if is_canceled(root, request_id):
-        remove_live_request_copies(root, request_id)
+    if queue_store.is_canceled(root, request_id):
+        queue_store.remove_live_request_copies(root, request_id)
         print(f"atc: callback {request_id} was canceled; suppressing finalization", file=sys.stderr)
         return 0
     if not source.exists():
-        if request_already_transitioned(root, request_id):
+        if queue_store.request_already_transitioned(root, request_id):
             return 0
         print(
             f"atc: warning: active callback {request_id} disappeared before finalization",
@@ -2296,23 +2097,23 @@ def transition_active_to_pending(root: Path, request: dict[str, object], prompt:
         )
         return 1
     prepare_request_for_queue(root, request, prompt)
-    if is_canceled(root, request_id):
-        remove_live_request_copies(root, request_id)
+    if queue_store.is_canceled(root, request_id):
+        queue_store.remove_live_request_copies(root, request_id)
         return 0
-    write_request(source, request)
-    if is_canceled(root, request_id):
-        remove_live_request_copies(root, request_id)
+    queue_store.write_request(source, request)
+    if queue_store.is_canceled(root, request_id):
+        queue_store.remove_live_request_copies(root, request_id)
         return 0
     try:
-        move_request(source, root / "pending")
+        queue_store.move_request(source, root / "pending")
     except FileNotFoundError:
-        if is_canceled(root, request_id) or request_already_transitioned(root, request_id):
-            if is_canceled(root, request_id):
-                remove_live_request_copies(root, request_id)
+        if queue_store.is_canceled(root, request_id) or queue_store.request_already_transitioned(root, request_id):
+            if queue_store.is_canceled(root, request_id):
+                queue_store.remove_live_request_copies(root, request_id)
             return 0
         raise
-    if is_canceled(root, request_id):
-        remove_live_request_copies(root, request_id)
+    if queue_store.is_canceled(root, request_id):
+        queue_store.remove_live_request_copies(root, request_id)
         return 0
     print(f"atc: queued callback {request_id} in {root}", file=sys.stderr)
     return 0
@@ -2337,19 +2138,19 @@ def recovery_prompt(request: dict[str, object], now: float) -> str:
 
 
 def recover_active(root: Path) -> int:
-    ensure_daemon_dirs(root)
+    queue_store.ensure_daemon_dirs(root)
     recovered = 0
     for path in sorted((root / layout.ACTIVE_STATE).glob("*.json")):
         request_id = path.stem
-        lock = acquire_owner_lock(root, request_id, blocking=False)
+        lock = queue_store.acquire_owner_lock(root, request_id, blocking=False)
         if lock is None:
             continue
         remove_lock = False
         try:
             if not path.exists():
                 continue
-            if is_canceled(root, request_id):
-                remove_live_request_copies(root, request_id)
+            if queue_store.is_canceled(root, request_id):
+                queue_store.remove_live_request_copies(root, request_id)
                 remove_lock = True
                 continue
             request = load_request(path)
@@ -2362,7 +2163,7 @@ def recover_active(root: Path) -> int:
                 )
                 continue
             if request.get("outcome") == "completed" and isinstance(request.get("exit_code"), int):
-                move_request(path, root / "pending")
+                queue_store.move_request(path, root / "pending")
                 recovered += 1
                 remove_lock = True
                 print(
@@ -2388,15 +2189,15 @@ def recover_active(root: Path) -> int:
                 file=sys.stderr,
             )
         finally:
-            release_owner_lock(lock, remove=remove_lock)
+            queue_store.release_owner_lock(lock, remove=remove_lock)
     return recovered
 
 
 def cancel_one(root: Path, request_id: str, message: str | None = None) -> bool:
-    ensure_daemon_dirs(root)
+    queue_store.ensure_daemon_dirs(root)
     canceled = layout.request_path(root, "canceled", request_id)
     if canceled.exists():
-        remove_live_request_copies(root, request_id)
+        queue_store.remove_live_request_copies(root, request_id)
         print(f"atc: callback {request_id} is already canceled in {root}", file=sys.stderr)
         return True
 
@@ -2421,8 +2222,8 @@ def cancel_one(root: Path, request_id: str, message: str | None = None) -> bool:
             data["cancel_message"] = message
         # Publish the tombstone first. The wrapper finalizer and daemon both
         # honor it, so cancellation wins even if a state transition races us.
-        write_request(canceled, data)
-        remove_live_request_copies(root, request_id)
+        queue_store.write_request(canceled, data)
+        queue_store.remove_live_request_copies(root, request_id)
         try:
             release_retained_target_lease(root, data)
         except (OSError, RuntimeError) as exc:
@@ -2439,7 +2240,7 @@ def cancel_one(root: Path, request_id: str, message: str | None = None) -> bool:
 
 
 def cancel_all(root: Path, message: str | None = None) -> int:
-    ensure_daemon_dirs(root)
+    queue_store.ensure_daemon_dirs(root)
     request_ids: set[str] = set()
     for state in (layout.ACTIVE_STATE, "pending", "running", "failed"):
         request_ids.update(path.stem for path in (root / state).glob("*.json"))
@@ -2452,36 +2253,36 @@ def cancel_all(root: Path, message: str | None = None) -> int:
 
 
 def process_one(root: Path, args: argparse.Namespace) -> bool:
-    ensure_daemon_dirs(root)
+    queue_store.ensure_daemon_dirs(root)
     path = select_pending(root, time.time())
     if path is None:
         return False
 
     request_id = path.stem
-    if is_canceled(root, request_id):
-        remove_live_request_copies(root, request_id)
+    if queue_store.is_canceled(root, request_id):
+        queue_store.remove_live_request_copies(root, request_id)
         return True
     try:
-        running = move_request(path, root / "running")
+        running = queue_store.move_request(path, root / "running")
     except FileNotFoundError:
         return True
     except Exception as exc:
         print(f"atc: warning: could not claim {path.name}: {exc}", file=sys.stderr)
         return True
-    if is_canceled(root, request_id):
-        remove_live_request_copies(root, request_id)
+    if queue_store.is_canceled(root, request_id):
+        queue_store.remove_live_request_copies(root, request_id)
         return True
 
     try:
         request = load_request(running)
         request_id = str(request.get("id", running.stem))
         if layout.ack_path(root, request_id).exists():
-            move_request(running, root / "done")
+            queue_store.move_request(running, root / "done")
             return True
         attempts = int(request.get("attempts", 0)) + 1
         request["attempts"] = attempts
         request.pop("next_attempt_at", None)
-        write_request(running, request)
+        queue_store.write_request(running, request)
         try:
             result, acked, resume_still_running = run_resume_until_exit_or_ack(root, request_id, request, args)
         except TargetLeaseUnavailable as exc:
@@ -2489,10 +2290,10 @@ def process_one(root: Path, args: argparse.Namespace) -> bool:
             # request was selected. Put it back without consuming a retry.
             request["attempts"] = max(0, attempts - 1)
             request["last_deferred_reason"] = f"target lease held: {exc}"
-            if not running.exists() or is_canceled(root, request_id):
+            if not running.exists() or queue_store.is_canceled(root, request_id):
                 return True
-            write_request(running, request)
-            move_request(running, root / "pending")
+            queue_store.write_request(running, request)
+            queue_store.move_request(running, root / "pending")
             return True
         if resume_still_running:
             return True
@@ -2506,17 +2307,17 @@ def process_one(root: Path, args: argparse.Namespace) -> bool:
             request.setdefault("pi_published_at", now)
             request.setdefault("live_delivered_at", now)
             request["last_deferred_reason"] = pi_callback.PUBLISHED_REASON
-            if running.exists() and not is_canceled(root, request_id):
-                write_request(running, request)
-                move_request(running, root / "pending")
+            if running.exists() and not queue_store.is_canceled(root, request_id):
+                queue_store.write_request(running, request)
+                queue_store.move_request(running, root / "pending")
             return True
         if result.returncode == 123 and not acked:
             request["attempts"] = max(0, attempts - 1)
             request["next_attempt_at"] = time.time() + 10
             request["last_deferred_reason"] = "original session has an active turn"
-            if running.exists() and not is_canceled(root, request_id):
-                write_request(running, request)
-                move_request(running, root / "pending")
+            if running.exists() and not queue_store.is_canceled(root, request_id):
+                queue_store.write_request(running, request)
+                queue_store.move_request(running, root / "pending")
             return True
         if result.returncode == 124 and not acked:
             request["last_error"] = "agent resume timed out"
@@ -2538,7 +2339,7 @@ def process_one(root: Path, args: argparse.Namespace) -> bool:
                 file=sys.stderr,
             )
             if running.exists():
-                write_request(running, request)
+                queue_store.write_request(running, request)
             else:
                 return True
         else:
@@ -2562,8 +2363,8 @@ def process_one(root: Path, args: argparse.Namespace) -> bool:
                         file=sys.stderr,
                     )
                     return True
-                write_request(running, request)
-                move_request(running, root / "pending")
+                queue_store.write_request(running, request)
+                queue_store.move_request(running, root / "pending")
                 print(
                     f"atc: warning: daemon callback {running.name} was not acknowledged; "
                     f"retry {attempts}/{max_retries} in {delay:.1f}s",
@@ -2571,7 +2372,7 @@ def process_one(root: Path, args: argparse.Namespace) -> bool:
                 )
                 return True
         if result.returncode == 126 and running.exists():
-            write_request(running, request)
+            queue_store.write_request(running, request)
     except Exception as exc:
         destination_dir = root / "failed"
         print(f"atc: warning: daemon failed to process {running.name}: {exc}", file=sys.stderr)
@@ -2580,14 +2381,14 @@ def process_one(root: Path, args: argparse.Namespace) -> bool:
         print(f"atc: callback {running.stem} disappeared from running; assuming it was canceled", file=sys.stderr)
         return True
     try:
-        finalized = move_request(running, destination_dir)
+        finalized = queue_store.move_request(running, destination_dir)
         # Close the final-attempt race with ack(): the marker may become
         # durable after ack() looked for failed/<id>, but just before this
         # process moved running/<id> there.  Once failed/ is visible, either
         # this reconciliation or ack() itself will converge it to done/.
         if destination_dir == root / "failed" and layout.ack_path(root, request_id).exists():
             try:
-                move_request(finalized, root / "done")
+                queue_store.move_request(finalized, root / "done")
                 if request.get("retain_target_lease") is True:
                     release_retained_target_lease(root, request)
             except FileNotFoundError:
@@ -2600,17 +2401,17 @@ def process_one(root: Path, args: argparse.Namespace) -> bool:
 
 
 def recover_running(root: Path) -> None:
-    ensure_daemon_dirs(root)
+    queue_store.ensure_daemon_dirs(root)
     for path in sorted((root / "running").glob("*.json")):
-        if delivery_lock_is_held(root, path.stem):
+        if queue_store.delivery_lock_is_held(root, path.stem):
             continue
         try:
             request = load_request(path)
             request_id = str(request.get("id", path.stem))
             destination = root / ("done" if layout.ack_path(root, request_id).exists() else "pending")
-            move_request(path, destination)
+            queue_store.move_request(path, destination)
         except FileNotFoundError:
-            if is_canceled(root, path.stem):
+            if queue_store.is_canceled(root, path.stem):
                 continue
             print(
                 f"atc: running callback {path.stem} changed state during recovery",
@@ -2621,7 +2422,7 @@ def recover_running(root: Path) -> None:
             if not path.exists():
                 continue
             try:
-                move_request(path, root / "failed")
+                queue_store.move_request(path, root / "failed")
             except FileNotFoundError:
                 continue
             except Exception as move_exc:
@@ -2637,7 +2438,7 @@ def process_goal_reminders(root: Path) -> bool:
         lock: tuple[object, Path] | None = None
         try:
             goal_id = path.stem
-            lock = acquire_owner_lock(root, layout.goal_lock_id(goal_id), blocking=True)
+            lock = queue_store.acquire_owner_lock(root, layout.goal_lock_id(goal_id), blocking=True)
             goal = load_goal(root, goal_id)
             if goal.get("state") != "active":
                 continue
@@ -2664,8 +2465,8 @@ def process_goal_reminders(root: Path) -> bool:
                 "target": goal["target"], "target_source": goal.get("target_source", "goal"),
                 "goal_id": goal_id, "goal_reminder": True, "prompt": "",
             }
-            goal_ack_command = control_command("goal", "ack", "--queue-dir", str(root), "--id", goal_id)
-            goal_check_command = control_command("goal", "check", "--queue-dir", str(root), "--id", goal_id)
+            goal_ack_command = atc_runtime.control_command("goal", "ack", "--queue-dir", str(root), "--id", goal_id)
+            goal_check_command = atc_runtime.control_command("goal", "check", "--queue-dir", str(root), "--id", goal_id)
             try:
                 plan_path, plan, _, _ = goal_plan_snapshot(goal)
                 completed, total, current, remaining = goal_plan_progress(plan)
@@ -2709,7 +2510,7 @@ def process_goal_reminders(root: Path) -> bool:
         except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError) as exc:
             print(f"atc: warning: could not process goal reminder {path.name}: {exc}", file=sys.stderr)
         finally:
-            release_owner_lock(lock, remove=False)
+            queue_store.release_owner_lock(lock, remove=False)
     return False
 
 
@@ -2721,23 +2522,23 @@ def daemon_has_live_delivery_workers(root: Path) -> bool:
     if _BACKGROUND_RESUMES:
         return True
     for path in (root / "running").glob("*.json"):
-        if delivery_lock_is_held(root, path.stem):
+        if queue_store.delivery_lock_is_held(root, path.stem):
             return True
     # ACK can move a callback to done before its Agent exits. A replacement
     # daemon has no in-memory child table; the inherited OS lease is still the
     # source of truth, regardless of the callback's current queue state.
     for path in (root / layout.LOCKS_STATE).glob("delivery-*.lock"):
-        lock = acquire_path_lock(path, blocking=False)
+        lock = queue_store.acquire_path_lock(path, blocking=False)
         if lock is None:
             return True
-        release_owner_lock(lock, remove=False)
+        queue_store.release_owner_lock(lock, remove=False)
     return False
 
 
 def daemon(args: argparse.Namespace) -> int:
     root = layout.queue_dir(args)
-    ensure_daemon_dirs(root)
-    daemon_lock = acquire_owner_lock(root, "daemon-singleton", blocking=False)
+    queue_store.ensure_daemon_dirs(root)
+    daemon_lock = queue_store.acquire_owner_lock(root, "daemon-singleton", blocking=False)
     if daemon_lock is None:
         print(f"atc: another daemon already owns {root}", file=sys.stderr)
         return 1
@@ -2826,7 +2627,7 @@ def daemon(args: argparse.Namespace) -> int:
         clear_daemon_runtime()
         # Keep the singleton inode stable. Unlinking a lock file after unlock
         # can let two newly starting daemons lock different inodes.
-        release_owner_lock(daemon_lock, remove=False)
+        queue_store.release_owner_lock(daemon_lock, remove=False)
 
 
 def done(args: argparse.Namespace) -> int:
@@ -2849,17 +2650,13 @@ def screen_required_error() -> str:
     )
 
 
-def current_machine_id() -> str:
-    return host_platform().current_machine_id()
-
-
 def write_managed_task(root: Path, task: dict[str, object]) -> None:
     task_id = task.get("id")
     if not isinstance(task_id, str):
         raise ValueError("managed task requires an id")
     directory = layout.managed_task_dir(root, task_id)
-    private_directory(directory)
-    write_request(layout.managed_task_path(root, task_id), task)
+    queue_store.private_directory(directory)
+    queue_store.write_request(layout.managed_task_path(root, task_id), task)
 
 
 def load_managed_task(path: Path) -> dict[str, object]:
@@ -3104,7 +2901,7 @@ def discard_managed_launch_credentials(task: dict[str, object]) -> None:
     path = Path(environment_path)
     try:
         path.unlink()
-        fsync_directory(path.parent)
+        queue_store.fsync_directory(path.parent)
     except FileNotFoundError:
         pass
     except OSError as exc:
@@ -3176,7 +2973,7 @@ def launch_managed_screen(root: Path, task: dict[str, object]) -> bool:
     task["state"] = "launching"
     task["launch_attempt_count"] = attempt_count
     task["launch_requested_at"] = time.time()
-    task["launch_boot_id"] = current_boot_id()
+    task["launch_boot_id"] = host.current_boot_id()
     task["screen_submitted_at"] = time.time()
     task.pop("next_launch_at", None)
     write_managed_task(root, task)
@@ -3249,7 +3046,7 @@ def collect_managed_owner(root: Path, task: dict[str, object]) -> None:
     if task.get("execution_backend") not in ("launchd", "windows-task") or task.get("owner_collected_at"):
         return
     owner = task.get("execution_owner")
-    if (task.get("machine_id") == current_machine_id() and isinstance(owner, str)
+    if (task.get("machine_id") == host.current_machine_id() and isinstance(owner, str)
             and native_backend(str(task["execution_backend"])).collect(owner)):
         task["owner_collected_at"] = time.time()
         write_managed_task(root, task)
@@ -3270,7 +3067,7 @@ def launch_managed_task(root: Path, task: dict[str, object]) -> bool:
     owner = backend.owner_name(str(task["id"]), attempt, root)
     task.update(state="launching", launch_attempt_count=attempt,
                 launch_requested_at=time.time(), execution_owner=owner,
-                launch_boot_id=current_boot_id())
+                launch_boot_id=host.current_boot_id())
     task.pop("next_launch_at", None)
     write_managed_task(root, task)
     argv = worker_command("_task-worker", "--task-file",
@@ -3292,15 +3089,15 @@ def recover_managed_tasks(root: Path) -> int:
     tasks_root = layout.managed_tasks_root(root)
     if not tasks_root.exists():
         return 0
-    current_boot = current_boot_id()
-    current_machine = current_machine_id()
+    current_boot = host.current_boot_id()
+    current_machine = host.current_machine_id()
     processed = 0
     for path in sorted(tasks_root.glob("*/task.json")):
         lock: tuple[object, Path] | None = None
         try:
             task = load_managed_task(path)
             task_id = str(task["id"])
-            lock = acquire_owner_lock(root, f"managed-task-{task_id}", blocking=False)
+            lock = queue_store.acquire_owner_lock(root, f"managed-task-{task_id}", blocking=False)
             if lock is None:
                 continue
             # The worker may have completed while we acquired ownership.
@@ -3374,7 +3171,7 @@ def recover_managed_tasks(root: Path) -> int:
         except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError) as exc:
             print(f"atc: warning: could not recover managed task {path}: {exc}", file=sys.stderr)
         finally:
-            release_owner_lock(lock, remove=False)
+            queue_store.release_owner_lock(lock, remove=False)
     return processed
 
 
@@ -3449,7 +3246,7 @@ def submit_managed_run(args: argparse.Namespace) -> int:
         return 125
     args._health_backend = backend
     root = layout.queue_dir(args).expanduser().absolute()
-    ensure_daemon_dirs(root)
+    queue_store.ensure_daemon_dirs(root)
     try:
         validate_managed_goal(root, getattr(args, "goal_id", None))
     except (OSError, ValueError, json.JSONDecodeError) as exc:
@@ -3506,13 +3303,13 @@ def submit_managed_run(args: argparse.Namespace) -> int:
         "submitted_at": time.time(),
         "execution_backend": backend,
         "callback_format": getattr(args, "callback_format", "compact"),
-        "submission_boot_id": current_boot_id(),
-        "machine_id": current_machine_id(),
+        "submission_boot_id": host.current_boot_id(),
+        "machine_id": host.current_machine_id(),
         "state": "submitted",
         "outcome": "pending",
         "task": args.task,
         "cwd": os.path.abspath(args.cwd),
-        "command": args.command or format_command(wrapped_command),
+        "command": args.command or commands.format_command(wrapped_command),
         "wrapped_command": wrapped_command,
         "message": args.message,
         "queue_dir": str(root),
@@ -3554,12 +3351,12 @@ def submit_managed_run(args: argparse.Namespace) -> int:
                 "agent_system_prompt_source": args.agent_system_prompt_source,
             })
     try:
-        private_directory(task_directory)
+        queue_store.private_directory(task_directory)
         if agent_prompt_path is not None:
-            write_private_text(agent_prompt_path, str(args.agent_prompt_text))
+            queue_store.write_private_text(agent_prompt_path, str(args.agent_prompt_text))
         if agent_system_prompt_path is not None:
-            write_private_text(agent_system_prompt_path, args.agent_system_prompt_text)
-        write_request(environment_path, {"version": 1, "environment": environment})
+            queue_store.write_private_text(agent_system_prompt_path, args.agent_system_prompt_text)
+        queue_store.write_request(environment_path, {"version": 1, "environment": environment})
         write_managed_task(root, task)
     except OSError as exc:
         print(f"atc: refusing to submit task because its durable record could not be written: {exc}", file=sys.stderr)
@@ -3583,7 +3380,7 @@ def submit_managed_run(args: argparse.Namespace) -> int:
             print("atc: Claude Code live callback: arrives through the atc channel; no `atc wait` needed",
                   file=sys.stderr)
         else:
-            wait = control_command("wait", "--queue-dir", str(root), "--task", task_id)
+            wait = atc_runtime.control_command("wait", "--queue-dir", str(root), "--task", task_id)
             print(f"atc: Claude Code live callback: run in the background (run_in_background): {wait}",
                   file=sys.stderr)
     return 0
@@ -3597,7 +3394,7 @@ def run_task_worker(args: argparse.Namespace) -> int:
         root = Path(str(task["queue_dir"])).expanduser().absolute()
         if task_path != layout.managed_task_path(root, str(task["id"])).absolute():
             raise ValueError("task outside its recorded queue")
-        lock = acquire_owner_lock(root, f"managed-task-{task['id']}", blocking=True)
+        lock = queue_store.acquire_owner_lock(root, f"managed-task-{task['id']}", blocking=True)
         if lock is None:
             raise ValueError("task already owned")
         try:
@@ -3608,9 +3405,9 @@ def run_task_worker(args: argparse.Namespace) -> int:
             if task["execution_backend"] in ("launchd", "windows-task"):
                 backend = native_backend(str(task["execution_backend"]))
                 owner = backend.owner_name(str(task["id"]), args.attempt, root)
-                boot = current_boot_id()
+                boot = host.current_boot_id()
                 if (task.get("execution_owner") != owner or not backend.admits_worker(owner)
-                        or task.get("machine_id") != current_machine_id()
+                        or task.get("machine_id") != host.current_machine_id()
                         or not boot or task.get("launch_boot_id") != boot):
                     raise ValueError("worker does not match its native owner, host or boot")
                 task["owner_invocation_id"] = owner
@@ -3625,7 +3422,7 @@ def run_task_worker(args: argparse.Namespace) -> int:
                         return run_managed_worker_locked(root, task)
             return run_managed_worker_locked(root, task)
         finally:
-            release_owner_lock(lock, remove=False)
+            queue_store.release_owner_lock(lock, remove=False)
     except (OSError, ValueError, KeyError, json.JSONDecodeError) as exc:
         print(f"atc: native worker refused: {exc}", file=sys.stderr)
         if os.name == "nt" and isinstance(locals().get("task"), dict):
@@ -3656,7 +3453,7 @@ def run_screen_worker(args: argparse.Namespace) -> int:
     if task_path != layout.managed_task_path(root, str(task["id"])).absolute():
         print("atc: refusing managed task outside its recorded queue", file=sys.stderr)
         return 125
-    lock = acquire_owner_lock(root, f"managed-task-{task['id']}", blocking=True)
+    lock = queue_store.acquire_owner_lock(root, f"managed-task-{task['id']}", blocking=True)
     if lock is None:
         print("atc: could not acquire managed task ownership", file=sys.stderr)
         return 125
@@ -3671,7 +3468,7 @@ def run_screen_worker(args: argparse.Namespace) -> int:
             return 125
         return run_screen_worker_locked(root, task)
     finally:
-        release_owner_lock(lock, remove=False)
+        queue_store.release_owner_lock(lock, remove=False)
 
 
 def run_screen_worker_locked(root: Path, task: dict[str, object]) -> int:
@@ -3700,13 +3497,13 @@ def run_managed_worker_locked(root: Path, task: dict[str, object]) -> int:
         environment["PYTHONIOENCODING"] = "utf-8"
     try:
         environment_path.unlink()
-        fsync_directory(environment_path.parent)
+        queue_store.fsync_directory(environment_path.parent)
     except FileNotFoundError:
         pass
     task.pop("token", None)
     task["state"] = "running"
     task["outcome"] = "running"
-    task["boot_id"] = current_boot_id()
+    task["boot_id"] = host.current_boot_id()
     task["started_at"] = time.time()
     task["worker_ready_at"] = task["started_at"]
     task["wrapper_pid"] = os.getpid()
@@ -3723,7 +3520,7 @@ def run_managed_worker_locked(root: Path, task: dict[str, object]) -> int:
         if os.name == "nt":
             run_kwargs.update(stdout=sys.stdout, stderr=sys.stderr, env=environment,
                               **windows_process.background_popen_kwargs())
-            command = process_command(command, environment)
+            command = commands.process_command(command, environment)
         if task.get("task_kind") == "agent":
             prompt_path = Path(str(task["agent_prompt_path"]))
             result_path = Path(str(task["agent_result_path"]))
@@ -3750,7 +3547,7 @@ def run_managed_worker_locked(root: Path, task: dict[str, object]) -> int:
             completed = subprocess.run(command, **run_kwargs)
             if captures_stdout:
                 output = completed.stdout if isinstance(completed.stdout, str) else ""
-                write_private_text(result_path, output)
+                queue_store.write_private_text(result_path, output)
                 if output:
                     sys.stdout.write(output)
                     if not output.endswith("\n"):
@@ -3762,7 +3559,7 @@ def run_managed_worker_locked(root: Path, task: dict[str, object]) -> int:
                 else:
                     os.chmod(result_path, 0o600)
             else:
-                write_private_text(result_path, "")
+                queue_store.write_private_text(result_path, "")
         else:
             completed = subprocess.run(command, **run_kwargs)
         exit_code = completed.returncode
@@ -3774,7 +3571,7 @@ def run_managed_worker_locked(root: Path, task: dict[str, object]) -> int:
             "completed_at": completed_at,
             "outcome": "completed",
         }
-        write_request(layout.managed_result_path(root, str(task["id"])), result)
+        queue_store.write_request(layout.managed_result_path(root, str(task["id"])), result)
     except (OSError, UnicodeError, ValueError) as exc:
         task["state"] = "interrupted"
         task["outcome"] = "unknown"
@@ -3800,7 +3597,7 @@ def run(args: argparse.Namespace) -> int:
     if not args.wrapped_command:
         raise SystemExit("run mode requires a command after --")
 
-    args.command = args.command or format_command(args.wrapped_command)
+    args.command = args.command or commands.format_command(args.wrapped_command)
     bind_target(args)
     if args.dry_run:
         print(
@@ -4117,11 +3914,11 @@ def callback_prompt_policy(args: argparse.Namespace) -> int:
         if updates:
             if any(type(value) is not int or value < 1 for value in updates.values()):
                 raise ValueError("callback prompt intervals must be positive integers")
-            lock = acquire_path_lock(path.with_suffix(".lock"), blocking=True)
+            lock = queue_store.acquire_path_lock(path.with_suffix(".lock"), blocking=True)
         policy = read_callback_prompt_policy(path)
         if updates:
             policy.update(updates)
-            write_private_text(path, yaml.safe_dump(policy, sort_keys=True))
+            queue_store.write_private_text(path, yaml.safe_dump(policy, sort_keys=True))
         print(f"Callback prompt policy: {path}")
         print(yaml.safe_dump(policy, sort_keys=True), end="")
         return 0
@@ -4130,7 +3927,7 @@ def callback_prompt_policy(args: argparse.Namespace) -> int:
         return 2
     finally:
         if lock is not None:
-            release_owner_lock(lock, remove=False)
+            queue_store.release_owner_lock(lock, remove=False)
 
 
 def allocate_prompt_cadence(
@@ -4153,7 +3950,7 @@ def allocate_prompt_cadence(
     path = root / "prompt-counters" / f"{digest}.json"
     lock = None
     try:
-        lock = acquire_owner_lock(root, f"prompt-cadence-{digest}", blocking=True)
+        lock = queue_store.acquire_owner_lock(root, f"prompt-cadence-{digest}", blocking=True)
         try:
             state = json.loads(path.read_text(encoding="utf-8"))
         except FileNotFoundError:
@@ -4190,14 +3987,14 @@ def allocate_prompt_cadence(
         }
         state["count"] = sequence
         callbacks[request_id] = allocation
-        write_request(path, state)
+        queue_store.write_request(path, state)
         return allocation
     except (OSError, ValueError, RuntimeError, yaml.YAMLError) as exc:
         print(f"atc: prompt cadence unavailable; keeping full reminders: {exc}", file=sys.stderr)
         return None
     finally:
         if lock is not None:
-            release_owner_lock(lock, remove=False)
+            queue_store.release_owner_lock(lock, remove=False)
 
 
 def select_delivery_prompt(payload: dict[str, object]) -> str:
@@ -4224,7 +4021,7 @@ def select_delivery_prompt(payload: dict[str, object]) -> str:
 def ensure_callback_hook_file() -> Path:
     path = layout.callback_hook_path()
     if os.name == "nt":
-        private_directory(path.parent)
+        queue_store.private_directory(path.parent)
         try:
             windows_io.open_private_text(path).close()
         except FileExistsError:
@@ -4299,7 +4096,7 @@ def write_proxy_environment_file(path: Path, values: dict[str, str]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     contents = "".join(f"{name}={values[name]}\n" for name in PROXY_ENV_NAMES if name in values)
     if os.name == "nt":
-        write_private_text(path, contents)
+        queue_store.write_private_text(path, contents)
         return
     temporary = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
     try:
@@ -4310,7 +4107,7 @@ def write_proxy_environment_file(path: Path, values: dict[str, str]) -> None:
             os.fsync(handle.fileno())
         os.replace(temporary, path)
         os.chmod(path, 0o600)
-        fsync_directory(path.parent)
+        queue_store.fsync_directory(path.parent)
     except Exception:
         try:
             temporary.unlink()
@@ -4329,7 +4126,7 @@ def configure_proxy_environment(args: argparse.Namespace) -> Path | None:
     if clear:
         try:
             target.unlink()
-            fsync_directory(target.parent)
+            queue_store.fsync_directory(target.parent)
         except FileNotFoundError:
             pass
         print(f"Cleared proxy environment file at {target}; values were not printed.")
@@ -4401,21 +4198,21 @@ def add_proxy_environment_flags(parser: argparse.ArgumentParser) -> None:
 
 
 def daemon_process_identity(pid: int) -> dict[str, object] | None:
-    return host_platform().process_identity(pid)
+    return host.host_platform().process_identity(pid)
 
 
 def write_daemon_runtime(root: Path | None = None) -> None:
     path = layout.daemon_runtime_path()
     payload = {
         "pid": os.getpid(),
-        "boot_id": current_boot_id(),
+        "boot_id": host.current_boot_id(),
         "process_identity": daemon_process_identity(os.getpid()),
         "queue_dir": str((root if root is not None else layout.queue_dir()).resolve()),
         "reload_protocol": RELOAD_PROTOCOL_VERSION,
         "version": __version__,
         "started_at": time.time(),
     }
-    write_request(path, payload)
+    queue_store.write_request(path, payload)
 
 
 def read_daemon_runtime() -> dict[str, object] | None:
@@ -4462,7 +4259,7 @@ def send_standalone_reload(pid: int, *, expected_queue: Path | None = None) -> b
         root = Path(str(payload.get("queue_dir", "")))
         if not root.is_absolute():
             return False
-        write_request(root / "daemon-reload.json", {"pid": pid, "process_identity": identity})
+        queue_store.write_request(root / "daemon-reload.json", {"pid": pid, "process_identity": identity})
         return True
     return linux_platform.signal_if_identity_matches(pid, identity, signal.SIGHUP)
 
@@ -4475,7 +4272,7 @@ def consume_daemon_reload_request(root: Path, *, filename: str = "daemon-reload.
         accepted = (isinstance(request, dict) and request.get("pid") == os.getpid()
                     and identity is not None and request.get("process_identity") == identity)
         path.unlink()
-        fsync_directory(root)
+        queue_store.fsync_directory(root)
         return accepted
     except FileNotFoundError:
         return False
@@ -4494,7 +4291,7 @@ def clear_daemon_runtime() -> None:
             and identity is not None and payload.get("process_identity") == identity):
         try:
             path.unlink()
-            fsync_directory(path.parent)
+            queue_store.fsync_directory(path.parent)
         except FileNotFoundError:
             pass
 
@@ -4531,7 +4328,7 @@ def start_standalone_daemon(args: argparse.Namespace) -> int:
     # after restart. The OS-held per-queue lock is the source of ownership;
     # the runtime fingerprint is only used to authorize a safe reload signal.
     queue_root = layout.queue_dir(args)
-    admission = acquire_owner_lock(queue_root, "daemon-singleton", blocking=False)
+    admission = queue_store.acquire_owner_lock(queue_root, "daemon-singleton", blocking=False)
     if admission is None:
         existing_pid = read_pid(pid_path)
         if has_running_callbacks(args):
@@ -4553,7 +4350,7 @@ def start_standalone_daemon(args: argparse.Namespace) -> int:
         return 0
     # Do not pass this setup process's lock into Popen. The daemon acquires its
     # own singleton at startup, which also arbitrates concurrent setup calls.
-    release_owner_lock(admission, remove=False)
+    queue_store.release_owner_lock(admission, remove=False)
 
     env = os.environ.copy()
     env.update(daemon_environment(args))
@@ -4572,7 +4369,7 @@ def start_standalone_daemon(args: argparse.Namespace) -> int:
     finally:
         log_file.close()
 
-    write_private_text(pid_path, f"{process.pid}\n")
+    queue_store.write_private_text(pid_path, f"{process.pid}\n")
     time.sleep(0.2)
     returncode = process.poll()
     if returncode is not None:
@@ -4851,7 +4648,7 @@ def setup(args: argparse.Namespace) -> int:
 
 def ack(args: argparse.Namespace) -> int:
     root = layout.queue_dir(args)
-    ensure_daemon_dirs(root)
+    queue_store.ensure_daemon_dirs(root)
     marker = layout.ack_path(root, args.id)
     payload = {
         "id": args.id,
@@ -4859,7 +4656,7 @@ def ack(args: argparse.Namespace) -> int:
     }
     if args.message:
         payload["message"] = args.message
-    write_request(marker, payload)
+    queue_store.write_request(marker, payload)
     for state in ("failed", "running", "pending"):
         source = layout.request_path(root, state, args.id)
         if not source.exists():
@@ -4868,7 +4665,7 @@ def ack(args: argparse.Namespace) -> int:
             request = load_request(source)
             if state == "failed" or (state == "pending" and (request.get("callback_mode") == "manual"
                                                               or request.get("live_delivered_at"))):
-                move_request(source, root / "done")
+                queue_store.move_request(source, root / "done")
             try:
                 release_retained_target_lease(root, request)
             except (OSError, RuntimeError) as exc:
@@ -4892,8 +4689,8 @@ def retry_callback(args: argparse.Namespace) -> int:
         return 2
     delivery_lock = target_lock = None
     try:
-        ensure_daemon_dirs(root)
-        delivery_lock = acquire_owner_lock(root, layout.delivery_lock_id(args.id), blocking=False)
+        queue_store.ensure_daemon_dirs(root)
+        delivery_lock = queue_store.acquire_owner_lock(root, layout.delivery_lock_id(args.id), blocking=False)
         if delivery_lock is None:
             raise ValueError("callback delivery is still active")
         source = layout.request_path(root, "failed", args.id)
@@ -4902,7 +4699,7 @@ def retry_callback(args: argparse.Namespace) -> int:
         request = load_request(source)
         if source.parent.name == "pending" and request.get("callback_mode") != "manual":
             raise ValueError("callback is already pending")
-        if layout.ack_path(root, args.id).exists() or is_canceled(root, args.id):
+        if layout.ack_path(root, args.id).exists() or queue_store.is_canceled(root, args.id):
             raise ValueError("acknowledged or canceled callbacks cannot be retried")
         if request.get("retain_target_lease") is True or desktop_submission_pending(root, request):
             raise ValueError("previous submission outcome is unknown; inspect the original session before recovery")
@@ -4930,11 +4727,11 @@ def retry_callback(args: argparse.Namespace) -> int:
         request["attempts"] = 0
         for key in ("last_error", "delivery_state", "next_attempt_at", "last_deferred_reason"):
             request.pop(key, None)
-        if not source.exists() or layout.ack_path(root, args.id).exists() or is_canceled(root, args.id):
+        if not source.exists() or layout.ack_path(root, args.id).exists() or queue_store.is_canceled(root, args.id):
             raise ValueError("callback changed during recovery; inspect its current state")
-        write_request(source, request)
+        queue_store.write_request(source, request)
         if source.parent.name != "pending":
-            move_request(source, root / "pending")
+            queue_store.move_request(source, root / "pending")
         print(f"atc: requeued callback {args.id}; business task was not relaunched", file=sys.stderr)
         return 0
     except (OSError, ValueError, RuntimeError) as error:
@@ -4942,14 +4739,14 @@ def retry_callback(args: argparse.Namespace) -> int:
         return 2
     finally:
         if target_lock is not None:
-            release_owner_lock(target_lock, remove=False)
+            queue_store.release_owner_lock(target_lock, remove=False)
         if delivery_lock is not None:
-            release_owner_lock(delivery_lock, remove=False)
+            queue_store.release_owner_lock(delivery_lock, remove=False)
 
 
 def goal_start(args: argparse.Namespace) -> int:
     root = layout.queue_dir(args)
-    ensure_daemon_dirs(root)
+    queue_store.ensure_daemon_dirs(root)
     target, source = resolve_target(args)
     goal_id = args.id or uuid.uuid4().hex
     try:
@@ -4967,7 +4764,7 @@ def goal_start(args: argparse.Namespace) -> int:
     except ValueError as exc:
         print(f"atc: error: {exc}", file=sys.stderr)
         return 2
-    lock = acquire_owner_lock(root, layout.goal_lock_id(goal_id), blocking=True)
+    lock = queue_store.acquire_owner_lock(root, layout.goal_lock_id(goal_id), blocking=True)
     try:
         if path.exists():
             print(f"atc: goal {goal_id} already exists", file=sys.stderr)
@@ -4979,7 +4776,7 @@ def goal_start(args: argparse.Namespace) -> int:
                           "plan_file": str(plan_path), "plan_goal": plan["goal"],
                           "plan_sha256_at_start": plan_digest})
     finally:
-        release_owner_lock(lock, remove=False)
+        queue_store.release_owner_lock(lock, remove=False)
     print(goal_id)
     return 0
 
@@ -4991,7 +4788,7 @@ def goal_check(args: argparse.Namespace) -> int:
     except ValueError as exc:
         print(f"atc: error: {exc}", file=sys.stderr)
         return 2
-    lock = acquire_owner_lock(root, layout.goal_lock_id(args.id), blocking=True)
+    lock = queue_store.acquire_owner_lock(root, layout.goal_lock_id(args.id), blocking=True)
     try:
         try:
             goal = load_goal(root, args.id)
@@ -5012,7 +4809,7 @@ def goal_check(args: argparse.Namespace) -> int:
         goal["plan_total_items"] = total
         write_goal(root, goal)
     finally:
-        release_owner_lock(lock, remove=False)
+        queue_store.release_owner_lock(lock, remove=False)
 
     print(f"Goal: {plan['goal']}")
     print(f"Plan revision: {plan['revision']}")
@@ -5045,7 +4842,7 @@ def goal_set_plan(args: argparse.Namespace) -> int:
     except ValueError as exc:
         print(f"atc: error: {exc}", file=sys.stderr)
         return 2
-    lock = acquire_owner_lock(root, layout.goal_lock_id(args.id), blocking=True)
+    lock = queue_store.acquire_owner_lock(root, layout.goal_lock_id(args.id), blocking=True)
     try:
         try:
             goal = load_goal(root, args.id)
@@ -5080,7 +4877,7 @@ def goal_set_plan(args: argparse.Namespace) -> int:
             goal.pop(field, None)
         write_goal(root, goal)
     finally:
-        release_owner_lock(lock, remove=False)
+        queue_store.release_owner_lock(lock, remove=False)
     print(f"atc: goal {args.id} now follows YAML plan {plan_path}")
     print("atc: run goal check before acknowledging completion")
     return 0
@@ -5107,7 +4904,7 @@ def goal_ack(args: argparse.Namespace) -> int:
         if args.email_to and args.email_to != configured_recipient:
             print("atc: error: --email-to must match ATC_BLOCKED_EMAIL_TO", file=sys.stderr)
             return 2
-    lock = acquire_owner_lock(root, layout.goal_lock_id(args.id), blocking=True)
+    lock = queue_store.acquire_owner_lock(root, layout.goal_lock_id(args.id), blocking=True)
     try:
         try:
             goal = load_goal(root, args.id)
@@ -5165,7 +4962,7 @@ def goal_ack(args: argparse.Namespace) -> int:
             goal["completion_plan_checked_at"] = goal["last_plan_checked_at"]
         write_goal(root, goal)
     finally:
-        release_owner_lock(lock, remove=False)
+        queue_store.release_owner_lock(lock, remove=False)
     print(f"atc: goal {args.id} acknowledged as {args.state}")
     return 0
 
@@ -5177,7 +4974,7 @@ def process_blocked_goal_email(root: Path) -> bool:
         lock: tuple[object, Path] | None = None
         try:
             goal_id = path.stem
-            lock = acquire_owner_lock(root, layout.goal_lock_id(goal_id), blocking=True)
+            lock = queue_store.acquire_owner_lock(root, layout.goal_lock_id(goal_id), blocking=True)
             goal = load_goal(root, goal_id)
             if goal.get("state") != "blocked_conditions":
                 continue
@@ -5225,7 +5022,7 @@ def process_blocked_goal_email(root: Path) -> bool:
         except (OSError, ValueError, TypeError, json.JSONDecodeError) as exc:
             print(f"atc: warning: could not process blocked-goal email {path.name}: {exc}", file=sys.stderr)
         finally:
-            release_owner_lock(lock, remove=False)
+            queue_store.release_owner_lock(lock, remove=False)
     return False
 
 
@@ -5236,7 +5033,7 @@ def goal_resume(args: argparse.Namespace) -> int:
     except ValueError as exc:
         print(f"atc: error: {exc}", file=sys.stderr)
         return 2
-    lock = acquire_owner_lock(root, layout.goal_lock_id(args.id), blocking=True)
+    lock = queue_store.acquire_owner_lock(root, layout.goal_lock_id(args.id), blocking=True)
     try:
         try:
             goal = load_goal(root, args.id)
@@ -5256,7 +5053,7 @@ def goal_resume(args: argparse.Namespace) -> int:
         clear_blocked_goal_email(goal)
         write_goal(root, goal)
     finally:
-        release_owner_lock(lock, remove=False)
+        queue_store.release_owner_lock(lock, remove=False)
     print(f"atc: goal {args.id} resumed")
     return 0
 
@@ -5355,7 +5152,7 @@ def shell_hook_text(command: str) -> str:
 
 def install_shell_hook(args: argparse.Namespace) -> int:
     rc_file = Path(args.rc_file or "~/.bashrc").expanduser()
-    command = args.command or console_script_path() or sys.argv[0]
+    command = args.command or atc_runtime.console_script_path() or sys.argv[0]
     block = shell_hook_text(command)
     existing = rc_file.read_text(encoding="utf-8") if rc_file.exists() else ""
 

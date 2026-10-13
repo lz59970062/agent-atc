@@ -15,6 +15,8 @@ import unittest
 from unittest import mock
 
 from agent_atc import cli
+from agent_atc.owners import host
+from agent_atc.store import records as queue_store
 from agent_atc.store import layout
 from agent_atc.install import diagnostics, launchd_service
 from agent_atc.owners import LaunchdBackend, LaunchError, OwnerState
@@ -32,8 +34,8 @@ class MacOSContracts(unittest.TestCase):
         self.addCleanup(self.stack.close)
         self.stack.enter_context(mock.patch.object(sys, "platform", "darwin"))
         self.stack.enter_context(mock.patch.object(macos, "gui_domain", return_value="gui/501"))
-        self.stack.enter_context(mock.patch.object(cli, "current_machine_id", return_value="host"))
-        self.stack.enter_context(mock.patch.object(cli, "current_boot_id", return_value="boot"))
+        self.stack.enter_context(mock.patch.object(host, "current_machine_id", return_value="host"))
+        self.stack.enter_context(mock.patch.object(host, "current_boot_id", return_value="boot"))
         self.backend = LaunchdBackend()
 
     def arguments(self, **updates):
@@ -188,7 +190,7 @@ class MacOSContracts(unittest.TestCase):
             self.assertTrue(cli.send_standalone_reload(os.getpid(), expected_queue=self.queue))
             self.assertTrue(cli.consume_daemon_reload_request(self.queue))
             self.assertFalse(cli.consume_daemon_reload_request(self.queue))
-            cli.write_request(self.queue / "daemon-reload.json", dict(payload, pid=os.getpid() + 1))
+            queue_store.write_request(self.queue / "daemon-reload.json", dict(payload, pid=os.getpid() + 1))
             self.assertFalse(cli.consume_daemon_reload_request(self.queue))
             kill.assert_not_called()
 

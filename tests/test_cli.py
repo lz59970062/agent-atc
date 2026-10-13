@@ -21,6 +21,10 @@ from pathlib import Path
 from unittest import mock
 
 from agent_atc import cli
+from agent_atc.owners import host
+from agent_atc import runtime as atc_runtime
+from agent_atc.store import records as queue_store
+from agent_atc.system import commands
 from agent_atc.store import layout
 
 
@@ -443,7 +447,7 @@ class CliTests(unittest.TestCase):
                 mock.patch.object(cli, "screen_binary", return_value="/usr/bin/screen"),
                 mock.patch.object(cli, "screen_owner_state", return_value=cli.OwnerState.ABSENT),
                 mock.patch("agent_atc.owners.screen.screen_binary", return_value="/usr/bin/screen"),
-                mock.patch.object(cli, "console_script_path", return_value="/usr/bin/atc"),
+                mock.patch.object(atc_runtime, "console_script_path", return_value="/usr/bin/atc"),
                 mock.patch.object(cli.subprocess, "run", return_value=completed) as launch,
             ):
                 self.assertEqual(cli.recover_managed_tasks(root), 1)
@@ -544,7 +548,7 @@ class CliTests(unittest.TestCase):
             cli.write_managed_task(root, task)
 
             with (
-                mock.patch.object(cli, "current_machine_id", return_value=str(task["machine_id"])),
+                mock.patch.object(host, "current_machine_id", return_value=str(task["machine_id"])),
                 mock.patch.object(cli, "screen_owner_state", return_value=cli.OwnerState.ABSENT),
                 mock.patch.object(cli.subprocess, "run") as relaunch,
             ):
@@ -607,8 +611,8 @@ class CliTests(unittest.TestCase):
             cli.write_managed_task(root, task)
 
             with (
-                mock.patch.object(cli, "current_boot_id", return_value="new-boot"),
-                mock.patch.object(cli, "current_machine_id", return_value=str(task["machine_id"])),
+                mock.patch.object(host, "current_boot_id", return_value="new-boot"),
+                mock.patch.object(host, "current_machine_id", return_value=str(task["machine_id"])),
                 mock.patch.object(cli, "screen_owner_state", return_value=cli.OwnerState.ABSENT),
                 mock.patch.object(cli.subprocess, "run") as restart,
             ):
@@ -632,11 +636,11 @@ class CliTests(unittest.TestCase):
                 self.assertEqual(cli.run(run_args), 0)
             task_path = next(layout.managed_tasks_root(root).glob("*/task.json"))
             task = cli.load_managed_task(task_path)
-            task.update({"state": "running", "boot_id": cli.current_boot_id()})
+            task.update({"state": "running", "boot_id": host.current_boot_id()})
             cli.write_managed_task(root, task)
 
             with (
-                mock.patch.object(cli, "current_machine_id", return_value=str(task["machine_id"])),
+                mock.patch.object(host, "current_machine_id", return_value=str(task["machine_id"])),
                 mock.patch.object(cli, "screen_owner_state", return_value=cli.OwnerState.ALIVE),
                 mock.patch.object(cli.subprocess, "run") as relaunch,
             ):
@@ -654,7 +658,7 @@ class CliTests(unittest.TestCase):
             task_path = next(layout.managed_tasks_root(root).glob("*/task.json"))
 
             with (
-                mock.patch.object(cli, "current_machine_id", return_value="different-machine"),
+                mock.patch.object(host, "current_machine_id", return_value="different-machine"),
                 mock.patch.object(cli.subprocess, "run") as launch,
             ):
                 self.assertEqual(cli.recover_managed_tasks(root), 1)
@@ -690,8 +694,8 @@ class CliTests(unittest.TestCase):
             cli.write_managed_task(root, task)
 
             with (
-                mock.patch.object(cli, "current_boot_id", return_value="new-boot"),
-                mock.patch.object(cli, "current_machine_id", return_value=str(task["machine_id"])),
+                mock.patch.object(host, "current_boot_id", return_value="new-boot"),
+                mock.patch.object(host, "current_machine_id", return_value=str(task["machine_id"])),
                 mock.patch.object(cli, "screen_owner_state", return_value=cli.OwnerState.ABSENT),
             ):
                 self.assertEqual(cli.recover_managed_tasks(root), 1)
@@ -722,14 +726,14 @@ class CliTests(unittest.TestCase):
             request = cli.make_active_request(args, time.time())
             request["launch_phase"] = "launch_committed"
             request_id = str(request["id"])
-            lock = cli.acquire_owner_lock(root, request_id, blocking=True)
+            lock = queue_store.acquire_owner_lock(root, request_id, blocking=True)
             self.assertIsNotNone(lock)
-            cli.write_request(layout.request_path(root, layout.ACTIVE_STATE, request_id), request)
+            queue_store.write_request(layout.request_path(root, layout.ACTIVE_STATE, request_id), request)
 
             self.assertEqual(cli.recover_active(root), 0)
             self.assertTrue(layout.request_path(root, layout.ACTIVE_STATE, request_id).exists())
 
-            cli.release_owner_lock(lock, remove=False)
+            queue_store.release_owner_lock(lock, remove=False)
             self.assertEqual(cli.recover_active(root), 1)
             recovered = json.loads(layout.request_path(root, "pending", request_id).read_text(encoding="utf-8"))
             self.assertEqual(recovered["outcome"], "unknown")
@@ -742,16 +746,16 @@ class CliTests(unittest.TestCase):
     def test_daemon_singleton_uses_stable_non_removed_lock_inode(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "queue"
-            first = cli.acquire_owner_lock(root, "daemon-singleton", blocking=False)
+            first = queue_store.acquire_owner_lock(root, "daemon-singleton", blocking=False)
             self.assertIsNotNone(first)
-            self.assertIsNone(cli.acquire_owner_lock(root, "daemon-singleton", blocking=False))
+            self.assertIsNone(queue_store.acquire_owner_lock(root, "daemon-singleton", blocking=False))
             lock_path = layout.owner_lock_path(root, "daemon-singleton")
 
-            cli.release_owner_lock(first, remove=False)
+            queue_store.release_owner_lock(first, remove=False)
             self.assertTrue(lock_path.exists())
-            handoff = cli.acquire_owner_lock(root, "daemon-singleton", blocking=False)
+            handoff = queue_store.acquire_owner_lock(root, "daemon-singleton", blocking=False)
             self.assertIsNotNone(handoff)
-            cli.release_owner_lock(handoff, remove=False)
+            queue_store.release_owner_lock(handoff, remove=False)
             self.assertTrue(lock_path.exists())
 
     def test_submission_persistence_failure_refuses_to_launch_task(self) -> None:
@@ -761,7 +765,7 @@ class CliTests(unittest.TestCase):
 
             with (
                 mock.patch.object(cli, "screen_binary", return_value="/usr/bin/screen"),
-                mock.patch.object(cli, "write_request", side_effect=OSError("disk unavailable")),
+                mock.patch.object(queue_store, "write_request", side_effect=OSError("disk unavailable")),
                 mock.patch.object(cli.subprocess, "run") as wrapped,
             ):
                 self.assertEqual(cli.submit_managed_run(args), 125)
@@ -809,7 +813,7 @@ class CliTests(unittest.TestCase):
             )
             cli.prepare_request_for_queue(root, request, cli.build_prompt(args, 3.0))
             request_id = str(request["id"])
-            cli.write_request(layout.request_path(root, layout.ACTIVE_STATE, request_id), request)
+            queue_store.write_request(layout.request_path(root, layout.ACTIVE_STATE, request_id), request)
 
             self.assertEqual(cli.recover_active(root), 1)
             recovered = json.loads(layout.request_path(root, "pending", request_id).read_text(encoding="utf-8"))
@@ -824,7 +828,7 @@ class CliTests(unittest.TestCase):
             args = self._run_args(tmp, root, [sys.executable, "-c", "pass"])
             request = cli.make_active_request(args, time.time())
             request_id = str(request["id"])
-            cli.write_request(layout.request_path(root, layout.ACTIVE_STATE, request_id), request)
+            queue_store.write_request(layout.request_path(root, layout.ACTIVE_STATE, request_id), request)
 
             self.assertEqual(cli.recover_active(root), 0)
             self.assertFalse(layout.request_path(root, layout.ACTIVE_STATE, request_id).exists())
@@ -1179,7 +1183,7 @@ class CliTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "queue"
             self._write_request(root, "late-ack", tmp)
-            cli.ensure_daemon_dirs(root)
+            queue_store.ensure_daemon_dirs(root)
             (root / "acks" / "late-ack.json").write_text("{}\n", encoding="utf-8")
             args = argparse.Namespace(retries=3, retry_delay=0.0, retry_backoff=2.0)
 
@@ -1206,7 +1210,7 @@ class CliTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "queue"
             self._write_request(root, "unacked", tmp)
-            cli.ensure_daemon_dirs(root)
+            queue_store.ensure_daemon_dirs(root)
             os.replace(root / "pending" / "unacked.json", root / "running" / "unacked.json")
             self._write_request(root, "acked", tmp)
             os.replace(root / "pending" / "acked.json", root / "running" / "acked.json")
@@ -1230,39 +1234,39 @@ class CliTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "queue"
-            cli.ensure_daemon_dirs(root)
+            queue_store.ensure_daemon_dirs(root)
             source = layout.request_path(root, layout.ACTIVE_STATE, "same-id")
             destination = layout.request_path(root, "pending", "same-id")
-            cli.write_request(source, payload("same-id", tmp, "identical"))
-            cli.write_request(destination, payload("same-id", tmp, "identical"))
+            queue_store.write_request(source, payload("same-id", tmp, "identical"))
+            queue_store.write_request(destination, payload("same-id", tmp, "identical"))
 
-            self.assertEqual(cli.move_request(source, destination.parent), destination)
+            self.assertEqual(queue_store.move_request(source, destination.parent), destination)
             self.assertFalse(source.exists())
             self.assertEqual(json.loads(destination.read_text(encoding="utf-8"))["prompt"], "identical")
 
             source = layout.request_path(root, layout.ACTIVE_STATE, "divergent")
             destination = layout.request_path(root, "pending", "divergent")
-            cli.write_request(source, payload("divergent", tmp, "new completed source"))
-            cli.write_request(destination, payload("divergent", tmp, "stale destination"))
+            queue_store.write_request(source, payload("divergent", tmp, "new completed source"))
+            queue_store.write_request(destination, payload("divergent", tmp, "stale destination"))
 
             with self.assertRaises(FileExistsError):
-                cli.move_request(source, destination.parent)
+                queue_store.move_request(source, destination.parent)
             self.assertTrue(source.exists())
             self.assertTrue(destination.exists())
 
             source = layout.request_path(root, layout.ACTIVE_STATE, "collision")
             destination = layout.request_path(root, "pending", "collision")
-            cli.write_request(source, payload("collision", tmp, "source"))
-            cli.write_request(destination, payload("different-id", tmp, "destination"))
+            queue_store.write_request(source, payload("collision", tmp, "source"))
+            queue_store.write_request(destination, payload("different-id", tmp, "destination"))
 
             with self.assertRaises(FileExistsError):
-                cli.move_request(source, destination.parent)
+                queue_store.move_request(source, destination.parent)
             self.assertTrue(source.exists())
             self.assertTrue(destination.exists())
 
             destination.write_text("not json\n", encoding="utf-8")
             with self.assertRaises(FileExistsError):
-                cli.move_request(source, destination.parent)
+                queue_store.move_request(source, destination.parent)
             self.assertTrue(source.exists())
 
     def test_ack_is_monotonic_and_prevents_redelivery_after_recovery(self) -> None:
@@ -1294,8 +1298,8 @@ class CliTests(unittest.TestCase):
                 tmp,
                 target={"kind": "session", "value": "queue-only-session"},
             )
-            cli.ensure_daemon_dirs(root)
-            cli.move_request(layout.request_path(root, "pending", "queue-only-ack"), root / "running")
+            queue_store.ensure_daemon_dirs(root)
+            queue_store.move_request(layout.request_path(root, "pending", "queue-only-ack"), root / "running")
             args = argparse.Namespace(queue_dir=str(root), id="queue-only-ack", message="inspected")
 
             with mock.patch.dict(os.environ, {layout.TARGET_LOCK_DIR_ENV: str(target_locks)}, clear=False):
@@ -1314,12 +1318,12 @@ class CliTests(unittest.TestCase):
                 tmp,
                 target={"kind": "session", "value": "deferred-lease-session"},
             )
-            cli.ensure_daemon_dirs(root)
-            cli.move_request(layout.request_path(root, "pending", "deferred-lease-ack"), root / "failed")
+            queue_store.ensure_daemon_dirs(root)
+            queue_store.move_request(layout.request_path(root, "pending", "deferred-lease-ack"), root / "failed")
             failed_path = layout.request_path(root, "failed", "deferred-lease-ack")
             failed = cli.load_request(failed_path)
             failed["retain_target_lease"] = True
-            cli.write_request(failed_path, failed)
+            queue_store.write_request(failed_path, failed)
             args = argparse.Namespace(queue_dir=str(root), id="deferred-lease-ack", message=None)
 
             with mock.patch.dict(os.environ, {layout.TARGET_LOCK_DIR_ENV: str(target_locks)}, clear=False):
@@ -1344,14 +1348,14 @@ class CliTests(unittest.TestCase):
             root = Path(tmp) / "queue"
             target = {"kind": "session", "value": "late-ack-thread"}
             self._write_request(root, "late-failed-ack", tmp, target=target)
-            cli.ensure_daemon_dirs(root)
-            cli.move_request(
+            queue_store.ensure_daemon_dirs(root)
+            queue_store.move_request(
                 layout.request_path(root, "pending", "late-failed-ack"),
                 root / "failed",
             )
             failed = cli.load_request(layout.request_path(root, "failed", "late-failed-ack"))
             failed["retain_target_lease"] = True
-            cli.write_request(layout.request_path(root, "failed", "late-failed-ack"), failed)
+            queue_store.write_request(layout.request_path(root, "failed", "late-failed-ack"), failed)
             args = argparse.Namespace(queue_dir=str(root), id="late-failed-ack", message="late delivery completed")
 
             with mock.patch.dict(os.environ, {layout.TARGET_LOCK_DIR_ENV: str(Path(tmp) / "target-locks")}, clear=False):
@@ -1368,11 +1372,11 @@ class CliTests(unittest.TestCase):
             root_b = Path(tmp) / "queue-b"
             target = {"kind": "session", "value": "late-ack-thread"}
             self._write_request(root_a, "late-failed-ack", tmp, target=target)
-            cli.ensure_daemon_dirs(root_a)
-            cli.move_request(layout.request_path(root_a, "pending", "late-failed-ack"), root_a / "failed")
+            queue_store.ensure_daemon_dirs(root_a)
+            queue_store.move_request(layout.request_path(root_a, "pending", "late-failed-ack"), root_a / "failed")
             failed = cli.load_request(layout.request_path(root_a, "failed", "late-failed-ack"))
             failed["retain_target_lease"] = True
-            cli.write_request(layout.request_path(root_a, "failed", "late-failed-ack"), failed)
+            queue_store.write_request(layout.request_path(root_a, "failed", "late-failed-ack"), failed)
             self._write_request(root_b, "same-session", tmp, target=target)
             args = argparse.Namespace(queue_dir=str(root_a), id="late-failed-ack", message=None)
 
@@ -1388,14 +1392,14 @@ class CliTests(unittest.TestCase):
             root_b = Path(tmp) / "queue-b"
             target = {"kind": "session", "value": "restart-thread"}
             self._write_request(root_a, "reconciled", tmp, target=target)
-            cli.ensure_daemon_dirs(root_a)
-            cli.move_request(layout.request_path(root_a, "pending", "reconciled"), root_a / "done")
+            queue_store.ensure_daemon_dirs(root_a)
+            queue_store.move_request(layout.request_path(root_a, "pending", "reconciled"), root_a / "done")
             completed = cli.load_request(layout.request_path(root_a, "done", "reconciled"))
             self._write_request(root_b, "same-session", tmp, target=target)
 
             with mock.patch.dict(os.environ, {layout.TARGET_LOCK_DIR_ENV: str(Path(tmp) / "target-locks")}, clear=False):
                 cli.retain_target_lease(root_a, completed)
-                cli.write_request(layout.ack_path(root_a, "reconciled"), {"id": "reconciled", "marked_at": time.time()})
+                queue_store.write_request(layout.ack_path(root_a, "reconciled"), {"id": "reconciled", "marked_at": time.time()})
                 self.assertEqual(cli.select_pending(root_b, time.time()).stem, "same-session")
                 self.assertFalse(cli.retained_target_lease_is_held(completed))
 
@@ -1408,13 +1412,13 @@ class CliTests(unittest.TestCase):
 
             with mock.patch.dict(os.environ, {layout.TARGET_LOCK_DIR_ENV: str(Path(tmp) / "target-locks")}, clear=False):
                 cli.retain_target_lease(root, request)
-                cli.write_request(layout.ack_path(root, "reconciled"), {"id": "reconciled", "marked_at": time.time()})
+                queue_store.write_request(layout.ack_path(root, "reconciled"), {"id": "reconciled", "marked_at": time.time()})
                 lock = cli.acquire_retained_target_lease_lock(request, blocking=False)
                 self.assertIsNotNone(lock)
                 try:
                     self.assertTrue(cli.retained_target_lease_is_held(request))
                 finally:
-                    cli.release_owner_lock(lock, remove=False)
+                    queue_store.release_owner_lock(lock, remove=False)
                 self.assertFalse(cli.retained_target_lease_is_held(request))
 
     def test_ack_releases_timeout_marker_while_parent_still_marks_running(self) -> None:
@@ -1422,8 +1426,8 @@ class CliTests(unittest.TestCase):
             root = Path(tmp) / "queue"
             target = {"kind": "session", "value": "timeout-thread"}
             self._write_request(root, "timeout-ack", tmp, target=target)
-            cli.ensure_daemon_dirs(root)
-            cli.move_request(layout.request_path(root, "pending", "timeout-ack"), root / "running")
+            queue_store.ensure_daemon_dirs(root)
+            queue_store.move_request(layout.request_path(root, "pending", "timeout-ack"), root / "running")
             request = cli.load_request(layout.request_path(root, "running", "timeout-ack"))
             args = argparse.Namespace(queue_dir=str(root), id="timeout-ack", message=None)
 
@@ -1439,12 +1443,12 @@ class CliTests(unittest.TestCase):
             request_id = "final-transition-ack"
             self._write_request(root, request_id, tmp, target={"kind": "session", "value": "race-thread"})
             args = argparse.Namespace(retries=0, retry_delay=0.0, retry_backoff=2.0)
-            original_move = cli.move_request
+            original_move = queue_store.move_request
 
             def move_with_late_ack(source: Path, destination: Path) -> Path:
                 if source.parent.name == "running" and destination == root / "failed":
                     cli.retain_target_lease(root, cli.load_request(source))
-                    cli.write_request(
+                    queue_store.write_request(
                         layout.ack_path(root, request_id),
                         {"id": request_id, "marked_at": time.time()},
                     )
@@ -1454,7 +1458,7 @@ class CliTests(unittest.TestCase):
             with (
                 mock.patch.dict(os.environ, {layout.TARGET_LOCK_DIR_ENV: str(Path(tmp) / "target-locks")}, clear=False),
                 mock.patch.object(cli, "run_resume_until_exit_or_ack", return_value=(completed, False, False)),
-                mock.patch.object(cli, "move_request", side_effect=move_with_late_ack),
+                mock.patch.object(queue_store, "move_request", side_effect=move_with_late_ack),
             ):
                 self.assertTrue(cli.process_one(root, args))
                 request = cli.load_request(layout.request_path(root, "done", request_id))
@@ -1483,7 +1487,7 @@ class CliTests(unittest.TestCase):
                 self.assertTrue(cli.process_one(root, args))
             self.assertLess(time.monotonic() - started, 2.0)
             self.assertTrue(layout.request_path(root, "running", "a-running").exists())
-            self.assertTrue(cli.delivery_lock_is_held(root, "a-running"))
+            self.assertTrue(queue_store.delivery_lock_is_held(root, "a-running"))
 
             self._write_request(root, "b-same", tmp, target={"kind": "session", "value": "session-a"})
             self._write_request(root, "c-other", tmp, target={"kind": "session", "value": "session-b"})
@@ -1504,7 +1508,7 @@ class CliTests(unittest.TestCase):
             self._write_request(root, "ack-race", tmp, target={"kind": "session", "value": "race-session"})
             request = cli.load_request(layout.request_path(root, "pending", "ack-race"))
             args = argparse.Namespace(resume_timeout=10.0)
-            original_acquire = cli.acquire_owner_lock
+            original_acquire = queue_store.acquire_owner_lock
 
             def acquire_then_ack(
                 queue_root: Path,
@@ -1514,11 +1518,11 @@ class CliTests(unittest.TestCase):
             ) -> tuple[object, Path] | None:
                 lock = original_acquire(queue_root, lock_id, blocking=blocking)
                 if lock_id == layout.delivery_lock_id("ack-race"):
-                    cli.write_request(layout.ack_path(root, "ack-race"), {"id": "ack-race", "marked_at": time.time()})
+                    queue_store.write_request(layout.ack_path(root, "ack-race"), {"id": "ack-race", "marked_at": time.time()})
                 return lock
 
             with (
-                mock.patch.object(cli, "acquire_owner_lock", side_effect=acquire_then_ack),
+                mock.patch.object(queue_store, "acquire_owner_lock", side_effect=acquire_then_ack),
                 mock.patch.object(cli.subprocess, "Popen") as spawn,
             ):
                 result, acked, live = cli.run_resume_until_exit_or_ack(root, "ack-race", request, args)
@@ -1532,16 +1536,16 @@ class CliTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "queue"
             self._write_request(root, "held-canceled", tmp, target={"kind": "session", "value": "held-session"})
-            cli.ensure_daemon_dirs(root)
-            cli.move_request(layout.request_path(root, "pending", "held-canceled"), root / "canceled")
-            delivery_lock = cli.acquire_owner_lock(root, layout.delivery_lock_id("held-canceled"), blocking=False)
+            queue_store.ensure_daemon_dirs(root)
+            queue_store.move_request(layout.request_path(root, "pending", "held-canceled"), root / "canceled")
+            delivery_lock = queue_store.acquire_owner_lock(root, layout.delivery_lock_id("held-canceled"), blocking=False)
             self.assertIsNotNone(delivery_lock)
             try:
                 self._write_request(root, "same-target", tmp, target={"kind": "session", "value": "held-session"})
                 cli._BACKGROUND_RESUMES.clear()
                 self.assertIsNone(cli.select_pending(root, time.time()))
             finally:
-                cli.release_owner_lock(delivery_lock, remove=False)
+                queue_store.release_owner_lock(delivery_lock, remove=False)
             self.assertEqual(cli.select_pending(root, time.time()).stem, "same-target")
 
     def test_global_target_lease_blocks_same_session_across_queue_roots(self) -> None:
@@ -1570,7 +1574,7 @@ class CliTests(unittest.TestCase):
                     self.assertIsNotNone(selected)
                     self.assertEqual(selected.stem, "b-other")
                 finally:
-                    cli.release_owner_lock(lease, remove=False)
+                    queue_store.release_owner_lock(lease, remove=False)
 
                 self.assertEqual(cli.select_pending(root_b, time.time()).stem, "a-same")
 
@@ -1598,7 +1602,7 @@ class CliTests(unittest.TestCase):
                         self.assertTrue(cli.process_one(root_b, args))
                     spawn.assert_not_called()
                 finally:
-                    cli.release_owner_lock(lease, remove=False)
+                    queue_store.release_owner_lock(lease, remove=False)
 
             pending = layout.request_path(root_b, "pending", "contender")
             self.assertTrue(pending.exists())
@@ -1620,8 +1624,8 @@ class CliTests(unittest.TestCase):
                 "prompt": "wake up",
                 "retain_target_lease": True,
             }
-            cli.ensure_daemon_dirs(root_a)
-            cli.write_request(layout.request_path(root_a, "failed", "desktop-unknown"), failed)
+            queue_store.ensure_daemon_dirs(root_a)
+            queue_store.write_request(layout.request_path(root_a, "failed", "desktop-unknown"), failed)
             self._write_request(root_b, "contender", tmp, target=target)
             args = argparse.Namespace(retries=3, retry_delay=0.0, retry_backoff=2.0, resume_timeout=10.0)
 
@@ -1681,19 +1685,19 @@ class CliTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "queue"
             self._write_request(root, "cancel-race", tmp)
-            cli.ensure_daemon_dirs(root)
-            cli.move_request(layout.request_path(root, "pending", "cancel-race"), root / "running")
+            queue_store.ensure_daemon_dirs(root)
+            queue_store.move_request(layout.request_path(root, "pending", "cancel-race"), root / "running")
             running = layout.request_path(root, "running", "cancel-race")
             data = json.loads(running.read_text(encoding="utf-8"))
 
             def cancel_during_move(source: Path, destination: Path) -> Path:
                 canceled = dict(data)
                 canceled.update({"canceled_at": time.time(), "canceled_from": "running"})
-                cli.write_request(layout.request_path(root, "canceled", "cancel-race"), canceled)
+                queue_store.write_request(layout.request_path(root, "canceled", "cancel-race"), canceled)
                 source.unlink()
                 raise FileNotFoundError(source)
 
-            with mock.patch.object(cli, "move_request", side_effect=cancel_during_move):
+            with mock.patch.object(queue_store, "move_request", side_effect=cancel_during_move):
                 cli.recover_running(root)
 
             self.assertTrue(layout.request_path(root, "canceled", "cancel-race").exists())
@@ -1756,11 +1760,11 @@ class CliTests(unittest.TestCase):
                 self.assertEqual(replacement.returncode, 0)
                 self.assertEqual(len(launch_log.read_text(encoding="utf-8").splitlines()), 1)
                 self.assertTrue(layout.request_path(root, "running", "restart-lease").exists())
-                self.assertTrue(cli.delivery_lock_is_held(root, "restart-lease"))
+                self.assertTrue(queue_store.delivery_lock_is_held(root, "restart-lease"))
 
                 os.kill(child_pid, signal.SIGTERM)
                 deadline = time.time() + 5.0
-                while time.time() < deadline and cli.delivery_lock_is_held(root, "restart-lease"):
+                while time.time() < deadline and queue_store.delivery_lock_is_held(root, "restart-lease"):
                     time.sleep(0.05)
                 cli.recover_running(root)
                 self.assertTrue(layout.request_path(root, "pending", "restart-lease").exists())
@@ -1794,7 +1798,7 @@ class CliTests(unittest.TestCase):
                     self.assertTrue(cli.process_one(root, args))
                 descendant_pid = int(descendant_pid_path.read_text(encoding="utf-8"))
                 os.kill(descendant_pid, 0)
-                self.assertFalse(cli.delivery_lock_is_held(root, "no-fd-leak"))
+                self.assertFalse(queue_store.delivery_lock_is_held(root, "no-fd-leak"))
                 self.assertTrue(layout.request_path(root, "pending", "no-fd-leak").exists())
             finally:
                 if descendant_pid is not None:
@@ -1849,7 +1853,7 @@ class CliTests(unittest.TestCase):
         output = io.StringIO()
         with (
             mock.patch.object(cli.shutil, "which", return_value="/opt/claude/bin/claude"),
-            mock.patch.object(cli, "process_command", side_effect=lambda command, environment=None: command),
+            mock.patch.object(commands, "process_command", side_effect=lambda command, environment=None: command),
             mock.patch.object(cli.subprocess, "run", return_value=completed) as auth_status,
             mock.patch.dict(
                 os.environ,
@@ -1989,7 +1993,7 @@ class CliTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "queue"
             self._write_request(root, "inflight", tmp)
-            cli.move_request(root / "pending" / "inflight.json", root / "running")
+            queue_store.move_request(root / "pending" / "inflight.json", root / "running")
             args = argparse.Namespace(
                 name="agent-atc",
                 queue_dir=str(root),
@@ -2025,7 +2029,7 @@ class CliTests(unittest.TestCase):
         ):
             root = Path(tmp) / "queue"
             self._write_request(root, "inflight", tmp)
-            cli.move_request(root / "pending" / "inflight.json", root / "running")
+            queue_store.move_request(root / "pending" / "inflight.json", root / "running")
             home = Path(tmp) / "atc-home"
             runtime = home / "daemon-runtime.json"
             runtime.parent.mkdir(parents=True)
@@ -2530,7 +2534,7 @@ class CliTests(unittest.TestCase):
     def test_goal_set_plan_migrates_legacy_goal_and_clears_old_check(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "queue"
-            cli.ensure_daemon_dirs(root)
+            queue_store.ensure_daemon_dirs(root)
             cli.write_goal(
                 root,
                 {
@@ -2582,13 +2586,13 @@ class CliTests(unittest.TestCase):
             self.assertEqual(len(pending), 1)
             reminder = cli.load_request(pending[0])
             self.assertTrue(reminder["goal_reminder"])
-            self.assertIn(cli.control_command("goal", "ack", "--queue-dir", str(root), "--id", "reminder-goal"), reminder["prompt"])
-            self.assertIn(cli.control_command("goal", "check", "--queue-dir", str(root), "--id", "reminder-goal"), reminder["prompt"])
+            self.assertIn(atc_runtime.control_command("goal", "ack", "--queue-dir", str(root), "--id", "reminder-goal"), reminder["prompt"])
+            self.assertIn(atc_runtime.control_command("goal", "check", "--queue-dir", str(root), "--id", "reminder-goal"), reminder["prompt"])
             self.assertIn("--condition", reminder["prompt"])
             self.assertIn("Current item: finish [pending]", reminder["prompt"])
             self.assertIn("Remaining path:", reminder["prompt"])
 
-            cli.move_request(pending[0], root / "done")
+            queue_store.move_request(pending[0], root / "done")
             goal = cli.load_goal(root, "reminder-goal")
             goal["last_reminder_at"] = time.time() - 2.0
             cli.write_goal(root, goal)
@@ -2612,7 +2616,7 @@ class CliTests(unittest.TestCase):
             goal["last_external_callback_at"] = time.time() - 2.0
             cli.write_goal(root, goal)
             callback_time = time.time()
-            cli.write_request(
+            queue_store.write_request(
                 root / "pending" / "crash-window.json",
                 {
                     "version": 1,
@@ -3122,7 +3126,7 @@ class CliTests(unittest.TestCase):
 
             def retain_then_ack(root: Path, callback: dict[str, object]) -> None:
                 original_retain(root, callback)
-                cli.write_request(ack, {"id": callback["id"], "marked_at": time.time()})
+                queue_store.write_request(ack, {"id": callback["id"], "marked_at": time.time()})
 
             read_fd, lock_fd = os.pipe()
             output = io.StringIO()
@@ -3152,7 +3156,7 @@ class CliTests(unittest.TestCase):
     def test_manual_desktop_recovery_retains_target_lease_until_canceled(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "queue"
-            cli.ensure_daemon_dirs(root)
+            queue_store.ensure_daemon_dirs(root)
             request = {
                 "version": 1,
                 "id": "desktop-unknown",
@@ -3162,7 +3166,7 @@ class CliTests(unittest.TestCase):
                 "prompt": "wake up",
                 "retain_target_lease": True,
             }
-            cli.write_request(layout.request_path(root, "failed", "desktop-unknown"), request)
+            queue_store.write_request(layout.request_path(root, "failed", "desktop-unknown"), request)
             with mock.patch.dict(os.environ, {layout.TARGET_LOCK_DIR_ENV: str(Path(tmp) / "target-locks")}, clear=False):
                 cli.retain_target_lease(root, request)
                 self.assertTrue(cli.target_has_live_resume(root, request))
@@ -3183,8 +3187,8 @@ class CliTests(unittest.TestCase):
                 "prompt": "wake up",
                 "retain_target_lease": True,
             }
-            cli.ensure_daemon_dirs(root_a)
-            cli.write_request(layout.request_path(root_a, "failed", "desktop-unknown"), failed)
+            queue_store.ensure_daemon_dirs(root_a)
+            queue_store.write_request(layout.request_path(root_a, "failed", "desktop-unknown"), failed)
             self._write_request(root_b, "same-session", tmp, target=target)
             with mock.patch.dict(os.environ, {layout.TARGET_LOCK_DIR_ENV: str(Path(tmp) / "target-locks")}, clear=False):
                 cli.retain_target_lease(root_a, failed)
@@ -3197,8 +3201,8 @@ class CliTests(unittest.TestCase):
             root = Path(tmp) / "queue"
             target = {"kind": "session", "value": "timeout-thread"}
             self._write_request(root, "timeout-cancel", tmp, target=target)
-            cli.ensure_daemon_dirs(root)
-            cli.move_request(layout.request_path(root, "pending", "timeout-cancel"), root / "running")
+            queue_store.ensure_daemon_dirs(root)
+            queue_store.move_request(layout.request_path(root, "pending", "timeout-cancel"), root / "running")
             request = cli.load_request(layout.request_path(root, "running", "timeout-cancel"))
 
             with mock.patch.dict(os.environ, {layout.TARGET_LOCK_DIR_ENV: str(Path(tmp) / "target-locks")}, clear=False):

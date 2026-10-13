@@ -20,6 +20,7 @@ import unittest
 from unittest import mock
 
 from agent_atc import cli
+from agent_atc.owners import host
 from agent_atc.store import layout
 from agent_atc.install import diagnostics, launchd_service
 from agent_atc.owners import LaunchdBackend, OwnerState, macos
@@ -69,7 +70,7 @@ class RealLaunchdTests(unittest.TestCase):
                 wrapped_command=[sys.executable, str(workload), str(started), str(release), str(executions)])
             # Sandboxed submitters may lack kern.bootsessionuuid access. The
             # unrestricted coordinator must supply its own launch boot binding.
-            with mock.patch.object(cli, "current_boot_id", return_value=None):
+            with mock.patch.object(host, "current_boot_id", return_value=None):
                 self.assertEqual(cli.run(args), 0)
             task_path = next(layout.managed_tasks_root(root).glob("*/task.json"))
             task = cli.load_managed_task(task_path)
@@ -82,6 +83,7 @@ class RealLaunchdTests(unittest.TestCase):
                 from pathlib import Path
                 sys.path.insert(0, {source!r})
                 from agent_atc import cli
+                from agent_atc.owners import host
                 from agent_atc.store import layout
                 cli.recover_managed_tasks(Path(sys.argv[1]))
                 time.sleep(40)
