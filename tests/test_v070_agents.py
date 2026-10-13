@@ -4,7 +4,7 @@ from __future__ import annotations
 import unittest
 from pathlib import Path
 
-from long_task_callback.agents import AGENTS, AgentRegistry, ChildOptions, get_agent
+from agent_atc.agents import AGENTS, AgentRegistry, ChildOptions, get_agent
 
 
 class FixtureAdapter:
@@ -103,7 +103,7 @@ class AgentRegistryTests(unittest.TestCase):
             sandbox_mode="workspace-write", permission_mode="auto", model="fixture-model",
             reasoning_effort="max",
         )
-        environment = {"CODEX_LONG_TASK_WAKEUP_CODEX_BIN": "/opt/my codex/codex"}
+        environment = {"ATC_CODEX_BIN": "/opt/my codex/codex"}
         before = dict(environment)
         command = get_agent("codex").child_command(options, environment)
         self.assertEqual(command[0], "/opt/my codex/codex")

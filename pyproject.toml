@@ -3,9 +3,9 @@ requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "codex-long-task-callback"
+name = "agent-atc"
 version = "0.7.1a2"
-description = "Long Task Callback: explicit callback CLI for waking a Codex or Claude Code session after a long-running task finishes"
+description = "Agent Traffic Control: explicit callback CLI for waking a Codex or Claude Code session after a long-running task finishes"
 requires-python = ">=3.9"
 license = { text = "MIT" }
 authors = [
@@ -21,11 +21,11 @@ classifiers = [
 dependencies = ["PyYAML>=6.0"]
 
 [project.scripts]
-ltc = "long_task_callback.cli:main"
-ltc-desktop-core = "long_task_callback.desktop_core:main"
+atc = "agent_atc.cli:main"
+atc-desktop-core = "agent_atc.desktop_core:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
-long_task_callback = ["skill/SKILL.md", "claude_skill/SKILL.md", "pi_skill/SKILL.md", "skill/agents/openai.yaml", "templates/*.md", "platforms/*.ps1", "desktop_windows_assets/*.ps1", "desktop_windows_assets/*.py", "pi_extension/*.js"]
+agent_atc = ["skill/SKILL.md", "claude_skill/SKILL.md", "pi_skill/SKILL.md", "skill/agents/openai.yaml", "templates/*.md", "platforms/*.ps1", "desktop_windows_assets/*.ps1", "desktop_windows_assets/*.py", "pi_extension/*.js"]

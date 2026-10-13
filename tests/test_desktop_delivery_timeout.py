@@ -18,12 +18,12 @@ import time
 import unittest
 from unittest import mock
 
-from long_task_callback import cli
+from agent_atc import cli
 
 
 class DesktopDeliveryTimeoutTests(unittest.TestCase):
     def setUp(self):
-        temporary = tempfile.TemporaryDirectory(prefix="ltc desktop intent ")
+        temporary = tempfile.TemporaryDirectory(prefix="atc desktop intent ")
         self.addCleanup(temporary.cleanup)
         self.directory = Path(temporary.name).resolve()
         self.root = self.directory / "queue"
@@ -39,7 +39,7 @@ class DesktopDeliveryTimeoutTests(unittest.TestCase):
         self.stack = contextlib.ExitStack()
         self.addCleanup(self.stack.close)
         self.stack.enter_context(mock.patch.dict(os.environ, {
-            "CODEX_HOME": str(self.directory / "codex-profile"), "LTC_HOME": str(self.directory / "codex-profile" / "ltc-home"),
+            "CODEX_HOME": str(self.directory / "codex-profile"), "ATC_HOME": str(self.directory / "codex-profile" / "atc-home"),
             cli.TARGET_LOCK_DIR_ENV: str(self.directory / "target-locks"),
             "PYTHONPATH": str(Path(cli.__file__).resolve().parents[1]),
             "PYTHONIOENCODING": "utf-8",
@@ -51,7 +51,7 @@ class DesktopDeliveryTimeoutTests(unittest.TestCase):
         program = textwrap.dedent("""
             import argparse,json,os,sys,time
             from pathlib import Path
-            from long_task_callback import cli
+            from agent_atc import cli
             root=Path(ROOT)
             request=json.loads(REQUEST)
             events=Path(EVENTS)

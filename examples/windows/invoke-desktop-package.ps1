@@ -7,8 +7,8 @@ param(
     [Parameter(Mandatory = $true)][string]$RequestFile
 )
 $ErrorActionPreference = 'Stop'
-$resource = Join-Path (Split-Path -Parent $MyInvocation.MyCommand.Path) '..\..\src\long_task_callback\desktop_windows_assets\invoke-desktop-package.ps1'
+$resource = Join-Path (Split-Path -Parent $MyInvocation.MyCommand.Path) '..\..\src\agent_atc\desktop_windows_assets\invoke-desktop-package.ps1'
 if (-not (Test-Path -LiteralPath $resource -PathType Leaf)) {
-    throw 'The checkout package helper is missing. Use the installed ltc desktop launch command.'
+    throw 'The checkout package helper is missing. Use the installed atc desktop launch command.'
 }
 & $resource @PSBoundParameters

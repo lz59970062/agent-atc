@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from long_task_callback.cli import AppServerConnection, AppServerProtocolError, AppServerTimeout
+from agent_atc.cli import AppServerConnection, AppServerProtocolError, AppServerTimeout
 
 
 def frame(payload, opcode=1, final=True, masked=False):

@@ -13,7 +13,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from long_task_callback import claude_channel, claude_code, cli
+from agent_atc import claude_channel, claude_code, cli
 
 SRC = str(Path(__file__).resolve().parents[1] / "src")
 SESSION = "3f0c9a52-claude-session"
@@ -22,22 +22,22 @@ CLAUDE_PID = 424242
 
 
 class ChannelOptInTests(unittest.TestCase):
-    def test_only_a_server_ltc_opt_in_enables_delivery(self) -> None:
+    def test_only_a_server_atc_opt_in_enables_delivery(self) -> None:
         enabled = claude_channel.channel_enabled
-        self.assertTrue(enabled(["claude", "--dangerously-load-development-channels", "server:ltc"]))
-        self.assertTrue(enabled(["claude", "--dangerously-load-development-channels", "server:x", "server:ltc"]))
-        self.assertTrue(enabled(["claude", "--channels=server:ltc"]))
+        self.assertTrue(enabled(["claude", "--dangerously-load-development-channels", "server:atc"]))
+        self.assertTrue(enabled(["claude", "--dangerously-load-development-channels", "server:x", "server:atc"]))
+        self.assertTrue(enabled(["claude", "--channels=server:atc"]))
         self.assertFalse(enabled(["claude", "--mcp-config", "{}"]))
         self.assertFalse(enabled(["claude", "--channels", "plugin:telegram@claude-plugins-official"]))
-        self.assertFalse(enabled(["claude", "--dangerously-load-development-channels", "--resume", "server:ltc"]))
+        self.assertFalse(enabled(["claude", "--dangerously-load-development-channels", "--resume", "server:atc"]))
 
     def test_launch_adds_the_server_and_the_development_flag(self) -> None:
         root = Path("/q")
         command = claude_channel.launch_command("/bin/claude", root, ["--resume", SESSION],
                                                 {cli.TARGET_LOCK_DIR_ENV: "/locks", "PATH": "/bin"})
         self.assertEqual(command[0], "/bin/claude")
-        self.assertEqual(command[3:6], ["--dangerously-load-development-channels", "server:ltc", "--resume"])
-        server = json.loads(command[2])["mcpServers"]["ltc"]
+        self.assertEqual(command[3:6], ["--dangerously-load-development-channels", "server:atc", "--resume"])
+        server = json.loads(command[2])["mcpServers"]["atc"]
         self.assertEqual(server["args"][-3:], ["_claude-channel", "--queue-dir", "/q"])
         self.assertEqual(server["env"], {cli.TARGET_LOCK_DIR_ENV: "/locks"})
         self.assertTrue(claude_channel.channel_enabled(command))
@@ -50,7 +50,7 @@ class ChannelServerTests(unittest.TestCase):
         self.directory = Path(temporary.name)
         self.root = self.directory / "queue"
         self.environment = {
-            "CODEX_HOME": str(self.directory / "codex-home"), "LTC_HOME": str(self.directory / "codex-home" / "ltc-home"),
+            "CODEX_HOME": str(self.directory / "codex-home"), "ATC_HOME": str(self.directory / "codex-home" / "atc-home"),
             "CLAUDE_CONFIG_DIR": str(self.directory / "claude"),
             cli.TARGET_LOCK_DIR_ENV: str(self.directory / "target-locks"),
         }
@@ -78,7 +78,7 @@ class ChannelServerTests(unittest.TestCase):
 
     def server(self, *, enabled: bool = True, ack_grace: float = 3600.0) -> claude_channel.ChannelServer:
         with mock.patch.object(claude_channel, "parent_command_line",
-                               return_value=["claude", "--dangerously-load-development-channels", "server:ltc"]
+                               return_value=["claude", "--dangerously-load-development-channels", "server:atc"]
                                if enabled else ["claude"]):
             server = claude_channel.ChannelServer(self.root, parent_pid=CLAUDE_PID, environment=os.environ,
                                                   poll_interval=0.05, ack_grace=ack_grace, out=io.StringIO())
@@ -106,7 +106,7 @@ class ChannelServerTests(unittest.TestCase):
         first, second, ping, unknown = self.messages(server)
         self.assertEqual(first["result"]["capabilities"], {"experimental": {"claude/channel": {}}})
         self.assertEqual(first["result"]["protocolVersion"], "2025-06-18")
-        self.assertIn("ltc wait", first["result"]["instructions"])
+        self.assertIn("atc wait", first["result"]["instructions"])
         self.assertEqual(second["result"]["protocolVersion"], "2025-03-26")
         self.assertEqual(ping, {"jsonrpc": "2.0", "id": 3, "result": {}})
         self.assertEqual(unknown["error"]["code"], -32601)
@@ -122,7 +122,7 @@ class ChannelServerTests(unittest.TestCase):
         (event,) = self.messages(server)
         self.assertEqual(event["method"], "notifications/claude/channel")
         self.assertEqual(event["params"]["meta"], {"callback_id": "cb-mine"})
-        self.assertIn("[long-task-callback]", event["params"]["content"])
+        self.assertIn("[atc]", event["params"]["content"])
         self.assertTrue(mine.exists())  # Back in pending until ACKed.
         self.assertTrue(claude_code.channel_is_held(SESSION))
         self.assertFalse(claude_code.channel_is_held(OTHER_SESSION))
@@ -130,13 +130,13 @@ class ChannelServerTests(unittest.TestCase):
         selected = cli.select_pending(self.root, time.time() + 2 * claude_code.LIVE_ACK_GRACE_SECONDS)
         self.assertIn(selected, (codex, cli.request_path(self.root, "pending", "cb-other")))
         self.assertNotEqual(selected, mine)
-        # A stray `ltc wait` in the channel session exits instead of printing a duplicate.
+        # A stray `atc wait` in the channel session exits instead of printing a duplicate.
         errors = io.StringIO()
         with contextlib.redirect_stdout(io.StringIO()) as output, contextlib.redirect_stderr(errors):
             status = claude_code.wait(argparse.Namespace(queue_dir=str(self.root), session=SESSION, task=None,
                                                          timeout=1.0, poll_interval=0.05))
         self.assertEqual((status, output.getvalue()), (0, ""))
-        self.assertIn("ltc channel", errors.getvalue())
+        self.assertIn("atc channel", errors.getvalue())
         server.release()
         self.assertFalse(claude_code.channel_is_held(SESSION))
 
@@ -180,10 +180,10 @@ class ChannelServerTests(unittest.TestCase):
         self.assertFalse(claude_code.channel_is_held(SESSION))
 
     def test_stdio_server_pushes_and_exits_when_claude_closes_the_pipe(self) -> None:
-        # The parent's command line carries the channel opt-in, like `ltc claude`.
+        # The parent's command line carries the channel opt-in, like `atc claude`.
         self.enqueue("cb-mine")
-        environment = dict(os.environ, PYTHONPATH=SRC, CODEX_LONG_TASK_WAKEUP_QUEUE_DIR=str(self.root))
-        child = [sys.executable, "-m", "long_task_callback", "_claude-channel", "--poll-interval", "0.05"]
+        environment = dict(os.environ, PYTHONPATH=SRC, ATC_QUEUE_DIR=str(self.root))
+        child = [sys.executable, "-m", "agent_atc", "_claude-channel", "--poll-interval", "0.05"]
         parent = ("import os,subprocess,sys,json;"
                   f"open(os.path.join({str(self.directory / 'claude/sessions')!r}, f'{{os.getpid()}}.json'),'w')"
                   f".write(json.dumps({{'sessionId': {SESSION!r}}}));"
@@ -193,7 +193,7 @@ class ChannelServerTests(unittest.TestCase):
                   "p.stdin.flush();print(p.stdout.readline(),end='');print(p.stdout.readline(),end='');"
                   "p.stdin.close();sys.exit(p.wait(timeout=10))")
         result = subprocess.run([sys.executable, "-c", parent, json.dumps(child),
-                                 "--dangerously-load-development-channels", "server:ltc"],
+                                 "--dangerously-load-development-channels", "server:atc"],
                                 capture_output=True, text=True, timeout=30, env=environment)
         self.assertEqual(result.returncode, 0, result.stderr)
         initialize, event = (json.loads(line) for line in result.stdout.splitlines())

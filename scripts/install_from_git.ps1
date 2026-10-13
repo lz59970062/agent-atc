@@ -1,4 +1,4 @@
-<# Install the package and configure LTC with the same Windows Python. #>
+<# Install the package and configure ATC with the same Windows Python. #>
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true, Position = 0)][string]$RepoUrl,
@@ -13,5 +13,5 @@ if ($Subdirectory) { $spec += '#subdirectory=' + $Subdirectory }
 & $Python -m pip install $spec
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 # Passing the module to this same interpreter avoids depending on Scripts/PATH.
-& $Python -m long_task_callback setup --force --enable --now @SetupArguments
+& $Python -m agent_atc setup --force --enable --now @SetupArguments
 exit $LASTEXITCODE

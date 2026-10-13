@@ -14,15 +14,15 @@ import threading
 import unittest
 from unittest import mock
 
-from long_task_callback import cli, windows_service
-from long_task_callback.desktop_connection import BridgeEndpoint, load_bridge_endpoint
-from long_task_callback.platforms import windows
+from agent_atc import cli, windows_service
+from agent_atc.desktop_connection import BridgeEndpoint, load_bridge_endpoint
+from agent_atc.platforms import windows
 
 
 @unittest.skipUnless(os.name == "nt", "native Windows bridge peer verification")
 class BridgeClientTests(unittest.TestCase):
     def setUp(self):
-        temporary = tempfile.TemporaryDirectory(prefix="ltc-bridge-client-")
+        temporary = tempfile.TemporaryDirectory(prefix="atc-bridge-client-")
         self.addCleanup(temporary.cleanup)
         self.directory = Path(temporary.name)
         self.profile = self.directory / "profile"

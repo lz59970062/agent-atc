@@ -15,8 +15,8 @@ import unittest
 from unittest import mock
 from urllib.parse import urlsplit
 
-from long_task_callback import desktop_bridge as bridge
-from long_task_callback.platforms import windows
+from agent_atc import desktop_bridge as bridge
+from agent_atc.platforms import windows
 
 
 KEY = base64.b64encode(b"0123456789abcdef").decode("ascii")
@@ -217,12 +217,12 @@ while True:
 @unittest.skipUnless(os.name == "nt", "native Windows gateway identity and Job tests")
 class NativeBridgeTests(unittest.TestCase):
     def setUp(self):
-        self.temporary = tempfile.TemporaryDirectory(prefix="ltc-bridge-")
+        self.temporary = tempfile.TemporaryDirectory(prefix="atc-bridge-")
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name)
         self.profile = self.root / "profile 中文"
         self.profile.mkdir()
-        self.metadata = self.profile / "long-task-wakeup" / "desktop-bridge.json"
+        self.metadata = self.profile / "agent-atc" / "desktop-bridge.json"
         fixture = self.root / "fake server.py"
         fixture.write_text(FAKE_SERVER, encoding="utf-8")
         self.shim = self.root / "fake codex.cmd"
@@ -231,7 +231,7 @@ class NativeBridgeTests(unittest.TestCase):
         # Exercise redirected legacy-code-page output with a Unicode profile.
         self.env["PYTHONIOENCODING"] = "ascii"
         self.env["PYTHONPATH"] = str(Path(__file__).resolve().parents[1] / "src")
-        self.command = [sys.executable, "-m", "long_task_callback.desktop_bridge", "--codex-home", str(self.profile),
+        self.command = [sys.executable, "-m", "agent_atc.desktop_bridge", "--codex-home", str(self.profile),
                         "--codex-bin", str(self.shim), "--startup-timeout", "3", "--handshake-timeout", "0.4"]
         self.processes = []
         self.addCleanup(self.stop_processes)

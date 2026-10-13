@@ -3,28 +3,28 @@
 Inspect the complete options with:
 
 ```bash
-ltc --help
-ltc run --help
-ltc agent --help
+atc --help
+atc run --help
+atc agent --help
 ```
 
 ## Install and inspect
 
 | Command | Purpose |
 | --- | --- |
-| `ltc --version` | Print the current version |
-| `ltc setup --enable --now` | Install skills and start the coordinator |
-| `ltc setup --keep-skill --force --enable --now` | Update the coordinator and retain skill content |
-| `ltc doctor --agent codex --session <id>` | Inspect a session's runtime configuration |
+| `atc --version` | Print the current version |
+| `atc setup --enable --now` | Install skills and start the coordinator |
+| `atc setup --keep-skill --force --enable --now` | Update the coordinator and retain skill content |
+| `atc doctor --agent codex --session <id>` | Inspect a session's runtime configuration |
 
 ## Submit work
 
 | Command | Purpose |
 | --- | --- |
-| `ltc run --task <name> -- <command>` | Submit a command |
-| `ltc agent codex -- <prompt>` | Start a Codex child Agent |
-| `ltc agent claude -- <prompt>` | Start a Claude child Agent |
-| `ltc done --task <name> --exit-code <code>` | Report an external task result |
+| `atc run --task <name> -- <command>` | Submit a command |
+| `atc agent codex -- <prompt>` | Start a Codex child Agent |
+| `atc agent claude -- <prompt>` | Start a Claude child Agent |
+| `atc done --task <name> --exit-code <code>` | Report an external task result |
 
 Put submission options before `--`:
 
@@ -43,11 +43,11 @@ Put submission options before `--`:
 
 | Command | Purpose |
 | --- | --- |
-| `ltc status` | Inspect outstanding callbacks |
-| `ltc status --state failed` | Inspect failed deliveries |
-| `ltc ack --id <callback-id>` | Confirm that you have read the result |
-| `ltc cancel --id <callback-id>` | Cancel delivery of this callback |
-| `ltc prompt-policy` | Inspect reminder intervals |
+| `atc status` | Inspect outstanding callbacks |
+| `atc status --state failed` | Inspect failed deliveries |
+| `atc ack --id <callback-id>` | Confirm that you have read the result |
+| `atc cancel --id <callback-id>` | Cancel delivery of this callback |
+| `atc prompt-policy` | Inspect reminder intervals |
 
 ## Preview commands
 
@@ -55,12 +55,12 @@ These commands use the `0.7.1` preview:
 
 | Command | Purpose |
 | --- | --- |
-| `ltc wait --task <task-id>` | Wait for and print a callback in Claude Code |
-| `ltc retry --id <callback-id>` | Redeliver a saved callback |
-| `ltc agent pi -- <prompt>` | Start a Pi child Agent |
-| `ltc pi` | Open an LTC-managed Pi session |
-| `ltc template list` | List registered templates |
-| `ltc desktop status` | Inspect Desktop connection settings |
-| `ltc desktop launch` | Start Desktop through the shared Core |
+| `atc wait --task <task-id>` | Wait for and print a callback in Claude Code |
+| `atc retry --id <callback-id>` | Redeliver a saved callback |
+| `atc agent pi -- <prompt>` | Start a Pi child Agent |
+| `atc pi` | Open an ATC-managed Pi session |
+| `atc template list` | List registered templates |
+| `atc desktop status` | Inspect Desktop connection settings |
+| `atc desktop launch` | Start Desktop through the shared Core |
 
 See [Multi-stage goals](../guides/goals.md) for the goal command sequence.

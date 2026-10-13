@@ -1,8 +1,8 @@
 """Opt-in real Linux service-lifetime test; never contacts an AI provider.
 
-Run with LTC_TEST_SYSTEMD=1 after reviewing local service permissions. The test
+Run with ATC_TEST_SYSTEMD=1 after reviewing local service permissions. The test
 creates only disposable, namespaced user services and a private temporary queue.
-It does not stop/restart the installed LTC daemon or change user services.
+It does not stop/restart the installed ATC daemon or change user services.
 """
 from __future__ import annotations
 
@@ -17,11 +17,11 @@ import time
 import unittest
 from pathlib import Path
 
-from long_task_callback import cli
-from long_task_callback.platforms import OwnerState, SystemdUserBackend
+from agent_atc import cli
+from agent_atc.platforms import OwnerState, SystemdUserBackend
 
 
-@unittest.skipUnless(os.environ.get("LTC_TEST_SYSTEMD") == "1", "set LTC_TEST_SYSTEMD=1 for real user-service test")
+@unittest.skipUnless(os.environ.get("ATC_TEST_SYSTEMD") == "1", "set ATC_TEST_SYSTEMD=1 for real user-service test")
 class RealSystemdIsolationTests(unittest.TestCase):
     def wait_until(self, predicate, explanation: str, timeout: float = 15.0) -> None:
         deadline = time.monotonic() + timeout
@@ -50,7 +50,7 @@ class RealSystemdIsolationTests(unittest.TestCase):
         backend = SystemdUserBackend()
         if not backend.available():
             self.skipTest("Linux systemd >=240 user manager is unavailable")
-        with tempfile.TemporaryDirectory(prefix="ltc-real-systemd-") as temporary:
+        with tempfile.TemporaryDirectory(prefix="atc-real-systemd-") as temporary:
             directory = Path(temporary)
             root = directory / "queue"
             started = directory / "workload-started"
@@ -96,7 +96,7 @@ class RealSystemdIsolationTests(unittest.TestCase):
                 import time
                 from pathlib import Path
                 sys.path.insert(0, {source!r})
-                from long_task_callback import cli
+                from agent_atc import cli
                 cli.recover_managed_tasks(Path(sys.argv[1]))
                 Path(sys.argv[2]).write_text("launched")
                 time.sleep(60)

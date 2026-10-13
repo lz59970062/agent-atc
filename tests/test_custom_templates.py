@@ -10,7 +10,7 @@ import tempfile
 import unittest
 from unittest import mock
 
-from long_task_callback import cli
+from agent_atc import cli
 from test_cli import executable_python_fixture, patch_fixture_commands
 
 
@@ -27,7 +27,7 @@ class CustomTemplateTests(unittest.TestCase):
         self.queue = self.cwd / "isolated-queue"
         self.directory = self.cwd / "profiles"
         self.directory.mkdir()
-        env = mock.patch.dict(os.environ, {"LTC_TEMPLATE_DIR": str(self.directory)})
+        env = mock.patch.dict(os.environ, {"ATC_TEMPLATE_DIR": str(self.directory)})
         env.start()
         self.addCleanup(env.stop)
 
@@ -38,7 +38,7 @@ class CustomTemplateTests(unittest.TestCase):
 
     def invoke(self, options=(), worker="codex", requirements="Reject negative balances."):
         output = io.StringIO()
-        argv = ["ltc", "agent", worker, "--cwd", str(self.cwd), "--queue-dir", str(self.queue),
+        argv = ["atc", "agent", worker, "--cwd", str(self.cwd), "--queue-dir", str(self.queue),
                 "--agent", "claude", "--session", "custom-parent", "--task", "review contract",
                 *options, "--", requirements]
         with mock.patch.object(sys, "argv", argv), \
@@ -123,12 +123,12 @@ class CustomTemplateTests(unittest.TestCase):
 
     def test_named_yml_and_xdg_lookup(self):
         config = self.cwd / "config"
-        directory = config / "ltc" / "templates"
+        directory = config / "atc" / "templates"
         directory.mkdir(parents=True)
         path = directory / "review.yml"
         path.write_text("version: 1\nprompt: XDG contract.\n")
         with mock.patch.dict(os.environ, {"XDG_CONFIG_HOME": str(config)}):
-            os.environ.pop("LTC_TEMPLATE_DIR", None)
+            os.environ.pop("ATC_TEMPLATE_DIR", None)
             self.assertEqual(self.invoke(["--template", "review"])[0], 0)
         self.assertEqual(self.task()["agent_template_source"], str(path.resolve()))
 
@@ -195,7 +195,7 @@ class CustomTemplateTests(unittest.TestCase):
                          f"Path({str(capture)!r}).write_text(json.dumps({{'argv':sys.argv[1:],'prompt':sys.stdin.read()}}))\n"
                          "Path(sys.argv[sys.argv.index('-o')+1]).write_text('Authored report')\n")
         child = executable_python_fixture(child)
-        with mock.patch.dict(os.environ, {"CODEX_LONG_TASK_WAKEUP_CODEX_BIN": str(child)}):
+        with mock.patch.dict(os.environ, {"ATC_CODEX_BIN": str(child)}):
             self.assertEqual(self.invoke(["--template", "review"])[0], 0)
         task = self.task()
         frozen_prompt = Path(task["agent_prompt_path"]).read_text()

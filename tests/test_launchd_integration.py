@@ -1,7 +1,7 @@
 """Opt-in macOS lifetime tests with disposable jobs, queues and fake agents.
 
 No installed coordinator is touched; all launchd registrations are removed.
-Run with LTC_TEST_LAUNCHD=1 in a logged-in macOS GUI session.
+Run with ATC_TEST_LAUNCHD=1 in a logged-in macOS GUI session.
 """
 from __future__ import annotations
 
@@ -19,12 +19,12 @@ import time
 import unittest
 from unittest import mock
 
-from long_task_callback import cli, diagnostics, launchd_service
-from long_task_callback.platforms import LaunchdBackend, OwnerState, macos
+from agent_atc import cli, diagnostics, launchd_service
+from agent_atc.platforms import LaunchdBackend, OwnerState, macos
 
 
-@unittest.skipUnless(sys.platform == "darwin" and os.environ.get("LTC_TEST_LAUNCHD") == "1",
-                     "set LTC_TEST_LAUNCHD=1 for real macOS jobs")
+@unittest.skipUnless(sys.platform == "darwin" and os.environ.get("ATC_TEST_LAUNCHD") == "1",
+                     "set ATC_TEST_LAUNCHD=1 for real macOS jobs")
 class RealLaunchdTests(unittest.TestCase):
     def wait_until(self, predicate, message, timeout=12):
         deadline = time.monotonic() + timeout
@@ -40,7 +40,7 @@ class RealLaunchdTests(unittest.TestCase):
     def test_task_survives_coordinator_exit_with_one_result_and_callback(self):
         self.assertTrue(macos.manager_available(), "macOS GUI domain is required")
         backend = LaunchdBackend()
-        with tempfile.TemporaryDirectory(prefix="ltc-launchd-", dir="/tmp") as temporary:
+        with tempfile.TemporaryDirectory(prefix="atc-launchd-", dir="/tmp") as temporary:
             directory = Path(temporary).resolve()
             root = directory / "queue"
             started, release, executions = (directory / name for name in ("started", "release", "executions"))
@@ -79,7 +79,7 @@ class RealLaunchdTests(unittest.TestCase):
                 import sys, time
                 from pathlib import Path
                 sys.path.insert(0, {source!r})
-                from long_task_callback import cli
+                from agent_atc import cli
                 cli.recover_managed_tasks(Path(sys.argv[1]))
                 time.sleep(40)
                 """))
@@ -111,7 +111,7 @@ class RealLaunchdTests(unittest.TestCase):
 
     def test_launchagent_setup_doctor_and_reload_use_isolated_profile(self):
         self.assertTrue(macos.manager_available(), "macOS GUI domain is required")
-        with tempfile.TemporaryDirectory(prefix="ltc-agent-", dir="/tmp") as temporary:
+        with tempfile.TemporaryDirectory(prefix="atc-agent-", dir="/tmp") as temporary:
             directory = Path(temporary).resolve()
             queue = directory / "queue"
             name = LaunchdBackend().owner_name("test-daemon", 1, queue)
@@ -119,10 +119,10 @@ class RealLaunchdTests(unittest.TestCase):
             fake = directory / "fake-codex"
             fake.write_text("#!/bin/sh\nexit 97\n")
             fake.chmod(0o700)
-            env = {"CODEX_HOME": str(home), "LTC_HOME": str(home / "ltc-home"), "CLAUDE_CONFIG_DIR": str(directory / "claude"),
+            env = {"CODEX_HOME": str(home), "ATC_HOME": str(home / "atc-home"), "CLAUDE_CONFIG_DIR": str(directory / "claude"),
                    cli.TARGET_LOCK_DIR_ENV: str(directory / "locks"), cli.DESKTOP_APP_SERVER_ENV: "0",
-                   "CODEX_LONG_TASK_WAKEUP_CODEX_BIN": str(fake)}
-            argv = ["ltc", "setup", "--callback-only", "--name", name, "--queue-dir", str(queue),
+                   "ATC_CODEX_BIN": str(fake)}
+            argv = ["atc", "setup", "--callback-only", "--name", name, "--queue-dir", str(queue),
                     "--service", "launchd", "--skill-target", "codex", "--codex-bin", str(fake),
                     "--interval", "0.05", "--force", "--enable", "--now"]
             with mock.patch.dict(os.environ, env), mock.patch.object(

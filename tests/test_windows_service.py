@@ -12,20 +12,20 @@ import tempfile
 import unittest
 from unittest import mock
 
-from long_task_callback import cli, windows_service
-from long_task_callback.platforms import windows, windows_io
+from agent_atc import cli, windows_service
+from agent_atc.platforms import windows, windows_io
 
 
 @unittest.skipUnless(os.name == "nt", "Windows service contracts with native private files")
 class WindowsServiceTests(unittest.TestCase):
     def setUp(self):
-        temporary = tempfile.TemporaryDirectory(prefix="ltc service regression ")
+        temporary = tempfile.TemporaryDirectory(prefix="atc service regression ")
         self.addCleanup(temporary.cleanup)
         self.directory = Path(temporary.name).resolve()
         self.root = self.directory / "queue"
         self.target = self.directory / "state" / "windows-test.json"
         self.config = {
-            "version": 1, "run": True, "owner": "ltc-test-service",
+            "version": 1, "run": True, "owner": "atc-test-service",
             "command": [sys.executable, "-c", "pass"], "queue_dir": str(self.root),
             "environment": {"CODEX_HOME": str(self.directory / "profile")},
             "cwd": str(self.target.parent), "log_path": str(self.target.parent / "daemon.log"),

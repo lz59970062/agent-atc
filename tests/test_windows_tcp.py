@@ -9,7 +9,7 @@ import sys
 import unittest
 from unittest import mock
 
-from long_task_callback.platforms import windows, windows_tcp
+from agent_atc.platforms import windows, windows_tcp
 
 
 class WindowsTcpContracts(unittest.TestCase):

@@ -11,13 +11,13 @@ from unittest import mock
 import uuid
 import xml.etree.ElementTree as ET
 
-from long_task_callback.platforms import LaunchError, OwnerState
-from long_task_callback.platforms import windows
+from agent_atc.platforms import LaunchError, OwnerState
+from agent_atc.platforms import windows
 
 
 class WindowsBackendContracts(unittest.TestCase):
     def setUp(self):
-        temporary = tempfile.TemporaryDirectory(prefix="ltc windows ")
+        temporary = tempfile.TemporaryDirectory(prefix="atc windows ")
         self.addCleanup(temporary.cleanup)
         self.directory = Path(temporary.name).resolve()
         self.backend = windows.WindowsBackend()
@@ -39,11 +39,11 @@ class WindowsBackendContracts(unittest.TestCase):
         argv = [sys.executable, str(self.directory / "entry script.py"), "_task-worker", "--task-file",
                 str(self.directory / "中文 & $value; files" / "task.json"), "--attempt", "1"]
         with mock.patch.object(windows, "scheduler_call", return_value={"submitted": True}) as control:
-            self.backend.launch("ltc.test", argv, self.directory, self.directory / "worker.log")
+            self.backend.launch("atc.test", argv, self.directory, self.directory / "worker.log")
         control.assert_called_once()
         operation, payload = control.call_args.args
         self.assertEqual(operation, "launch")
-        self.assertEqual(payload["owner"], "ltc.test")
+        self.assertEqual(payload["owner"], "atc.test")
         config = payload["configuration"]
         self.assertEqual(config["arguments"], subprocess.list2cmdline(argv[1:]))
         self.assertEqual(config["executable"], argv[0])
@@ -56,7 +56,7 @@ class WindowsBackendContracts(unittest.TestCase):
                                  (windows.SchedulerError("RPC failed"), True),
                                  (FileNotFoundError("powershell"), False)):
             with self.subTest(error=error), mock.patch.object(windows, "scheduler_call", side_effect=error), self.assertRaises(LaunchError) as caught:
-                self.backend.launch("ltc.test", [sys.executable], self.directory, self.directory / "log")
+                self.backend.launch("atc.test", [sys.executable], self.directory, self.directory / "log")
             self.assertEqual(caught.exception.uncertain, uncertain)
         with mock.patch.object(windows, "scheduler_call") as control, self.assertRaises(LaunchError) as caught:
             self.backend.launch("../invalid", [sys.executable], self.directory, self.directory / "log")
@@ -78,21 +78,21 @@ class WindowsBackendContracts(unittest.TestCase):
         ]
         for data, expected in samples:
             with self.subTest(data=data), mock.patch.object(windows, "scheduler_call", return_value=data):
-                self.assertEqual(self.backend.probe("ltc.test"), expected)
+                self.assertEqual(self.backend.probe("atc.test"), expected)
         for error in (windows.SchedulerError("denied"), subprocess.TimeoutExpired("powershell", 15), OSError("RPC")):
             with self.subTest(error=error), mock.patch.object(windows, "scheduler_call", side_effect=error):
-                self.assertEqual(self.backend.probe("ltc.test"), OwnerState.UNKNOWN)
+                self.assertEqual(self.backend.probe("atc.test"), OwnerState.UNKNOWN)
 
     def test_collection_rechecks_without_stopping_live_workers(self):
         for state in (OwnerState.ALIVE, OwnerState.UNKNOWN):
             with mock.patch.object(windows, "job_status", return_value=(state, None, True)), mock.patch.object(windows, "scheduler_call") as control:
-                self.assertFalse(self.backend.collect("ltc.test"))
+                self.assertFalse(self.backend.collect("atc.test"))
                 control.assert_not_called()
         with mock.patch.object(windows, "job_status", return_value=(OwnerState.ABSENT, None, True)), mock.patch.object(
             windows, "scheduler_call", return_value={"collected": False}
         ) as control:
-            self.assertFalse(self.backend.collect("ltc.test"))
-            control.assert_called_once_with("collect", {"owner": "ltc.test"})
+            self.assertFalse(self.backend.collect("atc.test"))
+            control.assert_called_once_with("collect", {"owner": "atc.test"})
 
     def test_worker_admission_requires_scheduler_pid_and_stable_live_identity(self):
         identity = {"creation_time": 10, "boot_id": "boot", "sid": "sid"}
@@ -106,7 +106,7 @@ class WindowsBackendContracts(unittest.TestCase):
             with self.subTest(status=status, identities=identities), mock.patch.object(windows, "job_status", return_value=status), mock.patch.object(
                 windows, "process_identity", side_effect=identities
             ):
-                self.assertEqual(self.backend.admits_worker("ltc.test"), expected)
+                self.assertEqual(self.backend.admits_worker("atc.test"), expected)
 
     def test_venv_admission_rejects_unrelated_or_reused_parent_processes(self):
         child_id = {"creation_time": 20, "boot_id": "boot", "machine_id": "host", "sid": "user"}
@@ -142,10 +142,10 @@ class WindowsBackendContracts(unittest.TestCase):
                     "executable": change.get("executable", parent_image)}))
                 stack.enter_context(mock.patch.object(windows, "job_status", side_effect=[
                     (OwnerState.ALIVE, 502, True), (OwnerState.ALIVE, change.get("new_engine", 502), True)]))
-                self.assertEqual(self.backend.admits_worker("ltc.test"), expected)
+                self.assertEqual(self.backend.admits_worker("atc.test"), expected)
 
     def test_scheduler_protocol_uses_json_stdin_and_hides_error_text(self):
-        payload = {"owner": "ltc.test", "configuration": {"cwd": "中文 & literal"}}
+        payload = {"owner": "atc.test", "configuration": {"cwd": "中文 & literal"}}
         with mock.patch.object(subprocess, "run", return_value=subprocess.CompletedProcess([], 0, b'{"ok":true}', b"")) as run:
             self.assertEqual(windows.scheduler_call("register", payload), {"ok": True})
         self.assertEqual(json.loads(run.call_args.kwargs["input"]), dict(payload, operation="register"))
@@ -154,14 +154,14 @@ class WindowsBackendContracts(unittest.TestCase):
         with mock.patch.object(subprocess, "run", return_value=subprocess.CompletedProcess(
             [], 1, b'{"ok":false,"hresult":-5,"error":"SECRET"}', b"SECRET"
         )), self.assertRaises(windows.SchedulerError) as caught:
-            windows.scheduler_call("status", {"owner": "ltc.test"})
+            windows.scheduler_call("status", {"owner": "atc.test"})
         self.assertNotIn("SECRET", str(caught.exception))
 
     def test_unavailable_platform_is_importable_and_fails_closed(self):
         with mock.patch.object(sys, "platform", "linux"):
             self.assertFalse(self.backend.available())
-            self.assertFalse(self.backend.admits_worker("ltc.test"))
-            self.assertEqual(self.backend.probe("ltc.test"), OwnerState.UNKNOWN)
+            self.assertFalse(self.backend.admits_worker("atc.test"))
+            self.assertEqual(self.backend.probe("atc.test"), OwnerState.UNKNOWN)
             self.assertIsNone(windows.current_boot_id())
             self.assertIsNone(windows.process_identity(os.getpid()))
 
@@ -199,20 +199,20 @@ class NativeWindowsIdentityTests(unittest.TestCase):
         self.assertIsNone(windows.process_identity(process.pid))
 
 
-@unittest.skipUnless(sys.platform == "win32" and os.environ.get("LTC_TEST_WINDOWS_SCHEDULER") == "1",
+@unittest.skipUnless(sys.platform == "win32" and os.environ.get("ATC_TEST_WINDOWS_SCHEDULER") == "1",
                      "opt-in isolated native Task Scheduler test")
 class NativeWindowsSchedulerTests(unittest.TestCase):
     def test_independent_owner_admission_arguments_policy_and_collection(self):
         backend = windows.WindowsBackend()
-        owner = "ltc-test-" + uuid.uuid4().hex
-        with tempfile.TemporaryDirectory(prefix="ltc task 中文 & ") as temporary:
+        owner = "atc-test-" + uuid.uuid4().hex
+        with tempfile.TemporaryDirectory(prefix="atc task 中文 & ") as temporary:
             directory = Path(temporary).resolve()
             output = directory / "process.json"
             script = directory / "worker.py"
             script.write_text(
                 "import json,os,sys,time\n"
                 f"sys.path.insert(0, {str(Path(windows.__file__).resolve().parents[2])!r})\n"
-                "from long_task_callback.platforms import windows\n"
+                "from agent_atc.platforms import windows\n"
                 "from pathlib import Path\n"
                 "Path(sys.argv[1]).write_text(json.dumps({'pid':os.getpid(),'ppid':os.getppid(),"
                 "'admitted':windows.WindowsBackend().admits_worker(sys.argv[2]),"

@@ -1,4 +1,4 @@
-"""Independent contracts for concise, actionable LTC configuration feedback."""
+"""Independent contracts for concise, actionable ATC configuration feedback."""
 from __future__ import annotations
 
 import argparse
@@ -12,7 +12,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from long_task_callback import cli, diagnostics
+from agent_atc import cli, diagnostics
 
 
 class DiagnosticBoundaryTests(unittest.TestCase):
@@ -50,7 +50,7 @@ class DiagnosticBoundaryTests(unittest.TestCase):
             def emit(args):
                 events.append("diagnostics")
 
-            with self.subTest(handler=handler), mock.patch.object(sys, "argv", ["ltc", *argv]), mock.patch.object(
+            with self.subTest(handler=handler), mock.patch.object(sys, "argv", ["atc", *argv]), mock.patch.object(
                 cli, handler, side_effect=operation
             ), mock.patch.object(diagnostics, "emit_if_needed", side_effect=emit), contextlib.redirect_stdout(io.StringIO()) as output:
                 self.assertEqual(cli.main(), 7)
@@ -65,13 +65,13 @@ class DiagnosticBoundaryTests(unittest.TestCase):
             (["_task-worker", "--task-file", "/fixture/task.json", "--attempt", "1"], "run_task_worker"),
             (["_delivery-worker"], "delivery_worker_main"),
         ):
-            with self.subTest(argv=argv), mock.patch.object(sys, "argv", ["ltc", *argv]), mock.patch.object(
+            with self.subTest(argv=argv), mock.patch.object(sys, "argv", ["atc", *argv]), mock.patch.object(
                 cli, handler, return_value=0
             ), mock.patch.object(diagnostics, "emit_if_needed") as emit:
                 self.assertEqual(cli.main(), 0)
                 emit.assert_not_called()
         for flag in ("--help", "--version"):
-            with self.subTest(flag=flag), mock.patch.object(sys, "argv", ["ltc", flag]), mock.patch.object(
+            with self.subTest(flag=flag), mock.patch.object(sys, "argv", ["atc", flag]), mock.patch.object(
                 diagnostics, "emit_if_needed"
             ) as emit, contextlib.redirect_stdout(io.StringIO()), self.assertRaises(SystemExit) as caught:
                 cli.main()
@@ -85,7 +85,7 @@ class DiagnosticBoundaryTests(unittest.TestCase):
         ) as errors:
             self.assertEqual(cli.invoke_with_diagnostics(args, lambda _: 23), 23)
         self.assertNotIn("SECRET_IN_EXCEPTION", errors.getvalue())
-        self.assertIn("[ltc-status]", errors.getvalue())
+        self.assertIn("[atc-status]", errors.getvalue())
 
 
 class HealthReportTests(unittest.TestCase):
@@ -94,21 +94,21 @@ class HealthReportTests(unittest.TestCase):
             platform = mock.patch.object(sys, "platform", "linux")
             platform.start()
             self.addCleanup(platform.stop)
-        temporary = tempfile.TemporaryDirectory(prefix="ltc health ")
+        temporary = tempfile.TemporaryDirectory(prefix="atc health ")
         self.addCleanup(temporary.cleanup)
         self.directory = Path(temporary.name)
         self.queue = self.directory / "queue with spaces"
         self.codex_home = self.directory / "codex"
         self.claude_home = self.directory / "claude"
         for home in (self.codex_home, self.claude_home):
-            skill = home / "skills" / "long-task-callback" / "SKILL.md"
+            skill = home / "skills" / "agent-atc" / "SKILL.md"
             skill.parent.mkdir(parents=True)
-            skill.write_text("Fixture LTC skill", encoding="utf-8")
+            skill.write_text("Fixture ATC skill", encoding="utf-8")
         self.patches = contextlib.ExitStack()
         self.addCleanup(self.patches.close)
         self.patches.enter_context(mock.patch.dict(os.environ, {
-            "CODEX_HOME": str(self.codex_home), "LTC_HOME": str(self.codex_home / "ltc-home"), "CLAUDE_CONFIG_DIR": str(self.claude_home),
-            "CODEX_LONG_TASK_WAKEUP_CODEX_BIN": "fixture-codex", "LONG_TASK_WAKEUP_CLAUDE_BIN": "fixture-claude",
+            "CODEX_HOME": str(self.codex_home), "ATC_HOME": str(self.codex_home / "atc-home"), "CLAUDE_CONFIG_DIR": str(self.claude_home),
+            "ATC_CODEX_BIN": "fixture-codex", "ATC_CLAUDE_BIN": "fixture-claude",
             "API_KEY": "SECRET_ENV_SENTINEL", "PATH": "/fixture/bin",
         }, clear=True))
         self.patches.enter_context(mock.patch.object(diagnostics, "queue_writable", return_value=True))
@@ -132,7 +132,7 @@ class HealthReportTests(unittest.TestCase):
             report = diagnostics.inspect(args)
             with contextlib.redirect_stdout(io.StringIO()) as output, contextlib.redirect_stderr(io.StringIO()) as errors:
                 diagnostics.emit_if_needed(args)
-        self.assertEqual(report["schema"], "ltc.health.v1")
+        self.assertEqual(report["schema"], "atc.health.v1")
         self.assertEqual(report["status"], "ready")
         self.assertEqual(report["scope"], "local_prerequisites")
         self.assertIn("authentication", report["unverified"])
@@ -150,9 +150,9 @@ class HealthReportTests(unittest.TestCase):
         }), contextlib.redirect_stderr(io.StringIO()) as errors, contextlib.redirect_stdout(io.StringIO()) as output:
             diagnostics.emit_if_needed(args)
         block = errors.getvalue()
-        self.assertEqual(block.count("[ltc-status]"), 1)
-        self.assertEqual(block.count("[/ltc-status]"), 1)
-        report = json.loads(block.split("[ltc-status]", 1)[1].split("[/ltc-status]", 1)[0])
+        self.assertEqual(block.count("[atc-status]"), 1)
+        self.assertEqual(block.count("[/atc-status]"), 1)
+        report = json.loads(block.split("[atc-status]", 1)[1].split("[/atc-status]", 1)[0])
         self.assertEqual(report["status"], "needs_configuration")
         self.assertEqual(report["work"], {"state": "task_persisted", "id": "persisted-1234"})
         self.assertEqual(report["queue_dir"], str(self.queue))
@@ -177,7 +177,7 @@ class HealthReportTests(unittest.TestCase):
         self.assertRegex(report["instruction"].lower(), r"(never|do not) resubmit")
 
     def test_real_run_admission_is_reported_as_persisted_without_resubmitting(self):
-        argv = ["ltc", "run", "--queue-dir", str(self.queue), "--backend", "screen",
+        argv = ["atc", "run", "--queue-dir", str(self.queue), "--backend", "screen",
                 "--agent", "codex", "--session", "original-bound-session", "--", "/bin/true"]
         with mock.patch.object(sys, "argv", argv), mock.patch.object(cli, "screen_binary", return_value="/fixture/screen"), mock.patch.object(
             diagnostics, "coordinator_issue", return_value={"code": "daemon_not_running", "action": "Start coordinator."}
@@ -187,13 +187,13 @@ class HealthReportTests(unittest.TestCase):
         tasks = list(cli.managed_tasks_root(self.queue).glob("*/task.json"))
         self.assertEqual(len(tasks), 1)
         task = json.loads(tasks[0].read_text())
-        report = json.loads(errors.getvalue().split("[ltc-status]", 1)[1].split("[/ltc-status]", 1)[0])
+        report = json.loads(errors.getvalue().split("[atc-status]", 1)[1].split("[/atc-status]", 1)[0])
         self.assertEqual(report["work"], {"state": "task_persisted", "id": task["id"]})
         self.assertEqual(task["state"], "submitted")
         self.assertEqual(report["status"], "needs_configuration")
 
     def test_real_done_keeps_queued_callback_and_exit_semantics_when_daemon_needs_repair(self):
-        argv = ["ltc", "done", "--queue-dir", str(self.queue), "--agent", "codex",
+        argv = ["atc", "done", "--queue-dir", str(self.queue), "--agent", "codex",
                 "--session", "original-bound-session", "--exit-code", "7"]
         with mock.patch.object(sys, "argv", argv), mock.patch.object(
             cli, "select_execution_backend", side_effect=AssertionError("done must not select a task backend")
@@ -204,19 +204,19 @@ class HealthReportTests(unittest.TestCase):
         callbacks = list((self.queue / "pending").glob("*.json"))
         self.assertEqual(len(callbacks), 1)
         callback = json.loads(callbacks[0].read_text())
-        report = json.loads(errors.getvalue().split("[ltc-status]", 1)[1].split("[/ltc-status]", 1)[0])
+        report = json.loads(errors.getvalue().split("[atc-status]", 1)[1].split("[/atc-status]", 1)[0])
         self.assertEqual(report["work"], {"state": "callback_queued", "id": callback["id"]})
         self.assertEqual(callback["exit_code"], 7)
         self.assertIn("--callback-only", report["repair_command"])
 
     def test_real_validation_failure_emits_not_submitted_without_creating_task(self):
-        argv = ["ltc", "run", "--queue-dir", str(self.queue), "--backend", "screen",
+        argv = ["atc", "run", "--queue-dir", str(self.queue), "--backend", "screen",
                 "--agent", "codex", "--session", "original-bound-session"]
         with mock.patch.object(sys, "argv", argv), mock.patch.object(cli, "screen_binary", return_value="/fixture/screen"), mock.patch.object(
             diagnostics, "coordinator_issue", return_value={"code": "daemon_not_running", "action": "Start coordinator."}
         ), contextlib.redirect_stderr(io.StringIO()) as errors, self.assertRaises(SystemExit):
             cli.main()
-        report = json.loads(errors.getvalue().split("[ltc-status]", 1)[1].split("[/ltc-status]", 1)[0])
+        report = json.loads(errors.getvalue().split("[atc-status]", 1)[1].split("[/atc-status]", 1)[0])
         self.assertEqual(report["work"], {"state": "not_submitted"})
         self.assertFalse(cli.managed_tasks_root(self.queue).exists())
 
@@ -281,7 +281,7 @@ class HealthReportTests(unittest.TestCase):
         self.assertIn("invoking AI", report["instruction"])
 
     def test_missing_skill_and_unwritable_queue_are_actionable_without_repair_side_effects(self):
-        (self.codex_home / "skills" / "long-task-callback" / "SKILL.md").unlink()
+        (self.codex_home / "skills" / "agent-atc" / "SKILL.md").unlink()
         with mock.patch.object(diagnostics, "queue_writable", return_value=False), mock.patch.object(
             cli, "setup"
         ) as repair, mock.patch.object(cli.subprocess, "Popen") as launch:
@@ -307,9 +307,9 @@ class HealthReportTests(unittest.TestCase):
 class SkillRepairPreservationTests(unittest.TestCase):
     def test_keep_existing_preserves_customized_tree_even_with_force(self):
         with tempfile.TemporaryDirectory() as temporary:
-            target = Path(temporary) / "long-task-callback"
+            target = Path(temporary) / "agent-atc"
             (target / "agents").mkdir(parents=True)
-            (target / "SKILL.md").write_text("User-maintained custom LTC workflow", encoding="utf-8")
+            (target / "SKILL.md").write_text("User-maintained custom ATC workflow", encoding="utf-8")
             (target / "agents" / "openai.yaml").write_text("custom: preserved", encoding="utf-8")
             (target / "local-notes.txt").write_text("Private local customization", encoding="utf-8")
             original = {path.relative_to(target): path.read_bytes() for path in target.rglob("*") if path.is_file()}
@@ -320,7 +320,7 @@ class SkillRepairPreservationTests(unittest.TestCase):
 
     def test_keep_existing_still_installs_missing_bundled_skill(self):
         with tempfile.TemporaryDirectory() as temporary:
-            target = Path(temporary) / "missing" / "long-task-callback"
+            target = Path(temporary) / "missing" / "agent-atc"
             with contextlib.redirect_stdout(io.StringIO()):
                 self.assertEqual(cli.install_skill_tree(target, include_codex_plugin=True, force=True, keep_existing=True), 0)
             bundled = Path(cli.__file__).parent / "skill"

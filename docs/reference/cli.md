@@ -3,28 +3,28 @@
 查看完整参数：
 
 ```bash
-ltc --help
-ltc run --help
-ltc agent --help
+atc --help
+atc run --help
+atc agent --help
 ```
 
 ## 安装和检查
 
 | 命令 | 用途 |
 | --- | --- |
-| `ltc --version` | 查看当前版本 |
-| `ltc setup --enable --now` | 安装技能并启动协调器 |
-| `ltc setup --keep-skill --force --enable --now` | 更新协调器，保留技能内容 |
-| `ltc doctor --agent codex --session <id>` | 检查指定会话的运行配置 |
+| `atc --version` | 查看当前版本 |
+| `atc setup --enable --now` | 安装技能并启动协调器 |
+| `atc setup --keep-skill --force --enable --now` | 更新协调器，保留技能内容 |
+| `atc doctor --agent codex --session <id>` | 检查指定会话的运行配置 |
 
 ## 提交工作
 
 | 命令 | 用途 |
 | --- | --- |
-| `ltc run --task <名称> -- <命令>` | 提交一个命令 |
-| `ltc agent codex -- <任务>` | 启动 Codex 子 Agent |
-| `ltc agent claude -- <任务>` | 启动 Claude 子 Agent |
-| `ltc done --task <名称> --exit-code <退出码>` | 报告外部任务结果 |
+| `atc run --task <名称> -- <命令>` | 提交一个命令 |
+| `atc agent codex -- <任务>` | 启动 Codex 子 Agent |
+| `atc agent claude -- <任务>` | 启动 Claude 子 Agent |
+| `atc done --task <名称> --exit-code <退出码>` | 报告外部任务结果 |
 
 提交参数写在 `--` 前面：
 
@@ -43,11 +43,11 @@ ltc agent --help
 
 | 命令 | 用途 |
 | --- | --- |
-| `ltc status` | 查看待处理回调 |
-| `ltc status --state failed` | 查看投递失败的回调 |
-| `ltc ack --id <回调ID>` | 确认已经读取结果 |
-| `ltc cancel --id <回调ID>` | 撤销这条回调的投递 |
-| `ltc prompt-policy` | 查看提醒间隔 |
+| `atc status` | 查看待处理回调 |
+| `atc status --state failed` | 查看投递失败的回调 |
+| `atc ack --id <回调ID>` | 确认已经读取结果 |
+| `atc cancel --id <回调ID>` | 撤销这条回调的投递 |
+| `atc prompt-policy` | 查看提醒间隔 |
 
 ## 预览版命令
 
@@ -55,12 +55,12 @@ ltc agent --help
 
 | 命令 | 用途 |
 | --- | --- |
-| `ltc wait --task <任务ID>` | 在 Claude Code 中等待并输出回调 |
-| `ltc retry --id <回调ID>` | 重新投递保存的回调 |
-| `ltc agent pi -- <任务>` | 启动 Pi 子 Agent |
-| `ltc pi` | 打开 LTC 托管的 Pi 会话 |
-| `ltc template list` | 查看已注册模板 |
-| `ltc desktop status` | 查看 Desktop 连接配置 |
-| `ltc desktop launch` | 通过共享 Core 启动 Desktop |
+| `atc wait --task <任务ID>` | 在 Claude Code 中等待并输出回调 |
+| `atc retry --id <回调ID>` | 重新投递保存的回调 |
+| `atc agent pi -- <任务>` | 启动 Pi 子 Agent |
+| `atc pi` | 打开 ATC 托管的 Pi 会话 |
+| `atc template list` | 查看已注册模板 |
+| `atc desktop status` | 查看 Desktop 连接配置 |
+| `atc desktop launch` | 通过共享 Core 启动 Desktop |
 
 多阶段目标的命令顺序见[目标指南](../guides/goals.md)。

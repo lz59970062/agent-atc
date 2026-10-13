@@ -1,0 +1,14 @@
+{
+  "name": "agent-atc",
+  "version": "0.0.0",
+  "description": "Agent Traffic Control: wake a Codex, Claude Code or Pi session when a long task finishes",
+  "license": "MIT",
+  "bin": {
+    "atc": "bin/atc.js"
+  },
+  "files": ["bin"],
+  "engines": { "node": ">=18" },
+  "optionalDependencies": {
+    "@agent-atc/linux-x64": "0.0.0"
+  }
+}

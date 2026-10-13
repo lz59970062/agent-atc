@@ -10,13 +10,13 @@ import tempfile
 import time
 import unittest
 
-from long_task_callback import callback_transport, cli, pi_callback as bridge
+from agent_atc import callback_transport, cli, pi_callback as bridge
 
 
 def build_bound(tmp_path):
     os.environ['PI_CODING_AGENT_DIR'] = str(tmp_path / 'pi')
     os.environ['CODEX_HOME'] = str(tmp_path / 'codex')
-    os.environ['LTC_HOME'] = str(tmp_path / 'ltc')
+    os.environ['ATC_HOME'] = str(tmp_path / 'atc')
     os.environ[cli.TARGET_LOCK_DIR_ENV] = str(tmp_path / 'target-locks')
     os.environ.pop(bridge.CHANNEL_ROOT_ENV, None)
     session = tmp_path / 'session 中文.jsonl'
@@ -50,7 +50,7 @@ def dead_managed(owner, directory):
 
 class PiLiveCallbackTests(unittest.TestCase):
     def setUp(self):
-        temporary = tempfile.TemporaryDirectory(prefix='ltc-pi-live-')
+        temporary = tempfile.TemporaryDirectory(prefix='atc-pi-live-')
         self.addCleanup(temporary.cleanup)
         self.directory = Path(temporary.name)
         patch = mock.patch.dict(os.environ)
@@ -68,7 +68,7 @@ class PiLiveCallbackTests(unittest.TestCase):
         cli.write_request(path, steer)
         assert cli.load_request(path)['pi_delivery'] == 'steer'
         task = dict(steer, version=5, queue_dir=str(queue), execution_backend='screen',
-                    screen_session='ltc-fixture', state='completed', command='/bin/true',
+                    screen_session='atc-fixture', state='completed', command='/bin/true',
                     wrapped_command=['/bin/true'], log_path=str(self.directory/'task.log'))
         task_path = self.directory/'fixture/task.json'
         cli.write_request(task_path, task)
@@ -337,7 +337,7 @@ class PiLiveCallbackTests(unittest.TestCase):
         profile.mkdir(); (profile / 'settings.json').write_text('{"personal":"keep"}')
         args = argparse.Namespace(profile=str(profile), force=False)
         assert bridge.install_extension(args) == 0
-        target = profile / 'extensions/ltc-callback.js'; target.write_text('// user edits\n')
+        target = profile / 'extensions/atc-callback.js'; target.write_text('// user edits\n')
         with self.assertRaisesRegex(ValueError, 'Preserving'): bridge.install_extension(args)
         assert target.read_text() == '// user edits\n'
         assert (profile / 'settings.json').read_text() == '{"personal":"keep"}'
@@ -385,7 +385,7 @@ class PiLiveCallbackTests(unittest.TestCase):
     def test_managed_child_strips_reservation_and_callback_cancel_paths(self):
         bound = self.bound
         tmp_path = self.directory
-        values={'LTC_PI_RESERVATION':'owner','LTC_PI_RECOVERY':'1',
-                'LTC_PI_CALLBACK_ACK_PATH':'/ack','LTC_PI_CALLBACK_CANCEL_PATH':'/cancel',
+        values={'ATC_PI_RESERVATION':'owner','ATC_PI_RECOVERY':'1',
+                'ATC_PI_CALLBACK_ACK_PATH':'/ack','ATC_PI_CALLBACK_CANCEL_PATH':'/cancel',
                 'PI_CODING_AGENT_DIR':'/keep/profile','PATH':'/keep/path'}
         assert cli.child_agent_environment(values)=={'PI_CODING_AGENT_DIR':'/keep/profile','PATH':'/keep/path'}

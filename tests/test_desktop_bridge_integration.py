@@ -12,32 +12,32 @@ import threading
 import time
 import unittest
 
-from long_task_callback import cli
-from long_task_callback.desktop_connection import load_bridge_endpoint
-from long_task_callback.desktop_bridge import bridge_status, stop_bridge
-from long_task_callback.platforms import windows_process
+from agent_atc import cli
+from agent_atc.desktop_connection import load_bridge_endpoint
+from agent_atc.desktop_bridge import bridge_status, stop_bridge
+from agent_atc.platforms import windows_process
 
 
-@unittest.skipUnless(os.name == "nt" and os.environ.get("LTC_TEST_CODEX_BRIDGE") == "1",
+@unittest.skipUnless(os.name == "nt" and os.environ.get("ATC_TEST_CODEX_BRIDGE") == "1",
                      "opt in to installed Codex bridge protocol test")
 class RealCodexBridgeTests(unittest.TestCase):
     def test_desktop_stdio_and_callback_share_core_and_eof_stops_both(self):
-        with tempfile.TemporaryDirectory(prefix="ltc-real-desktop-core-") as directory:
+        with tempfile.TemporaryDirectory(prefix="atc-real-desktop-core-") as directory:
             root = Path(directory)
             profile, metadata = root / "profile", root / "state" / "bridge.json"
-            codex = os.environ.get("LTC_TEST_CODEX_BRIDGE_BIN")
+            codex = os.environ.get("ATC_TEST_CODEX_BRIDGE_BIN")
             if not codex:
-                self.skipTest("Set LTC_TEST_CODEX_BRIDGE_BIN to a native Core executable for the Desktop adapter")
-            env = dict(os.environ, CODEX_HOME=str(profile), LTC_HOME=str(profile / "ltc-home"), PYTHONIOENCODING="utf-8",
-                       CODEX_LONG_TASK_WAKEUP_DESKTOP_REAL_CODEX=codex,
-                       CODEX_LONG_TASK_WAKEUP_DESKTOP_BRIDGE_FILE=str(metadata))
+                self.skipTest("Set ATC_TEST_CODEX_BRIDGE_BIN to a native Core executable for the Desktop adapter")
+            env = dict(os.environ, CODEX_HOME=str(profile), ATC_HOME=str(profile / "atc-home"), PYTHONIOENCODING="utf-8",
+                       ATC_DESKTOP_REAL_CODEX=codex,
+                       ATC_DESKTOP_BRIDGE_FILE=str(metadata))
             env.pop("CODEX_THREAD_ID", None)
             incoming = queue.Queue()
             callback = None
             with (root / "wrapper.log").open("w", encoding="utf-8") as log:
-                installed_wrapper = os.environ.get("LTC_TEST_DESKTOP_CORE_WRAPPER")
+                installed_wrapper = os.environ.get("ATC_TEST_DESKTOP_CORE_WRAPPER")
                 launcher = ([installed_wrapper] if installed_wrapper else
-                            [sys.executable, "-m", "long_task_callback.desktop_core"])
+                            [sys.executable, "-m", "agent_atc.desktop_core"])
                 process = subprocess.Popen(
                     [*launcher, "app-server",
                      "-c", "features.code_mode_host=true", "--analytics-default-enabled"],
@@ -67,7 +67,7 @@ class RealCodexBridgeTests(unittest.TestCase):
 
                 try:
                     request("desktop-init", "initialize", {
-                        "clientInfo": {"name": "ltc-stdio-fixture", "version": "0.7.0a1"},
+                        "clientInfo": {"name": "atc-stdio-fixture", "version": "0.7.0a1"},
                         "capabilities": {"experimentalApi": True}})
                     process.stdin.write(b'{"method":"initialized","params":{}}\n')
                     process.stdin.flush()
@@ -79,14 +79,14 @@ class RealCodexBridgeTests(unittest.TestCase):
                     callback = cli.AppServerConnection(endpoint, 8)
                     callback.connect()
                     callback.request("initialize", {
-                        "clientInfo": {"name": "ltc-callback-fixture", "version": "0.7.0a1"},
+                        "clientInfo": {"name": "atc-callback-fixture", "version": "0.7.0a1"},
                         "capabilities": {"experimentalApi": True}})
                     callback.notify("initialized", {})
                     resumed = callback.request("thread/resume", {"threadId": thread["id"], "excludeTurns": True})
                     self.assertEqual(resumed["thread"]["id"], thread["id"])
                     self.assertIn(thread["id"], request("loaded", "thread/loaded/list", {})["data"])
                     self.assertEqual(bridge_status(metadata)["active_clients"], 2)
-                    # Desktop lifetime owns its tool environment. An LTC client
+                    # Desktop lifetime owns its tool environment. An ATC client
                     # cannot keep a Core alive after Desktop's stdio EOF.
                     process.stdin.close()
                     process.wait(timeout=8)
@@ -109,16 +109,16 @@ class RealCodexBridgeTests(unittest.TestCase):
                     process.stdout.close()
 
     def test_two_clients_resume_one_owned_test_thread_without_a_model_turn(self):
-        with tempfile.TemporaryDirectory(prefix="ltc-real-bridge-") as directory:
+        with tempfile.TemporaryDirectory(prefix="atc-real-bridge-") as directory:
             root = Path(directory)
             profile = root / "profile"
             metadata = root / "state" / "bridge.json"
-            env = dict(os.environ, CODEX_HOME=str(profile), LTC_HOME=str(profile / "ltc-home"), PYTHONIOENCODING="utf-8")
+            env = dict(os.environ, CODEX_HOME=str(profile), ATC_HOME=str(profile / "atc-home"), PYTHONIOENCODING="utf-8")
             env.pop("CODEX_THREAD_ID", None)
-            command = [sys.executable, "-m", "long_task_callback.desktop_bridge",
+            command = [sys.executable, "-m", "agent_atc.desktop_bridge",
                        "--codex-home", str(profile), "--metadata-file", str(metadata)]
-            if os.environ.get("LTC_TEST_CODEX_BRIDGE_BIN"):
-                command.extend(["--codex-bin", os.environ["LTC_TEST_CODEX_BRIDGE_BIN"]])
+            if os.environ.get("ATC_TEST_CODEX_BRIDGE_BIN"):
+                command.extend(["--codex-bin", os.environ["ATC_TEST_CODEX_BRIDGE_BIN"]])
             clients = []
             with (root / "probe.log").open("w", encoding="utf-8") as log:
                 process = subprocess.Popen(command, env=env, stdout=log, stderr=log,
@@ -133,7 +133,7 @@ class RealCodexBridgeTests(unittest.TestCase):
                             if process.poll() is not None or time.monotonic() >= deadline:
                                 self.fail("Isolated bridge startup failed")
                             time.sleep(0.1)
-                    for name in ("ltc-desktop-fixture", "ltc-callback-fixture"):
+                    for name in ("atc-desktop-fixture", "atc-callback-fixture"):
                         client = cli.AppServerConnection(endpoint, 8)
                         clients.append(client)
                         client.connect()
@@ -146,7 +146,7 @@ class RealCodexBridgeTests(unittest.TestCase):
                     # a model turn, tool run or credential requirement.
                     clients[0].request("thread/inject_items", {"threadId": thread["id"], "items": [
                         {"type": "message", "role": "assistant", "content": [
-                            {"type": "output_text", "text": "Isolated LTC protocol fixture; no model call."}]}]})
+                            {"type": "output_text", "text": "Isolated ATC protocol fixture; no model call."}]}]})
                     resumed = clients[1].request("thread/resume", {"threadId": thread["id"], "excludeTurns": True})
                     self.assertEqual(resumed["thread"]["id"], thread["id"])
                     self.assertIn(thread["id"], clients[0].request("thread/loaded/list", {})["data"])

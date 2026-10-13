@@ -15,7 +15,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from long_task_callback import cli
+from agent_atc import cli
 
 
 IDENTITY = {"boot_id": "current-boot", "machine_id": "current-machine",

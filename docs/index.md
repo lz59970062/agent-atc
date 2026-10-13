@@ -1,6 +1,6 @@
-# Long Task Callback
+# Agent Traffic Control
 
-Long Task Callback（LTC）让 Agent 在长任务结束后回到原会话继续工作。你可以让它提交一次模型训练、测试或代码审查，任务在后台执行。结束后，LTC 把结果位置送回会话，Agent 读取日志和产物，接着处理下一步。
+Agent Traffic Control（ATC）让 Agent 在长任务结束后回到原会话继续工作。你可以让它提交一次模型训练、测试或代码审查，任务在后台执行。结束后，ATC 把结果位置送回会话，Agent 读取日志和产物，接着处理下一步。
 
 [开始使用](quickstart.md){ .md-button .md-button--primary }
 [了解架构](overview.md){ .md-button }
@@ -10,10 +10,10 @@ Long Task Callback（LTC）让 Agent 在长任务结束后回到原会话继续�
 在 Agent 会话中提交训练命令：
 
 ```bash
-ltc run --cwd "$PWD" --task "训练模型" -- python train.py --config configs/exp.yaml
+atc run --cwd "$PWD" --task "训练模型" -- python train.py --config configs/exp.yaml
 ```
 
-LTC 返回任务 ID 和日志路径。任务结束后，原会话收到回调，Agent 检查输出并执行回调中的 ACK 命令。第一次使用可以先按[快速开始](quickstart.md)跑一个十秒钟的示例。
+ATC 返回任务 ID 和日志路径。任务结束后，原会话收到回调，Agent 检查输出并执行回调中的 ACK 命令。第一次使用可以先按[快速开始](quickstart.md)跑一个十秒钟的示例。
 
 ## 选择入口
 
@@ -29,7 +29,7 @@ LTC 返回任务 ID 和日志路径。任务结束后，原会话收到回调，
 
 先看[典型使用场景](guides/use-cases.md)选择工作流程，再通过 [Harness 支持情况](integrations/support.md)确认接入方式和版本。
 
-LTC 支持 Linux、macOS 和 Windows。按[安装指南](installation.md)配置运行环境，再选择你使用的 Agent：[Codex CLI](integrations/codex.md)、[Claude Code](integrations/claude.md)、[Pi](integrations/pi.md)或 [Codex Desktop](integrations/desktop.md)。
+ATC 支持 Linux、macOS 和 Windows。按[安装指南](installation.md)配置运行环境，再选择你使用的 Agent：[Codex CLI](integrations/codex.md)、[Claude Code](integrations/claude.md)、[Pi](integrations/pi.md)或 [Codex Desktop](integrations/desktop.md)。
 
 快速开始使用正式版 `0.7.0`。Claude 实时回调、Pi 和 Desktop 接入使用 `0.7.1` 预览版，各接入页给出对应步骤。
 

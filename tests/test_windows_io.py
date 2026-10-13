@@ -11,14 +11,14 @@ import tempfile
 import unittest
 from unittest import mock
 
-from long_task_callback import storage
-from long_task_callback.platforms import windows_io
+from agent_atc import storage
+from agent_atc.platforms import windows_io
 
 
 @unittest.skipUnless(os.name == "nt", "native Windows file primitives")
 class WindowsIOTests(unittest.TestCase):
     def setUp(self) -> None:
-        temporary = tempfile.TemporaryDirectory(prefix="ltc 中文 空格 ")
+        temporary = tempfile.TemporaryDirectory(prefix="atc 中文 空格 ")
         self.addCleanup(temporary.cleanup)
         self.directory = Path(temporary.name)
 
@@ -160,7 +160,7 @@ class WindowsIOTests(unittest.TestCase):
         code = """
 import sys
 from pathlib import Path
-from long_task_callback.platforms.windows_io import acquire_path_lock
+from agent_atc.platforms.windows_io import acquire_path_lock
 lock = acquire_path_lock(Path(sys.argv[1]), blocking=False)
 assert lock is not None
 print('held', flush=True)

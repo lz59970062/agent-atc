@@ -15,23 +15,23 @@ import time
 import unittest
 from unittest import mock
 
-from long_task_callback import cli
-from long_task_callback.platforms import LaunchError, OwnerState
-from long_task_callback.platforms.windows import WindowsBackend
-from long_task_callback.platforms import windows_process
+from agent_atc import cli
+from agent_atc.platforms import LaunchError, OwnerState
+from agent_atc.platforms.windows import WindowsBackend
+from agent_atc.platforms import windows_process
 
 
 @unittest.skipUnless(os.name == "nt", "requires native Windows locks, ACLs and processes")
 class WindowsLifecycleTests(unittest.TestCase):
     def setUp(self):
-        temporary = tempfile.TemporaryDirectory(prefix="ltc Windows 生命周期 ")
+        temporary = tempfile.TemporaryDirectory(prefix="atc Windows 生命周期 ")
         self.addCleanup(temporary.cleanup)
         self.directory = Path(temporary.name).resolve()
         self.root = self.directory / "queue 中文 space & 'quote"
         self.stack = contextlib.ExitStack()
         self.addCleanup(self.stack.close)
         self.stack.enter_context(mock.patch.dict(os.environ, {
-            "CODEX_HOME": str(self.directory / "codex-profile"), "LTC_HOME": str(self.directory / "codex-profile" / "ltc-home"),
+            "CODEX_HOME": str(self.directory / "codex-profile"), "ATC_HOME": str(self.directory / "codex-profile" / "atc-home"),
             "CLAUDE_CONFIG_DIR": str(self.directory / "claude-profile"),
             cli.TARGET_LOCK_DIR_ENV: str(self.directory / "global-target-locks"),
             "PYTHONPATH": str(Path(cli.__file__).resolve().parents[1]),
@@ -217,7 +217,7 @@ class WindowsLifecycleTests(unittest.TestCase):
             encoding="utf-8",
         )
         coordinator_program = (
-            "import argparse,json,sys\nfrom pathlib import Path\nfrom long_task_callback import cli\n"
+            "import argparse,json,sys\nfrom pathlib import Path\nfrom agent_atc import cli\n"
             f"root=Path({str(self.root)!r})\nrequest=json.loads({json.dumps(owner)!r})\n"
             f"cli.resume_command=lambda request:[sys.executable,{str(fixture)!r}]\n"
             "cli.run_resume_until_exit_or_ack(root,'owner',request,argparse.Namespace(resume_timeout=25))\n"

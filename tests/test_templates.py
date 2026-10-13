@@ -12,7 +12,7 @@ import textwrap
 import unittest
 from unittest import mock
 
-from long_task_callback import cli
+from agent_atc import cli
 from test_cli import executable_python_fixture, patch_fixture_commands
 
 
@@ -27,12 +27,12 @@ class TemplateContractTests(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
         self.cwd = Path(self.tmp.name)
         self.queue = self.cwd / "test-queue"
-        template_env = mock.patch.dict(os.environ, {"LTC_TEMPLATE_DIR": str(self.cwd / "templates")})
+        template_env = mock.patch.dict(os.environ, {"ATC_TEMPLATE_DIR": str(self.cwd / "templates")})
         template_env.start()
         self.addCleanup(template_env.stop)
 
     def invoke(self, worker="codex", options=(), prompt="Reject negative amounts; accept zero."):
-        argv = ["ltc", "agent", worker, "--cwd", str(self.cwd),
+        argv = ["atc", "agent", worker, "--cwd", str(self.cwd),
                 "--queue-dir", str(self.queue), "--session", "parent-session",
                 "--agent", "claude", "--task", "independent contract tests",
                 *options, "--", prompt]
@@ -149,8 +149,8 @@ class TemplateContractTests(unittest.TestCase):
             import sys
 
             payload = {{"argv": sys.argv[1:], "prompt": sys.stdin.read()}}
-            Path(os.environ["LTC_TEST_CAPTURE"]).write_text(json.dumps(payload))
-            code = int(os.environ["LTC_TEST_EXIT"])
+            Path(os.environ["ATC_TEST_CAPTURE"]).write_text(json.dumps(payload))
+            code = int(os.environ["ATC_TEST_EXIT"])
             if code == 0:
                 Path(sys.argv[sys.argv.index("-o") + 1]).write_text("Tests have NOT been run. Authored.")
             sys.exit(code)
@@ -160,8 +160,8 @@ class TemplateContractTests(unittest.TestCase):
             with self.subTest(exit_code=exit_code):
                 self.queue = self.cwd / f"worker-queue-{exit_code}"
                 capture = self.cwd / f"capture-{exit_code}.json"
-                environment = {"CODEX_LONG_TASK_WAKEUP_CODEX_BIN": str(fake_child),
-                               "LTC_TEST_CAPTURE": str(capture), "LTC_TEST_EXIT": str(exit_code)}
+                environment = {"ATC_CODEX_BIN": str(fake_child),
+                               "ATC_TEST_CAPTURE": str(capture), "ATC_TEST_EXIT": str(exit_code)}
                 with mock.patch.dict(os.environ, environment):
                     self.assertEqual(self.invoke(options=["--template", "test", "--model", "contract-model",
                                                           "--reasoning-effort", "high"]), 0)

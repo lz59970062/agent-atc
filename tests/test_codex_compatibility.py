@@ -11,7 +11,7 @@ import tempfile
 import unittest
 from unittest import mock
 
-from long_task_callback import cli
+from agent_atc import cli
 
 
 class CodexCompatibilityTests(unittest.TestCase):
@@ -43,14 +43,14 @@ class CodexCompatibilityTests(unittest.TestCase):
                 for sandbox in ("workspace-write", "read-only"):
                     with self.subTest(template=template, sandbox=sandbox):
                         queue = Path(tmp) / f"queue-{template}-{sandbox}"
-                        argv = ["ltc", "agent", "codex", "--agent", "codex", "--session", "compat-parent",
+                        argv = ["atc", "agent", "codex", "--agent", "codex", "--session", "compat-parent",
                                 "--cwd", tmp, "--queue-dir", str(queue), "--task", "compatibility",
                                 "--sandbox-mode", sandbox]
                         if template:
                             argv.extend(["--template", "test"])
                         argv.extend(["--", "Test the public contract."])
                         with mock.patch.object(sys, "argv", argv), \
-                                mock.patch.dict(os.environ, {"LTC_TEMPLATE_DIR": str(Path(tmp) / "templates")}), \
+                                mock.patch.dict(os.environ, {"ATC_TEMPLATE_DIR": str(Path(tmp) / "templates")}), \
                                 mock.patch.object(cli, "screen_binary", return_value="/usr/bin/screen"), \
                                 contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
                             self.assertEqual(cli.main(), 0)
@@ -77,7 +77,7 @@ class CodexCompatibilityTests(unittest.TestCase):
             profile = Path(tmp) / "codex-profile"
             profile.mkdir()
             environment["CODEX_HOME"] = str(profile)
-            environment["LTC_HOME"] = str(profile / "ltc-home")
+            environment["ATC_HOME"] = str(profile / "atc-home")
             command = cli.process_command(command, environment)
             result = subprocess.run(command, input="", text=True, capture_output=True, timeout=20,
                                     cwd=tmp, env=environment)

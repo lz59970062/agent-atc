@@ -20,7 +20,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from long_task_callback import cli
+from agent_atc import cli
 
 
 def assert_private_file(test: unittest.TestCase, path: Path) -> None:
@@ -136,7 +136,7 @@ class CliTests(unittest.TestCase):
             task = cli.load_managed_task(manifests[0])
             self.assertEqual(task["state"], "submitted")
             self.assertEqual(task["wrapped_command"], args.wrapped_command)
-            self.assertEqual(task["id"], task["screen_session"].removeprefix("ltc-"))
+            self.assertEqual(task["id"], task["screen_session"].removeprefix("atc-"))
             self.assertTrue(Path(str(task["environment_path"])).exists())
             self.assertFalse(list((root / "pending").glob("*.json")))
 
@@ -193,7 +193,7 @@ class CliTests(unittest.TestCase):
                 sys,
                 "argv",
                 [
-                    "ltc",
+                    "atc",
                     "agent",
                     "claude",
                     "--session",
@@ -221,7 +221,7 @@ class CliTests(unittest.TestCase):
                 mock.patch.object(cli, "screen_binary", return_value="/usr/bin/screen"),
                 mock.patch.dict(
                     os.environ,
-                    {"CODEX_LONG_TASK_WAKEUP_CODEX_BIN": "/opt/codex/bin/codex"},
+                    {"ATC_CODEX_BIN": "/opt/codex/bin/codex"},
                     clear=False,
                 ),
             ):
@@ -267,11 +267,11 @@ class CliTests(unittest.TestCase):
                 mock.patch.dict(
                     os.environ,
                     {
-                        "CODEX_LONG_TASK_WAKEUP_CODEX_BIN": str(fake_codex),
+                        "ATC_CODEX_BIN": str(fake_codex),
                         "CODEX_THREAD_ID": "parent-codex-thread",
                         "CLAUDE_CODE_SESSION_ID": "stale-claude-thread",
                         "CLAUDECODE": "1",
-                        "LTC_TEST_SENTINEL": "codex-submission-environment",
+                        "ATC_TEST_SENTINEL": "codex-submission-environment",
                     },
                     clear=False,
                 ),
@@ -307,14 +307,14 @@ class CliTests(unittest.TestCase):
             fake_claude = self._fake_child_agent(Path(tmp))
             args = self._agent_args(tmp, root, "claude", "Audit the parser and return evidence.")
             submit_environment = {
-                "LONG_TASK_WAKEUP_CLAUDE_BIN": str(fake_claude),
+                "ATC_CLAUDE_BIN": str(fake_claude),
                 "CODEX_THREAD_ID": "codex-parent",
                 "CLAUDE_CODE_SESSION_ID": "claude-parent",
                 "CLAUDECODE": "1",
                 "CLAUDE_CONFIG_DIR": str(Path(tmp) / "claude-config"),
                 "ANTHROPIC_API_KEY": "secret-sentinel-value",
                 "ANTHROPIC_BASE_URL": "https://example.invalid/anthropic",
-                "LTC_TEST_SENTINEL": "submission-environment",
+                "ATC_TEST_SENTINEL": "submission-environment",
             }
             with (
                 mock.patch.object(cli, "screen_binary", return_value="/usr/bin/screen"),
@@ -381,7 +381,7 @@ class CliTests(unittest.TestCase):
     def test_via_daemon_is_hidden_compatibility_flag(self) -> None:
         help_output = io.StringIO()
         with (
-            mock.patch.object(sys, "argv", ["ltc", "run", "--help"]),
+            mock.patch.object(sys, "argv", ["atc", "run", "--help"]),
             mock.patch("sys.stdout", help_output),
             self.assertRaises(SystemExit) as help_exit,
         ):
@@ -393,7 +393,7 @@ class CliTests(unittest.TestCase):
             mock.patch.object(
                 sys,
                 "argv",
-                ["ltc", "run", "--via-daemon", "--session", "compat-session", "--", "true"],
+                ["atc", "run", "--via-daemon", "--session", "compat-session", "--", "true"],
             ),
             mock.patch.object(cli, "run", return_value=0) as parsed_run,
         ):
@@ -405,7 +405,7 @@ class CliTests(unittest.TestCase):
             mock.patch.object(
                 sys,
                 "argv",
-                ["ltc", "_screen-worker", "--task-file", "/tmp/task.json", "--token=-abc"],
+                ["atc", "_screen-worker", "--task-file", "/tmp/task.json", "--token=-abc"],
             ),
             mock.patch.object(cli, "run_screen_worker", return_value=0) as worker,
         ):
@@ -424,7 +424,7 @@ class CliTests(unittest.TestCase):
                 self.assertEqual(cli.run(args), 0)
 
             task_path = next(cli.managed_tasks_root(root).glob("*/task.json"))
-            self.assertEqual(cli.load_managed_task(task_path)["token"], "ltc_-abc")
+            self.assertEqual(cli.load_managed_task(task_path)["token"], "atc_-abc")
 
     def test_daemon_launches_submitted_task_through_screen(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -441,15 +441,15 @@ class CliTests(unittest.TestCase):
             with (
                 mock.patch.object(cli, "screen_binary", return_value="/usr/bin/screen"),
                 mock.patch.object(cli, "screen_owner_state", return_value=cli.OwnerState.ABSENT),
-                mock.patch("long_task_callback.platforms.screen.screen_binary", return_value="/usr/bin/screen"),
-                mock.patch.object(cli, "console_script_path", return_value="/usr/bin/ltc"),
+                mock.patch("agent_atc.platforms.screen.screen_binary", return_value="/usr/bin/screen"),
+                mock.patch.object(cli, "console_script_path", return_value="/usr/bin/atc"),
                 mock.patch.object(cli.subprocess, "run", return_value=completed) as launch,
             ):
                 self.assertEqual(cli.recover_managed_tasks(root), 1)
 
             command = launch.call_args.args[0]
             self.assertEqual(command[0], "/usr/bin/screen")
-            self.assertEqual(command[command.index("-dmS") + 1], f"ltc-{task_path.parent.name}")
+            self.assertEqual(command[command.index("-dmS") + 1], f"atc-{task_path.parent.name}")
             self.assertEqual("-Logfile" in command, sys.platform != "darwin")
             self.assertIn("_screen-worker", command)
             self.assertIn("--token=-abc", command)
@@ -470,7 +470,7 @@ class CliTests(unittest.TestCase):
             with (
                 mock.patch.object(cli, "screen_binary", return_value="/usr/bin/screen"),
                 mock.patch.object(cli, "screen_owner_state", return_value=cli.OwnerState.ABSENT),
-                mock.patch("long_task_callback.platforms.screen.screen_binary", return_value="/usr/bin/screen"),
+                mock.patch("agent_atc.platforms.screen.screen_binary", return_value="/usr/bin/screen"),
                 mock.patch.object(cli.subprocess, "run", return_value=completed) as launch,
                 mock.patch.object(cli, "MANAGED_WORKER_HANDSHAKE_SECONDS", 60.0),
             ):
@@ -494,7 +494,7 @@ class CliTests(unittest.TestCase):
             with (
                 mock.patch.object(cli, "screen_binary", return_value="/usr/bin/screen"),
                 mock.patch.object(cli, "screen_owner_state", return_value=cli.OwnerState.ABSENT),
-                mock.patch("long_task_callback.platforms.screen.screen_binary", return_value="/usr/bin/screen"),
+                mock.patch("agent_atc.platforms.screen.screen_binary", return_value="/usr/bin/screen"),
                 mock.patch.object(cli.subprocess, "run", return_value=completed) as launch,
                 mock.patch.object(cli, "MANAGED_WORKER_HANDSHAKE_SECONDS", 0.0),
                 mock.patch.object(cli, "MANAGED_LAUNCH_MAX_ATTEMPTS", 2),
@@ -929,7 +929,7 @@ class CliTests(unittest.TestCase):
             self.assertEqual(len(queued), 1)
             request = json.loads(queued[0].read_text(encoding="utf-8"))
 
-            self.assertRegex(request["prompt"], r"(ltc|codex-long-task-wakeup|_entry\.py)")
+            self.assertRegex(request["prompt"], r"(atc|agent-atc|_entry\.py)")
             self.assertIn(" 'ack' " if os.name == "nt" else " ack ", request["prompt"])
             details = Path(request["prompt_details_path"]).read_text()
             self.assertRegex(details, r"Callback time: .+[+-]\d{2}:\d{2}")
@@ -1025,7 +1025,7 @@ class CliTests(unittest.TestCase):
             "prompt": "hello",
             "permission_mode": "acceptEdits",
         }
-        with mock.patch.dict(os.environ, {"LONG_TASK_WAKEUP_CLAUDE_BIN": "/opt/claude"}, clear=False):
+        with mock.patch.dict(os.environ, {"ATC_CLAUDE_BIN": "/opt/claude"}, clear=False):
             command = cli.resume_command(request)
 
         self.assertEqual(command, ["/opt/claude", "-p", "--permission-mode", "acceptEdits", "--continue"])
@@ -1041,9 +1041,9 @@ class CliTests(unittest.TestCase):
         )
         prompt = cli.build_prompt(args)
         self.assertIn("called back into Claude Code", prompt)
-        ack_text = cli.build_acknowledgement_text("ltc ack --queue-dir /q --id abc", agent="claude")
+        ack_text = cli.build_acknowledgement_text("atc ack --queue-dir /q --id abc", agent="claude")
         self.assertIn("Claude Code headless", ack_text)
-        self.assertIn("ltc ack --queue-dir /q --id abc", ack_text)
+        self.assertIn("atc ack --queue-dir /q --id abc", ack_text)
 
     def test_desktop_delivery_skipped_for_claude_requests(self) -> None:
         payload = {
@@ -1068,7 +1068,7 @@ class CliTests(unittest.TestCase):
             fake_claude = self._fake_codex(Path(tmp), ack=True, queue=root, request_id="claude-acked")
             args = argparse.Namespace(retries=3, retry_delay=0.0, retry_backoff=2.0)
 
-            with mock.patch.dict(os.environ, {"LONG_TASK_WAKEUP_CLAUDE_BIN": str(fake_claude)}):
+            with mock.patch.dict(os.environ, {"ATC_CLAUDE_BIN": str(fake_claude)}):
                 self.assertTrue(cli.process_one(root, args))
 
             deadline = time.monotonic() + 5.0
@@ -1092,13 +1092,13 @@ class CliTests(unittest.TestCase):
             ):
                 self.assertEqual(cli.install_skill(args), 0)
 
-            codex_skill = codex_home / "skills" / "long-task-callback"
-            claude_skill = claude_home / "skills" / "long-task-callback"
+            codex_skill = codex_home / "skills" / "agent-atc"
+            claude_skill = claude_home / "skills" / "agent-atc"
             self.assertTrue((codex_skill / "SKILL.md").exists())
             self.assertTrue((codex_skill / "agents" / "openai.yaml").exists())
             self.assertTrue((claude_skill / "SKILL.md").exists())
             self.assertFalse((claude_skill / "agents").exists())
-            self.assertIn("ltc wait", (claude_skill / "SKILL.md").read_text(encoding="utf-8"))
+            self.assertIn("atc wait", (claude_skill / "SKILL.md").read_text(encoding="utf-8"))
             self.assertEqual(
                 (claude_skill / "REFERENCE.md").read_text(encoding="utf-8"),
                 (codex_skill / "SKILL.md").read_text(encoding="utf-8"),
@@ -1117,7 +1117,7 @@ class CliTests(unittest.TestCase):
                 self.assertEqual(cli.install_skill(args), 0)
 
             self.assertFalse((codex_home / "skills").exists())
-            self.assertTrue((claude_home / "skills" / "long-task-callback" / "SKILL.md").exists())
+            self.assertTrue((claude_home / "skills" / "agent-atc" / "SKILL.md").exists())
 
     def test_install_skill_all_keeps_each_agents_delivery_to_itself(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -1125,15 +1125,15 @@ class CliTests(unittest.TestCase):
                      "PI_CODING_AGENT_DIR": Path(tmp) / "pi"}
             with mock.patch.dict(os.environ, {name: str(path) for name, path in homes.items()}, clear=False):
                 self.assertEqual(cli.install_skill(argparse.Namespace(path=None, target="all", force=False)), 0)
-            skills = {name: (path / "skills" / "long-task-callback") for name, path in homes.items()}
+            skills = {name: (path / "skills" / "agent-atc") for name, path in homes.items()}
             codex = (skills["CODEX_HOME"] / "SKILL.md").read_text(encoding="utf-8")
             claude = (skills["CLAUDE_CONFIG_DIR"] / "SKILL.md").read_text(encoding="utf-8")
             pi = (skills["PI_CODING_AGENT_DIR"] / "SKILL.md").read_text(encoding="utf-8")
             self.assertIn("steer", pi)
-            self.assertNotIn("ltc wait", pi)
+            self.assertNotIn("atc wait", pi)
             self.assertNotIn("steer", claude)
             for text in (codex,):
-                self.assertNotIn("ltc wait", text)
+                self.assertNotIn("atc wait", text)
                 self.assertNotIn("install-pi-extension", text)
             self.assertEqual((skills["PI_CODING_AGENT_DIR"] / "REFERENCE.md").read_text(encoding="utf-8"), codex)
             self.assertFalse((skills["PI_CODING_AGENT_DIR"] / "agents").exists())
@@ -1145,7 +1145,7 @@ class CliTests(unittest.TestCase):
             fake_codex = self._fake_codex(Path(tmp), ack=False, queue=root, request_id="missing-ack")
             args = argparse.Namespace(retries=3, retry_delay=0.0, retry_backoff=2.0)
 
-            with mock.patch.dict(os.environ, {"CODEX_LONG_TASK_WAKEUP_CODEX_BIN": str(fake_codex)}):
+            with mock.patch.dict(os.environ, {"ATC_CODEX_BIN": str(fake_codex)}):
                 self.assertTrue(cli.process_one(root, args))
 
             pending = root / "pending" / "missing-ack.json"
@@ -1162,7 +1162,7 @@ class CliTests(unittest.TestCase):
             fake_codex = self._fake_codex(Path(tmp), ack=True, queue=root, request_id="acked")
             args = argparse.Namespace(retries=3, retry_delay=0.0, retry_backoff=2.0)
 
-            with mock.patch.dict(os.environ, {"CODEX_LONG_TASK_WAKEUP_CODEX_BIN": str(fake_codex)}):
+            with mock.patch.dict(os.environ, {"ATC_CODEX_BIN": str(fake_codex)}):
                 self.assertTrue(cli.process_one(root, args))
 
             deadline = time.monotonic() + 5.0
@@ -1478,7 +1478,7 @@ class CliTests(unittest.TestCase):
             args = argparse.Namespace(retries=3, retry_delay=0.0, retry_backoff=2.0, resume_timeout=10.0)
 
             started = time.monotonic()
-            with mock.patch.dict(os.environ, {"CODEX_LONG_TASK_WAKEUP_CODEX_BIN": str(fake_codex)}):
+            with mock.patch.dict(os.environ, {"ATC_CODEX_BIN": str(fake_codex)}):
                 self.assertTrue(cli.process_one(root, args))
             self.assertLess(time.monotonic() - started, 2.0)
             self.assertTrue(cli.request_path(root, "running", "a-running").exists())
@@ -1660,7 +1660,7 @@ class CliTests(unittest.TestCase):
             with mock.patch.dict(
                 os.environ,
                 {
-                    "CODEX_LONG_TASK_WAKEUP_CODEX_BIN": str(fake_codex),
+                    "ATC_CODEX_BIN": str(fake_codex),
                     cli.TARGET_LOCK_DIR_ENV: str(Path(tmp) / "global-target-locks"),
                 },
             ):
@@ -1713,11 +1713,11 @@ class CliTests(unittest.TestCase):
             )
             env = os.environ.copy()
             env["PYTHONPATH"] = str(Path(cli.__file__).parents[1])
-            env["CODEX_LONG_TASK_WAKEUP_CODEX_BIN"] = str(fake_codex)
+            env["ATC_CODEX_BIN"] = str(fake_codex)
             daemon_command = [
                 sys.executable,
                 "-m",
-                "long_task_callback",
+                "agent_atc",
                 "daemon",
                 "--queue-dir",
                 str(root),
@@ -1789,7 +1789,7 @@ class CliTests(unittest.TestCase):
             args = argparse.Namespace(retries=3, retry_delay=0.0, retry_backoff=2.0, resume_timeout=10.0)
             descendant_pid = None
             try:
-                with mock.patch.dict(os.environ, {"CODEX_LONG_TASK_WAKEUP_CODEX_BIN": str(fake_codex)}):
+                with mock.patch.dict(os.environ, {"ATC_CODEX_BIN": str(fake_codex)}):
                     self.assertTrue(cli.process_one(root, args))
                 descendant_pid = int(descendant_pid_path.read_text(encoding="utf-8"))
                 os.kill(descendant_pid, 0)
@@ -1805,7 +1805,7 @@ class CliTests(unittest.TestCase):
     def test_setup_installs_skill_then_systemd(self) -> None:
         args = argparse.Namespace(
             skill_path="/tmp/skills",
-            name="codex-long-task-wakeup",
+            name="agent-atc",
             queue_dir="/tmp/queue",
             interval=2.0,
             retries=3,
@@ -1887,23 +1887,23 @@ class CliTests(unittest.TestCase):
 
         auth_status.assert_not_called()
         self.assertIn("setup will continue", errors.getvalue())
-        self.assertIn("ltc agent claude", errors.getvalue())
+        self.assertIn("atc agent claude", errors.getvalue())
 
     def test_state_home_is_independent_of_the_codex_profile(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            with mock.patch.dict(os.environ, {"LTC_HOME": str(Path(tmp) / "ltc"), "CODEX_HOME": str(Path(tmp) / "codex")}):
-                self.assertEqual(cli.daemon_state_dir(), Path(tmp) / "ltc")
-                self.assertEqual(cli.queue_dir(), Path(tmp) / "ltc" / "queue")
-                self.assertEqual(cli.callback_hook_path(), Path(tmp) / "ltc" / "callback-hook.md")
-            environment = {name: value for name, value in os.environ.items() if name != "LTC_HOME"}
+            with mock.patch.dict(os.environ, {"ATC_HOME": str(Path(tmp) / "atc"), "CODEX_HOME": str(Path(tmp) / "codex")}):
+                self.assertEqual(cli.daemon_state_dir(), Path(tmp) / "atc")
+                self.assertEqual(cli.queue_dir(), Path(tmp) / "atc" / "queue")
+                self.assertEqual(cli.callback_hook_path(), Path(tmp) / "atc" / "callback-hook.md")
+            environment = {name: value for name, value in os.environ.items() if name != "ATC_HOME"}
             environment.update(HOME=tmp, USERPROFILE=tmp)
             with mock.patch.dict(os.environ, environment, clear=True):
-                self.assertEqual(cli.daemon_state_dir(), Path(tmp) / ".ltc")
+                self.assertEqual(cli.daemon_state_dir(), Path(tmp) / ".atc")
 
     def test_callback_hook_file_is_created_once_and_preserves_user_content(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            home = Path(tmp) / "ltc-home"
-            with mock.patch.dict(os.environ, {"LTC_HOME": str(home)}):
+            home = Path(tmp) / "atc-home"
+            with mock.patch.dict(os.environ, {"ATC_HOME": str(home)}):
                 path = cli.ensure_callback_hook_file()
                 self.assertEqual(path, home / "callback-hook.md")
                 self.assertEqual(path.read_text(encoding="utf-8"), "")
@@ -1917,7 +1917,7 @@ class CliTests(unittest.TestCase):
             path = Path(tmp) / "callback-hook.md"
             path.write_text("First instruction.\n", encoding="utf-8")
             first = cli.attach_callback_hook("wake up", path)
-            self.assertEqual(first, "wake up\n\n[long-task-callback-user-hook]\nFirst instruction.")
+            self.assertEqual(first, "wake up\n\n[atc-user-hook]\nFirst instruction.")
 
             path.write_text("Second instruction.\n", encoding="utf-8")
             second = cli.attach_callback_hook("wake up", path)
@@ -1946,7 +1946,7 @@ class CliTests(unittest.TestCase):
                 encoding="utf-8",
             )
             args = argparse.Namespace(
-                name="codex-long-task-wakeup",
+                name="agent-atc",
                 queue_dir="/tmp/queue",
                 interval=2.0,
                 retries=3,
@@ -1964,9 +1964,9 @@ class CliTests(unittest.TestCase):
                 now=False,
                 print=False,
             )
-            home = Path(tmp) / "ltc-home"
+            home = Path(tmp) / "atc-home"
             with (
-                mock.patch.dict(os.environ, {"LTC_HOME": str(home)}, clear=False),
+                mock.patch.dict(os.environ, {"ATC_HOME": str(home)}, clear=False),
                 mock.patch.object(cli, "systemd_user_dir", return_value=Path(tmp) / "systemd"),
                 mock.patch.object(cli.shutil, "which", return_value=None),
             ):
@@ -1978,7 +1978,7 @@ class CliTests(unittest.TestCase):
                 "no_proxy": "localhost,127.0.0.1",
             })
             assert_private_file(self, proxy_file)
-            service = (Path(tmp) / "systemd" / "codex-long-task-wakeup.service").read_text(encoding="utf-8")
+            service = (Path(tmp) / "systemd" / "agent-atc.service").read_text(encoding="utf-8")
             self.assertIn(f"EnvironmentFile=-{proxy_file}", service)
             self.assertIn("ExecReload=/bin/kill -HUP $MAINPID", service)
             self.assertNotIn("proxy.example", service)
@@ -1990,7 +1990,7 @@ class CliTests(unittest.TestCase):
             self._write_request(root, "inflight", tmp)
             cli.move_request(root / "pending" / "inflight.json", root / "running")
             args = argparse.Namespace(
-                name="codex-long-task-wakeup",
+                name="agent-atc",
                 queue_dir=str(root),
                 interval=2.0,
                 retries=3,
@@ -2009,14 +2009,14 @@ class CliTests(unittest.TestCase):
                 print=False,
             )
             with (
-                mock.patch.dict(os.environ, {"LTC_HOME": str(Path(tmp) / "ltc-home")}, clear=False),
+                mock.patch.dict(os.environ, {"ATC_HOME": str(Path(tmp) / "atc-home")}, clear=False),
                 mock.patch.object(cli, "systemd_user_dir", return_value=Path(tmp) / "systemd"),
                 mock.patch.object(cli.shutil, "which", side_effect=lambda command: "/usr/bin/systemctl" if command == "systemctl" else None),
                 mock.patch.object(cli, "run_systemctl", return_value=0) as run_systemctl,
             ):
                 self.assertEqual(cli.install_systemd(args), 0)
 
-            self.assertEqual(run_systemctl.call_args_list, [mock.call(["daemon-reload"]), mock.call(["enable", "codex-long-task-wakeup.service"])])
+            self.assertEqual(run_systemctl.call_args_list, [mock.call(["daemon-reload"]), mock.call(["enable", "agent-atc.service"])])
 
     def test_install_systemd_reloads_supported_daemon_while_delivery_is_running(self) -> None:
         with tempfile.TemporaryDirectory() as tmp, mock.patch.object(
@@ -2025,7 +2025,7 @@ class CliTests(unittest.TestCase):
             root = Path(tmp) / "queue"
             self._write_request(root, "inflight", tmp)
             cli.move_request(root / "pending" / "inflight.json", root / "running")
-            home = Path(tmp) / "ltc-home"
+            home = Path(tmp) / "atc-home"
             runtime = home / "daemon-runtime.json"
             runtime.parent.mkdir(parents=True)
             runtime.write_text(
@@ -2035,7 +2035,7 @@ class CliTests(unittest.TestCase):
                 encoding="utf-8",
             )
             args = argparse.Namespace(
-                name="codex-long-task-wakeup",
+                name="agent-atc",
                 queue_dir=str(root),
                 interval=2.0,
                 retries=3,
@@ -2054,7 +2054,7 @@ class CliTests(unittest.TestCase):
                 print=False,
             )
             with (
-                mock.patch.dict(os.environ, {"LTC_HOME": str(home)}, clear=False),
+                mock.patch.dict(os.environ, {"ATC_HOME": str(home)}, clear=False),
                 mock.patch.object(cli, "systemd_user_dir", return_value=Path(tmp) / "systemd"),
                 mock.patch.object(cli.shutil, "which", side_effect=lambda command: "/usr/bin/systemctl" if command == "systemctl" else None),
                 mock.patch.object(cli, "run_systemctl", return_value=0) as run_systemctl,
@@ -2065,30 +2065,30 @@ class CliTests(unittest.TestCase):
                 run_systemctl.call_args_list,
                 [
                     mock.call(["daemon-reload"]),
-                    mock.call(["enable", "codex-long-task-wakeup.service"]),
-                    mock.call(["reload", "codex-long-task-wakeup.service"]),
+                    mock.call(["enable", "agent-atc.service"]),
+                    mock.call(["reload", "agent-atc.service"]),
                 ],
             )
 
     def test_supervisor_config_does_not_embed_proxy_credentials(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            home = Path(tmp) / "ltc-home"
+            home = Path(tmp) / "atc-home"
             proxy = home / "service-proxy.env"
             proxy.parent.mkdir(parents=True)
             proxy.write_text("HTTPS_PROXY=https://user:secret@proxy.example:8443\n", encoding="utf-8")
             args = argparse.Namespace(
-                name="codex-long-task-wakeup",
+                name="agent-atc",
                 queue_dir="/tmp/queue",
                 interval=2.0,
                 retries=3,
                 retry_delay=30.0,
                 retry_backoff=2.0,
                 resume_timeout=3600.0,
-                exec_start="/usr/local/bin/codex-long-task-wakeup",
+                exec_start="/usr/local/bin/agent-atc",
                 codex_bin="/usr/local/bin/codex",
                 path="/bin",
             )
-            with mock.patch.dict(os.environ, {"LTC_HOME": str(home)}, clear=False):
+            with mock.patch.dict(os.environ, {"ATC_HOME": str(home)}, clear=False):
                 text = cli.supervisor_config_text(args)
 
             self.assertIn(f"{cli.PROXY_ENV_FILE_ENV}=", text)
@@ -2104,13 +2104,13 @@ class CliTests(unittest.TestCase):
 
     def test_clear_proxy_removes_persisted_proxy_file(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            home = Path(tmp) / "ltc-home"
+            home = Path(tmp) / "atc-home"
             proxy = home / "service-proxy.env"
             proxy.parent.mkdir(parents=True)
             proxy.write_text("HTTP_PROXY=http://proxy.example:8080\n", encoding="utf-8")
             args = argparse.Namespace(proxy_env_file=None, inherit_proxy=False, clear_proxy=True)
 
-            with mock.patch.dict(os.environ, {"LTC_HOME": str(home)}, clear=False):
+            with mock.patch.dict(os.environ, {"ATC_HOME": str(home)}, clear=False):
                 self.assertIsNone(cli.configure_proxy_environment(args))
 
             self.assertFalse(proxy.exists())
@@ -2180,7 +2180,7 @@ class CliTests(unittest.TestCase):
     def test_install_systemd_starts_supervisor_in_container(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             args = argparse.Namespace(
-                name="codex-long-task-wakeup",
+                name="agent-atc",
                 queue_dir="/tmp/queue",
                 interval=2.0,
                 retries=3,
@@ -2204,13 +2204,13 @@ class CliTests(unittest.TestCase):
             ):
                 self.assertEqual(cli.install_systemd(args), 0)
 
-            self.assertTrue((Path(tmp) / "codex-long-task-wakeup.service").exists())
+            self.assertTrue((Path(tmp) / "agent-atc.service").exists())
             install_supervisor.assert_called_once()
 
     def test_install_systemd_starts_standalone_without_supervisor(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             args = argparse.Namespace(
-                name="codex-long-task-wakeup",
+                name="agent-atc",
                 queue_dir="/tmp/queue",
                 interval=2.0,
                 retries=3,
@@ -2234,13 +2234,13 @@ class CliTests(unittest.TestCase):
             ):
                 self.assertEqual(cli.install_systemd(args), 0)
 
-            self.assertTrue((Path(tmp) / "codex-long-task-wakeup.service").exists())
+            self.assertTrue((Path(tmp) / "agent-atc.service").exists())
             start_standalone.assert_called_once()
 
     def test_install_systemd_falls_back_when_user_bus_is_unavailable(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             args = argparse.Namespace(
-                name="codex-long-task-wakeup",
+                name="agent-atc",
                 queue_dir="/tmp/queue",
                 interval=2.0,
                 retries=3,
@@ -2268,20 +2268,20 @@ class CliTests(unittest.TestCase):
 
     def test_supervisor_config_uses_autorestart(self) -> None:
         args = argparse.Namespace(
-            name="codex-long-task-wakeup",
+            name="agent-atc",
             queue_dir="/tmp/queue",
             interval=2.0,
             retries=3,
             retry_delay=30.0,
             retry_backoff=2.0,
-            exec_start="/usr/local/bin/codex-long-task-wakeup",
+            exec_start="/usr/local/bin/agent-atc",
             codex_bin="/usr/local/bin/codex",
             path="/bin",
         )
 
         text = cli.supervisor_config_text(args)
 
-        self.assertIn("[program:codex-long-task-wakeup]", text)
+        self.assertIn("[program:agent-atc]", text)
         self.assertIn("autostart=true", text)
         self.assertIn("autorestart=true", text)
         self.assertIn("--queue-dir " + shlex.quote(str(Path("/tmp/queue"))), text)
@@ -2338,7 +2338,7 @@ class CliTests(unittest.TestCase):
                 "created_at": 1.0,
                 "cwd": tmp,
                 "target": {"kind": "session", "value": "thread-1"},
-                "prompt": "[long-task-callback]\nTask: train model\n",
+                "prompt": "[atc]\nTask: train model\n",
             }
             (root / "pending" / "pending-id.json").write_text(json.dumps(request), encoding="utf-8")
             args = argparse.Namespace(queue_dir=str(root), state=None, limit=5, quiet_empty=False, shell_hook=True)
@@ -2362,7 +2362,7 @@ class CliTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             rc_file = Path(tmp) / ".bashrc"
             rc_file.write_text("export EXISTING=1\n", encoding="utf-8")
-            args = argparse.Namespace(rc_file=str(rc_file), command="/opt/bin/codex-long-task-wakeup")
+            args = argparse.Namespace(rc_file=str(rc_file), command="/opt/bin/agent-atc")
 
             self.assertEqual(cli.install_shell_hook(args), 0)
             self.assertEqual(cli.install_shell_hook(args), 0)
@@ -2371,7 +2371,7 @@ class CliTests(unittest.TestCase):
             self.assertIn("export EXISTING=1", rendered)
             self.assertEqual(rendered.count(cli.SHELL_HOOK_BEGIN), 1)
             self.assertEqual(rendered.count(cli.SHELL_HOOK_END), 1)
-            self.assertIn("timeout 2s /opt/bin/codex-long-task-wakeup status", rendered)
+            self.assertIn("timeout 2s /opt/bin/agent-atc status", rendered)
 
     def test_completed_goal_is_terminal_and_suppresses_reminders(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -2631,7 +2631,7 @@ class CliTests(unittest.TestCase):
 
     def test_blocked_goal_email_is_configured_and_sent_once_after_delay(self) -> None:
         with tempfile.TemporaryDirectory() as tmp, mock.patch.dict(
-            os.environ, {"CODEX_LONG_TASK_WAKEUP_BLOCKED_EMAIL_TO": "owner@example.test"}, clear=False
+            os.environ, {"ATC_BLOCKED_EMAIL_TO": "owner@example.test"}, clear=False
         ):
             root = Path(tmp) / "queue"
             start_args = argparse.Namespace(
@@ -2663,7 +2663,7 @@ class CliTests(unittest.TestCase):
 
     def test_blocked_goal_email_requires_one_recipient_and_stops_after_three_failures(self) -> None:
         with tempfile.TemporaryDirectory() as tmp, mock.patch.dict(
-            os.environ, {"CODEX_LONG_TASK_WAKEUP_BLOCKED_EMAIL_TO": "owner@example.test"}, clear=False
+            os.environ, {"ATC_BLOCKED_EMAIL_TO": "owner@example.test"}, clear=False
         ):
             root = Path(tmp) / "queue"
             start_args = argparse.Namespace(
@@ -3019,7 +3019,7 @@ class CliTests(unittest.TestCase):
             popen.assert_called_once()
             process.communicate.assert_called_once_with(
                 input=(
-                    "wake up\n\n[long-task-callback-user-hook]\n"
+                    "wake up\n\n[atc-user-hook]\n"
                     "Use the custom callback policy."
                 ),
                 timeout=1.0,
@@ -3274,7 +3274,7 @@ class CliTests(unittest.TestCase):
 
                 payload = {{
                     "prompt": sys.stdin.read(),
-                    "sentinel": os.environ.get("LTC_TEST_SENTINEL"),
+                    "sentinel": os.environ.get("ATC_TEST_SENTINEL"),
                     "api_key_present": bool(os.environ.get("ANTHROPIC_API_KEY")),
                     "base_url": os.environ.get("ANTHROPIC_BASE_URL"),
                     "config_dir": os.environ.get("CLAUDE_CONFIG_DIR"),
@@ -3307,7 +3307,7 @@ class CliTests(unittest.TestCase):
         src_path = Path(cli.__file__).parents[1]
         ack_code = (
             f"os.environ['PYTHONPATH'] = {str(src_path)!r} + os.pathsep + os.environ.get('PYTHONPATH', ''); "
-            "subprocess.run([sys.executable, '-m', 'long_task_callback', 'ack', "
+            "subprocess.run([sys.executable, '-m', 'agent_atc', 'ack', "
             f"'--queue-dir', {str(queue)!r}, '--id', {request_id!r}], check=True)"
             if ack
             else "pass"

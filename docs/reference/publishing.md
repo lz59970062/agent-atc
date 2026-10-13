@@ -6,7 +6,7 @@
 
 | 平台 | 仓库中的配置 | 接入后的更新方式 |
 | --- | --- | --- |
-| [GitHub Pages](https://lz59970062.github.io/long-task-wakeup/) | `.github/workflows/docs.yml` | 已启用；提交到 `main` 后自动更新 |
+| [GitHub Pages](https://lz59970062.github.io/agent-atc/) | `.github/workflows/docs.yml` | 已启用；提交到 `main` 后自动更新 |
 | Read the Docs | `.readthedocs.yaml` | 导入仓库后，由 webhook 触发构建 |
 | Cloudflare Pages | `wrangler.toml` 和下方构建参数 | 连接 GitHub 仓库后自动构建 |
 | GitLab Pages | `.gitlab-ci.yml`、可选 GitHub 同步任务 | GitHub 推送源文件到 GitLab，再由 GitLab CI 发布 |
@@ -16,13 +16,13 @@ GitHub Pages 已上线。其他四个平台的配置和内容导出已准备好�
 
 ## GitHub Pages
 
-推送文档到 `main` 后，在仓库 [Actions](https://github.com/lz59970062/long-task-wakeup/actions/workflows/docs.yml) 查看 `Documentation` 工作流。它先构建，再更新 `gh-pages` 分支并请求 Pages 发布。
+推送文档到 `main` 后，在仓库 [Actions](https://github.com/lz59970062/agent-atc/actions/workflows/docs.yml) 查看 `Documentation` 工作流。它先构建，再更新 `gh-pages` 分支并请求 Pages 发布。
 
 中文首页位于站点根路径，英文位于 `en/`。顶部语言菜单切换到当前页面的另一种语言。
 
 ## Read the Docs
 
-1. 登录 [Read the Docs](https://readthedocs.org/)，导入 `lz59970062/long-task-wakeup`。
+1. 登录 [Read the Docs](https://readthedocs.org/)，导入 `lz59970062/agent-atc`。
 2. 使用 `main` 分支和仓库根目录的 `.readthedocs.yaml`，项目语言选择简体中文。
 3. 触发第一次构建，打开项目给出的公开地址，检查语言菜单。
 4. 在项目的集成设置中确认 GitHub webhook 已连接，后续提交即可自动更新。
@@ -41,7 +41,7 @@ GitHub Pages 已上线。其他四个平台的配置和内容导出已准备好�
 | Build output directory | `site` |
 | 环境变量 | `PYTHON_VERSION=3.12` |
 
-仓库中的 `wrangler.toml` 也指定了 `site` 输出目录。站点地址从 `CF_PAGES_URL` 读取。使用自定义域名时，将 `LTC_DOCS_SITE_URL` 设置为完整公开地址。流程见 [Cloudflare 的 MkDocs 部署指南](https://developers.cloudflare.com/pages/framework-guides/deploy-an-mkdocs-site/)。
+仓库中的 `wrangler.toml` 也指定了 `site` 输出目录。站点地址从 `CF_PAGES_URL` 读取。使用自定义域名时，将 `ATC_DOCS_SITE_URL` 设置为完整公开地址。流程见 [Cloudflare 的 MkDocs 部署指南](https://developers.cloudflare.com/pages/framework-guides/deploy-an-mkdocs-site/)。
 
 ## GitLab Pages
 
@@ -79,4 +79,4 @@ python scripts/docs_sync.py export
 
 先确认 GitHub `Documentation` 构建成功，再打开目标平台的新页面。切换语言，检查代码块、站内链接和搜索。GitBook 的 `sync-manifest.json` 中记录源提交，可以和这次 GitHub 提交核对。
 
-`LTC_DOCS_SITE_URL` 可覆盖自动识别的地址，适合自定义域名。值使用站点根目录的完整 URL，并保留末尾的 `/`。
+`ATC_DOCS_SITE_URL` 可覆盖自动识别的地址，适合自定义域名。值使用站点根目录的完整 URL，并保留末尾的 `/`。

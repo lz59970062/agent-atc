@@ -17,13 +17,13 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from long_task_callback import callbacks, cli
+from agent_atc import callbacks, cli
 from test_cli import assert_private_file
 
 
 class CompactCallbackTests(unittest.TestCase):
     def setUp(self) -> None:
-        temporary = tempfile.TemporaryDirectory(prefix="ltc callback ")
+        temporary = tempfile.TemporaryDirectory(prefix="atc callback ")
         self.addCleanup(temporary.cleanup)
         self.directory = Path(temporary.name)
         self.root = self.directory / "queue's data"
@@ -95,7 +95,7 @@ class CompactCallbackTests(unittest.TestCase):
                 self.assertNotIn("Duration:", prepared["prompt_compact"])
 
     def test_ack_line_can_be_executed_with_spaces_and_quotes_without_wrong_queue(self) -> None:
-        launcher = "/opt/LTC user's tools/ltc"
+        launcher = "/opt/ATC user's tools/atc"
         with mock.patch.object(cli, "console_script_path", return_value=launcher):
             prepared = self.prepare("ack-correct-queue")
         lines = prepared["prompt_compact"].splitlines()

@@ -11,7 +11,7 @@ an installed CLI, or an idle Agent turn does not prove that connection exists.
 | --- | --- | --- |
 | `--callback-mode auto` (default) | Recognizes the current `Codex Desktop` origin marker and selects `desktop`; otherwise selects `cli` | If an integration omits the marker, select the mode explicitly. Historical session `source` is not current ownership. |
 | `--callback-mode cli` | Uses the existing local App Server when available, otherwise the bound Agent's CLI resume | Real original-session receipt/ACK must be verified for that CLI configuration; an unrelated Core may still own the session. |
-| `--callback-mode desktop` | Requires an explicit shared Core; never falls back to an independent CLI writer | Desktop and LTC must access the same original conversation and its normal tools/approvals. |
+| `--callback-mode desktop` | Requires an explicit shared Core; never falls back to an independent CLI writer | Desktop and ATC must access the same original conversation and its normal tools/approvals. |
 | `--callback-mode manual` | Runs the workload and saves a callback for later inspection; never automatically starts an Agent | User or original Agent reads results and ACKs receipt. A file by itself does not wake the Agent. |
 
 PI Agent callbacks always use CLI resume: PI has no shared-Core App Server, so
@@ -33,27 +33,27 @@ environment. Legacy records retain their prior routing behavior.
 
 ## Desktop launcher installation
 
-On Mac and Windows, standard `ltc setup` generates a launcher for the current
-profile and installed Python runtime. Mac generates `Start LTC Desktop.command`;
-Windows generates `Start LTC Desktop.cmd` and `Start LTC Desktop.ps1`, with local
+On Mac and Windows, standard `atc setup` generates a launcher for the current
+profile and installed Python runtime. Mac generates `Start ATC Desktop.command`;
+Windows generates `Start ATC Desktop.cmd` and `Start ATC Desktop.ps1`, with local
 settings in `desktop.json`. The implementation and script resources ship in the
 wheel; neither platform requires a source checkout or an `examples` script.
 Use `--no-desktop-launcher` to skip this setup step on either platform.
 
-The shared commands are `ltc desktop prepare`, `ltc desktop launch` and
-`ltc desktop status`. The Desktop step of setup and `desktop prepare` only
+The shared commands are `atc desktop prepare`, `atc desktop launch` and
+`atc desktop status`. The Desktop step of setup and `desktop prepare` only
 generate configuration and launchers; they do not start or stop Desktop.
 Activation remains an explicit launch after
 closing the existing Desktop. On Windows, direct launch is the default;
-`ltc setup --desktop-launch-mode package-context` or
-`ltc desktop prepare --launch-mode package-context --force` saves the explicit
+`atc setup --desktop-launch-mode package-context` or
+`atc desktop prepare --launch-mode package-context --force` saves the explicit
 experimental alternative. A failed direct launch does not select it automatically.
-`ltc desktop launch --check-only` retains the Windows suspended process-creation
+`atc desktop launch --check-only` retains the Windows suspended process-creation
 probe, whose success alone does not prove bridge or callback delivery.
 
 ## Readiness and recovery
 
-`ltc doctor` reports `checks.callback` and a separate `callback` object:
+`atc doctor` reports `checks.callback` and a separate `callback` object:
 
 - `owner_reachable`: a read-only query observed the bound thread in this Core.
 - `unverified`: CLI delivery may be available, but no original-session delivery
@@ -78,10 +78,10 @@ without consuming its retry budget; it does not interrupt that turn.
 After inspecting and repairing the connection, requeue the same callback:
 
 ```bash
-ltc retry --id <callback-id> --callback-mode desktop
+atc retry --id <callback-id> --callback-mode desktop
 # Or explicitly put a failed result into the manual inbox:
-ltc retry --id <callback-id> --callback-mode manual
-ltc status --state pending --state failed
+atc retry --id <callback-id> --callback-mode manual
+atc status --state pending --state failed
 ```
 
 `retry` preserves the ID, original session, prompt and workload artifacts. It

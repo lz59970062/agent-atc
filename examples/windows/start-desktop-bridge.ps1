@@ -1,4 +1,4 @@
-<# Compatibility entry point; launcher resources ship inside the LTC package. #>
+<# Compatibility entry point; launcher resources ship inside the ATC package. #>
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)][string]$Python,
@@ -11,8 +11,8 @@ param(
     [switch]$CheckOnly
 )
 $ErrorActionPreference = 'Stop'
-$resource = Join-Path (Split-Path -Parent $MyInvocation.MyCommand.Path) '..\..\src\long_task_callback\desktop_windows_assets\start-desktop-bridge.ps1'
+$resource = Join-Path (Split-Path -Parent $MyInvocation.MyCommand.Path) '..\..\src\agent_atc\desktop_windows_assets\start-desktop-bridge.ps1'
 if (-not (Test-Path -LiteralPath $resource -PathType Leaf)) {
-    throw 'The checkout launcher resource is missing. Use the installed ltc desktop launch command.'
+    throw 'The checkout launcher resource is missing. Use the installed atc desktop launch command.'
 }
 & $resource @PSBoundParameters

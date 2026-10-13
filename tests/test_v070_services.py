@@ -10,8 +10,8 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from long_task_callback import cli
-from long_task_callback.platforms import SystemdUserBackend
+from agent_atc import cli
+from agent_atc.platforms import SystemdUserBackend
 
 
 class DaemonServiceSelectionTests(unittest.TestCase):
@@ -26,7 +26,7 @@ class DaemonServiceSelectionTests(unittest.TestCase):
     def arguments(self, service="auto", *, now=True):
         return argparse.Namespace(
             backend="screen", service=service, skill_path=None, skill_target="both",
-            force=False, name="ltc-container-test", queue_dir=str(self.directory / "queue"),
+            force=False, name="atc-container-test", queue_dir=str(self.directory / "queue"),
             interval=2.0, retries=3, retry_delay=30.0, retry_backoff=2.0,
             resume_timeout=60.0, restart_sec=2.0, exec_start=None, codex_bin=None,
             claude_bin=None, path=None, proxy_env_file=None, inherit_proxy=False,
@@ -97,7 +97,7 @@ class DaemonServiceSelectionTests(unittest.TestCase):
     def test_parser_exposes_all_service_choices_without_starting_anything(self) -> None:
         for service in ("auto", "systemd", "supervisor", "standalone"):
             with self.subTest(service=service), mock.patch.object(
-                sys, "argv", ["ltc", "setup", "--service", service]
+                sys, "argv", ["atc", "setup", "--service", service]
             ), mock.patch.object(cli, "setup", return_value=0) as setup:
                 self.assertEqual(cli.main(), 0)
                 self.assertEqual(setup.call_args.args[0].service, service)
@@ -107,7 +107,7 @@ class DaemonServiceSelectionTests(unittest.TestCase):
             cli.select_daemon_service(self.arguments("unknown-future-service"))
 
     def test_keep_skill_cli_option_is_forwarded_to_skill_installer(self) -> None:
-        with mock.patch.object(sys, "argv", ["ltc", "setup", "--keep-skill", "--force"]), mock.patch.object(
+        with mock.patch.object(sys, "argv", ["atc", "setup", "--keep-skill", "--force"]), mock.patch.object(
             cli, "setup", return_value=0
         ) as setup:
             self.assertEqual(cli.main(), 0)
@@ -121,7 +121,7 @@ class DaemonServiceSelectionTests(unittest.TestCase):
         self.assertTrue(forwarded.force)
 
     def test_callback_only_setup_can_start_standalone_without_any_task_backend(self) -> None:
-        with mock.patch.object(sys, "argv", ["ltc", "setup", "--callback-only"]), mock.patch.object(
+        with mock.patch.object(sys, "argv", ["atc", "setup", "--callback-only"]), mock.patch.object(
             cli, "setup", return_value=0
         ) as setup:
             self.assertEqual(cli.main(), 0)
@@ -154,7 +154,7 @@ class DaemonServiceSelectionTests(unittest.TestCase):
             cli, "ensure_callback_hook_file"
         ), mock.patch.object(cli, "report_claude_agent_readiness"), mock.patch.object(
             cli, "configure_proxy_environment"
-        ), mock.patch.object(cli, "systemd_service_text", return_value="[Service]\nExecStart=/fixture/ltc daemon\n"), mock.patch.object(
+        ), mock.patch.object(cli, "systemd_service_text", return_value="[Service]\nExecStart=/fixture/atc daemon\n"), mock.patch.object(
             cli, "run_systemctl", return_value=1
         ) as systemctl, mock.patch.object(cli, "start_standalone_daemon", return_value=0) as standalone, mock.patch.object(
             cli, "install_supervisor", return_value=0

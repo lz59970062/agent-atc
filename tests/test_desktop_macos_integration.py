@@ -12,28 +12,28 @@ import threading
 import time
 import unittest
 
-from long_task_callback import cli
-from long_task_callback.desktop_connection import load_unix_bridge_endpoint
+from agent_atc import cli
+from agent_atc.desktop_connection import load_unix_bridge_endpoint
 
 
-@unittest.skipUnless(sys.platform == "darwin" and os.environ.get("LTC_TEST_MACOS_DESKTOP") == "1",
+@unittest.skipUnless(sys.platform == "darwin" and os.environ.get("ATC_TEST_MACOS_DESKTOP") == "1",
                      "opt in to the installed macOS Core protocol probe")
 class MacDesktopIntegrationTests(unittest.TestCase):
     def test_two_clients_share_core_and_desktop_eof_stops_it(self):
-        core = os.environ.get("LTC_TEST_CODEX_BRIDGE_BIN", "/Applications/ChatGPT.app/Contents/Resources/codex")
-        with tempfile.TemporaryDirectory(prefix="ltc-mac-core-", dir="/tmp") as temporary:
+        core = os.environ.get("ATC_TEST_CODEX_BRIDGE_BIN", "/Applications/ChatGPT.app/Contents/Resources/codex")
+        with tempfile.TemporaryDirectory(prefix="atc-mac-core-", dir="/tmp") as temporary:
             root = Path(temporary)
             profile, metadata = root / "profile", root / "bridge/bridge.json"
             profile.mkdir()
-            env = dict(os.environ, CODEX_HOME=str(profile), LTC_HOME=str(profile / "ltc-home"), CODEX_LONG_TASK_WAKEUP_DESKTOP_REAL_CODEX=core,
-                       CODEX_LONG_TASK_WAKEUP_DESKTOP_BRIDGE_FILE=str(metadata))
+            env = dict(os.environ, CODEX_HOME=str(profile), ATC_HOME=str(profile / "atc-home"), ATC_DESKTOP_REAL_CODEX=core,
+                       ATC_DESKTOP_BRIDGE_FILE=str(metadata))
             for key in ("CODEX_THREAD_ID", "CODEX_SESSION_ID", "CODEX_APP_TOOLS_PIPE_PATH"):
                 env.pop(key, None)
             incoming = queue.Queue()
             callback = None
             with (root / "wrapper.log").open("w") as log:
-                wrapper = os.environ.get("LTC_TEST_DESKTOP_CORE_WRAPPER")
-                command = [wrapper] if wrapper else [sys.executable, "-m", "long_task_callback.desktop_core"]
+                wrapper = os.environ.get("ATC_TEST_DESKTOP_CORE_WRAPPER")
+                command = [wrapper] if wrapper else [sys.executable, "-m", "agent_atc.desktop_core"]
                 process = subprocess.Popen([*command, "-c", "features.code_mode_host=true", "app-server"],
                                            env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=log)
                 def read():
@@ -54,7 +54,7 @@ class MacDesktopIntegrationTests(unittest.TestCase):
                             self.assertNotIn("error", record)
                             return record["result"]
                 try:
-                    request("init", "initialize", {"clientInfo": {"name": "ltc-desktop-fixture", "version": "1"},
+                    request("init", "initialize", {"clientInfo": {"name": "atc-desktop-fixture", "version": "1"},
                                                    "capabilities": {"experimentalApi": True}})
                     process.stdin.write(b'{"method":"initialized","params":{}}\n')
                     process.stdin.flush()
@@ -64,7 +64,7 @@ class MacDesktopIntegrationTests(unittest.TestCase):
                     endpoint = load_unix_bridge_endpoint(metadata, profile)
                     callback = cli.AppServerConnection(endpoint, 5)
                     callback.connect()
-                    callback.request("initialize", {"clientInfo": {"name": "ltc-callback-fixture", "version": "1"},
+                    callback.request("initialize", {"clientInfo": {"name": "atc-callback-fixture", "version": "1"},
                                                     "capabilities": {"experimentalApi": True}})
                     callback.notify("initialized", {})
                     resumed = callback.request("thread/resume", {"threadId": thread, "excludeTurns": True})

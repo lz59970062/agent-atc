@@ -21,7 +21,7 @@
 直接执行回调中的完整命令，默认形式是：
 
 ```bash
-ltc ack --id <callback-id>
+atc ack --id <callback-id>
 ```
 
 使用自定义队列时，回调里的命令还会带上 `--queue-dir`。保留这个参数，就会写入对应队列的确认记录。
@@ -29,21 +29,21 @@ ltc ack --id <callback-id>
 ## 查看待处理回调
 
 ```bash
-ltc status
-ltc status --state pending --state failed
+atc status
+atc status --state pending --state failed
 ```
 
 `pending` 表示正在等待投递，`failed` 中的回调需要结合错误记录处理。在 `0.7.1` 预览版中，修复连接后可以重新投递已有回调：
 
 ```bash
-ltc retry --id <callback-id>
+atc retry --id <callback-id>
 ```
 
-这条命令再次发送已保存的结果。需要运行新的业务命令时，使用 `ltc run` 提交新任务。
+这条命令再次发送已保存的结果。需要运行新的业务命令时，使用 `atc run` 提交新任务。
 
 ## 添加自己的交接习惯
 
-编辑 `~/.ltc/callback-hook.md`，例如写入：
+编辑 `~/.atc/callback-hook.md`，例如写入：
 
 ```text
 读取结果后，先告诉我产物路径和主要结论，再继续下一步。
@@ -53,7 +53,7 @@ ltc retry --id <callback-id>
 设置每次回调都带上这段文字：
 
 ```bash
-ltc prompt-policy --user-every 1
+atc prompt-policy --user-every 1
 ```
 
-查看当前提醒间隔时运行 `ltc prompt-policy`。文件位置和环境变量见[配置参考](../reference/configuration.md)。
+查看当前提醒间隔时运行 `atc prompt-policy`。文件位置和环境变量见[配置参考](../reference/configuration.md)。

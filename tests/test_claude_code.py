@@ -13,7 +13,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from long_task_callback import claude_code, cli
+from agent_atc import claude_code, cli
 
 SRC = str(Path(__file__).resolve().parents[1] / "src")
 SESSION = "3f0c9a52-claude-session"
@@ -166,12 +166,12 @@ class SessionDirectoryTests(unittest.TestCase):
 
 class LiveWaiterTests(unittest.TestCase):
     def setUp(self) -> None:
-        temporary = tempfile.TemporaryDirectory(prefix="ltc live ")
+        temporary = tempfile.TemporaryDirectory(prefix="atc live ")
         self.addCleanup(temporary.cleanup)
         self.directory = Path(temporary.name)
         self.root = self.directory / "queue"
         self.environment = {
-            "CODEX_HOME": str(self.directory / "codex-home"), "LTC_HOME": str(self.directory / "codex-home" / "ltc-home"),
+            "CODEX_HOME": str(self.directory / "codex-home"), "ATC_HOME": str(self.directory / "codex-home" / "atc-home"),
             cli.TARGET_LOCK_DIR_ENV: str(self.directory / "target-locks"),
         }
         patcher = mock.patch.dict(os.environ, self.environment)
@@ -244,7 +244,7 @@ class LiveWaiterTests(unittest.TestCase):
         self.enqueue("cb-1")
         status, output, _ = self.run_wait()
         self.assertEqual(status, 0)
-        self.assertIn("[long-task-callback] cb-1", output)
+        self.assertIn("[atc] cb-1", output)
         self.assertIn("ack", output)
         self.assertNotIn("cb-other", output)
 
@@ -303,7 +303,7 @@ class LiveWaiterTests(unittest.TestCase):
         environment = dict(os.environ, PYTHONPATH=SRC + os.pathsep + os.environ.get("PYTHONPATH", ""),
                            CLAUDE_CODE_SESSION_ID=SESSION, CLAUDECODE="1")
         process = subprocess.Popen(
-            [sys.executable, "-m", "long_task_callback", "wait", "--queue-dir", str(self.root),
+            [sys.executable, "-m", "agent_atc", "wait", "--queue-dir", str(self.root),
              "--poll-interval", "0.05", "--timeout", "30"],
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=environment,
         )
@@ -323,12 +323,12 @@ class LiveWaiterTests(unittest.TestCase):
                 process.kill()
                 process.communicate()
         self.assertEqual(process.returncode, 0, stderr)
-        self.assertIn("[long-task-callback] cb-async", stdout)
+        self.assertIn("[atc] cb-async", stdout)
         self.assertFalse(claude_code.live_watcher_is_held(request))
 
 
 class ControlCommandTests(unittest.TestCase):
-    def test_ack_command_is_runnable_without_ltc_on_path(self) -> None:
+    def test_ack_command_is_runnable_without_atc_on_path(self) -> None:
         with mock.patch.object(cli, "console_script_path", return_value=None):
             command = cli.control_command("ack", "--id", "x")
         self.assertEqual(command.split()[:2], [sys.executable, str(Path(cli.__file__).with_name("_entry.py"))])

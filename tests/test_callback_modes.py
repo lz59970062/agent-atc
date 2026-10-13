@@ -11,19 +11,19 @@ import tempfile
 import unittest
 from unittest import mock
 
-from long_task_callback import callback_transport as transport, cli
+from agent_atc import callback_transport as transport, cli
 
 
 class CallbackModeTests(unittest.TestCase):
     def setUp(self):
-        temporary = tempfile.TemporaryDirectory(prefix="ltc-modes-")
+        temporary = tempfile.TemporaryDirectory(prefix="atc-modes-")
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
         self.stack = contextlib.ExitStack()
         self.addCleanup(self.stack.close)
         self.stack.enter_context(mock.patch.dict(os.environ, {
-            "CODEX_HOME": str(self.root / "profile"), "LTC_HOME": str(self.root / "profile" / "ltc-home"),
-            "CODEX_LONG_TASK_WAKEUP_TARGET_LOCK_DIR": str(self.root / "target-locks"),
+            "CODEX_HOME": str(self.root / "profile"), "ATC_HOME": str(self.root / "profile" / "atc-home"),
+            "ATC_TARGET_LOCK_DIR": str(self.root / "target-locks"),
         }, clear=True))
         self.stack.enter_context(contextlib.redirect_stderr(io.StringIO()))
 
@@ -52,7 +52,7 @@ class CallbackModeTests(unittest.TestCase):
 
     def test_windows_desktop_default_matches_existing_launcher(self):
         with mock.patch.object(transport.sys, "platform", "win32"):
-            self.assertEqual(transport.bridge_file(self.root), self.root / "long-task-wakeup/desktop-bridge.json")
+            self.assertEqual(transport.bridge_file(self.root), self.root / "agent-atc/desktop-bridge.json")
 
     def test_unconfigured_desktop_refuses_before_workload_admission(self):
         args = argparse.Namespace(agent="codex", callback_mode="desktop", session="original", last=False)

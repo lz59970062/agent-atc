@@ -9,13 +9,13 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from long_task_callback import cli, diagnostics
-from long_task_callback.platforms import OwnerState
+from agent_atc import cli, diagnostics
+from agent_atc.platforms import OwnerState
 
 
 class HealthArtifacts:
     def setUp(self):
-        temporary = tempfile.TemporaryDirectory(prefix="ltc runtime health ")
+        temporary = tempfile.TemporaryDirectory(prefix="atc runtime health ")
         self.addCleanup(temporary.cleanup)
         self.directory = Path(temporary.name)
         self.root = self.directory / "queue"
@@ -24,7 +24,7 @@ class HealthArtifacts:
         self.addCleanup(self.patches.close)
         self.patches.enter_context(mock.patch.object(cli, "current_machine_id", return_value="this-machine"))
         self.patches.enter_context(mock.patch.object(cli, "current_boot_id", return_value="this-boot"))
-        self.patches.enter_context(mock.patch("long_task_callback.diagnostics.time.time", return_value=1000.0))
+        self.patches.enter_context(mock.patch("agent_atc.diagnostics.time.time", return_value=1000.0))
 
     def write_json(self, path, value):
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -34,8 +34,8 @@ class HealthArtifacts:
         task = {
             "version": 2 if backend == "systemd-user" else 1,
             "id": task_id, "queue_dir": str(self.root), "agent": "codex",
-            "execution_backend": backend, "execution_owner": f"ltc-{task_id}-attempt1.service",
-            "screen_session": f"ltc-{task_id}", "state": "running",
+            "execution_backend": backend, "execution_owner": f"atc-{task_id}-attempt1.service",
+            "screen_session": f"atc-{task_id}", "state": "running",
             "machine_id": "this-machine", "boot_id": "this-boot", "submission_boot_id": "this-boot",
             "launch_requested_at": 100.0, "started_at": 101.0,
             "cwd": str(self.directory), "task": "SECRET_TASK_CONTENT", "command": "SECRET_COMMAND_CONTENT",
@@ -233,7 +233,7 @@ class RuntimeHealthTests(HealthArtifacts, unittest.TestCase):
 
     def test_configured_container_can_still_have_broken_runtime_and_needs_no_reinstall(self):
         self.task(backend="screen")
-        skill = self.directory / "skills" / "long-task-callback" / "SKILL.md"
+        skill = self.directory / "skills" / "agent-atc" / "SKILL.md"
         skill.parent.mkdir(parents=True)
         skill.write_text("fixture skill", encoding="utf-8")
         args = argparse.Namespace(mode="doctor", operation="run", agent="codex", session="actual-session",

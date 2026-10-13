@@ -12,15 +12,15 @@ import tempfile
 import unittest
 from unittest import mock
 
-from long_task_callback import cli, desktop_macos as desktop
-from long_task_callback.desktop_connection import load_unix_bridge_endpoint
-from long_task_callback.desktop_core import app_server_arguments
+from agent_atc import cli, desktop_macos as desktop
+from agent_atc.desktop_connection import load_unix_bridge_endpoint
+from agent_atc.desktop_core import app_server_arguments
 
 
 @unittest.skipUnless(sys.platform == "darwin", "macOS Desktop launcher")
 class DesktopLauncherTests(unittest.TestCase):
     def setUp(self):
-        temp = tempfile.TemporaryDirectory(prefix="ltc-desktop-", dir="/tmp")
+        temp = tempfile.TemporaryDirectory(prefix="atc-desktop-", dir="/tmp")
         self.addCleanup(temp.cleanup)
         self.root = Path(temp.name).resolve()
         self.profile = self.root / "profile"
@@ -56,10 +56,10 @@ class DesktopLauncherTests(unittest.TestCase):
                 mock.patch.object(desktop.subprocess, "Popen") as launch, contextlib.redirect_stdout(io.StringIO()):
             self.assertEqual(desktop.command(args), 0)
         launch.assert_not_called()
-        launcher = self.profile / "long-task-wakeup/Start LTC Desktop.command"
+        launcher = self.profile / "agent-atc/Start ATC Desktop.command"
         self.assertTrue(launcher.is_file())
         self.assertIn("desktop launch", launcher.read_text())
-        self.assertEqual(json.loads((self.profile / "long-task-wakeup/desktop.json").read_text()), self.config)
+        self.assertEqual(json.loads((self.profile / "agent-atc/desktop.json").read_text()), self.config)
 
     def test_launch_refuses_existing_desktop_without_signaling_it(self):
         args = argparse.Namespace(desktop_action="launch", check_only=False)

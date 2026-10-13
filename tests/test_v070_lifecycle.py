@@ -12,8 +12,8 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from long_task_callback import cli
-from long_task_callback.platforms import LaunchError, OwnerState, ScreenBackend, SystemdUserBackend
+from agent_atc import cli
+from agent_atc.platforms import LaunchError, OwnerState, ScreenBackend, SystemdUserBackend
 
 
 class NativeTaskLifecycleTests(unittest.TestCase):

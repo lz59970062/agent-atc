@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Freeze ltc with PyInstaller. Runs inside a Python image and writes /out/dist/ltc.
+# Freeze atc with PyInstaller. Runs inside a Python image and writes /out/dist/atc.
 # The builder's glibc is the oldest glibc the binary will run on.
 set -euo pipefail
 
@@ -9,8 +9,8 @@ python -m venv "$work/venv"
 . "$work/venv/bin/activate"
 pip install --quiet --disable-pip-version-check pyinstaller==6.11.1 "$work"
 pyinstaller --noconfirm --log-level WARN --distpath /out/dist --workpath "$work/build" \
-  /src/packaging/pyinstaller/ltc.spec
+  /src/packaging/pyinstaller/atc.spec
 
-/out/dist/ltc/ltc --version
+/out/dist/atc/atc --version
 echo "built against $(ldd --version | head -1)"
-du -sh /out/dist/ltc
+du -sh /out/dist/atc

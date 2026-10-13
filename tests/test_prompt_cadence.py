@@ -11,7 +11,7 @@ import sys
 import unittest
 from unittest import mock
 
-from long_task_callback import cli
+from agent_atc import cli
 from test_cli import patch_inprocess_delivery_worker
 
 

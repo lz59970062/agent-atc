@@ -1,6 +1,6 @@
 # macOS Desktop shared Core — experimental 0.7.1 preview
 
-This opt-in launcher lets Desktop and LTC use one Core through a private Unix
+This opt-in launcher lets Desktop and ATC use one Core through a private Unix
 socket. It preserves Desktop's bundled Core, configuration arguments and fresh
 App Tools environment. It changes the listening transport and relays Desktop's
 stdio JSONL traffic without interpreting tool requests, approvals or JSON-RPC IDs.
@@ -22,13 +22,13 @@ setup; no separate launcher preparation is required:
 ```bash
 python3 -m venv .venv
 .venv/bin/python -m pip install .
-.venv/bin/ltc setup --force --enable --now
+.venv/bin/atc setup --force --enable --now
 source .venv/bin/activate
 ```
 
 On Mac, setup generates a double-click launcher named
-`Start LTC Desktop.command`, a private Core wrapper and settings under
-`${CODEX_HOME:-~/.codex}/long-task-wakeup`. Once an app is selected, its settings
+`Start ATC Desktop.command`, a private Core wrapper and settings under
+`${CODEX_HOME:-~/.codex}/agent-atc`. Once an app is selected, its settings
 are saved in `desktop.json`. The wrapper and launcher use the current installed
 Python/runtime, so they work independently of the caller's working directory or
 PATH. The implementation ships in the Python package; it does not require a
@@ -41,15 +41,15 @@ than copying `.command` or `desktop.json` files between machines. Keep the Pytho
 environment in place, or rerun setup after moving or replacing it.
 
 Plain `pip install` installs the package and command entry points; it does not
-run a hook that changes user configuration. Follow it with `ltc setup` as above.
+run a hook that changes user configuration. Follow it with `atc setup` as above.
 The preview's `scripts/install_from_git.sh` provides a combined Git installation:
 
 ```text
-LTC_PYTHON=/absolute/path/to/python bash scripts/install_from_git.sh <github-https-url> [subdirectory] -- [setup flags]
+ATC_PYTHON=/absolute/path/to/python bash scripts/install_from_git.sh <github-https-url> [subdirectory] -- [setup flags]
 ```
 
 The helper runs pip and `setup --force --enable --now` with the same interpreter.
-`LTC_PYTHON` is optional; additional setup flags go after `--`. Select the preview
+`ATC_PYTHON` is optional; additional setup flags go after `--`. Select the preview
 with `@codex/macos-desktop-callback` in the Git URL. Installing `v0.7.0`
 continues to install that release and does not supply this generator.
 
@@ -61,15 +61,15 @@ configured custom wrapper. When several valid apps are available, select the
 intended one; setup does not guess:
 
 ```bash
-ltc setup --desktop-app /path/to/Codex.app --force --enable --now
+atc setup --desktop-app /path/to/Codex.app --force --enable --now
 ```
 
-Use `ltc setup --no-desktop-launcher` to skip launcher generation. If Desktop is
+Use `atc setup --no-desktop-launcher` to skip launcher generation. If Desktop is
 not installed yet, CLI setup and launcher generation still complete. After
-installing Desktop, open the launcher or run `ltc desktop prepare` to discover it.
+installing Desktop, open the launcher or run `atc desktop prepare` to discover it.
 
-For a later manual change, `ltc desktop prepare --app /path/to/Codex.app --force`
-selects an app. `--wrapper /absolute/path/to/ltc-desktop-core` chooses a custom
+For a later manual change, `atc desktop prepare --app /path/to/Codex.app --force`
+selects an app. `--wrapper /absolute/path/to/atc-desktop-core` chooses a custom
 wrapper; omit it to preserve a configured wrapper, or use the generated wrapper
 when preparing a new configuration. Standalone
 `prepare --force` explicitly replaces existing Desktop settings. Standard setup
@@ -92,21 +92,21 @@ Save/finish active Desktop work and quit the app. Then double-click the generate
 launcher, or run:
 
 ```bash
-ltc desktop launch --check-only
-ltc desktop launch
+atc desktop launch --check-only
+atc desktop launch
 ```
 
 The launcher refuses an existing Desktop process. It passes the override only
 to the new app, which starts the wrapper with fresh tool-pipe settings. Ordinary
-Dock startup continues to use the ordinary app connection; use the LTC launcher
+Dock startup continues to use the ordinary app connection; use the ATC launcher
 when Desktop automatic callbacks are needed.
 
 After startup, open the **original** conversation, check a normal Desktop App
 Tools operation, then run:
 
 ```bash
-ltc desktop status
-ltc doctor --agent codex --session <original-session-id> --callback-mode desktop
+atc desktop status
+atc doctor --agent codex --session <original-session-id> --callback-mode desktop
 ```
 
 The mode's metadata path travels with each newly submitted task, so it does not
@@ -123,7 +123,7 @@ refuses existing state; it does not delete unknown sockets or writer locks.
 To recover a previously completed result after the connection is verified:
 
 ```bash
-ltc retry --id <original-callback-id> --callback-mode desktop
+atc retry --id <original-callback-id> --callback-mode desktop
 ```
 
 Do not restart its business task. Inspect the delivered artifacts and ACK from
@@ -138,7 +138,7 @@ that same thread; stdin EOF stopped the owned Core and removed socket/metadata.
 The probe used an empty temporary profile, no credentials and no model turns.
 
 ```bash
-LTC_TEST_MACOS_DESKTOP=1 PYTHONPATH=src .venv/bin/python -m unittest discover \
+ATC_TEST_MACOS_DESKTOP=1 PYTHONPATH=src .venv/bin/python -m unittest discover \
   -s tests -p test_desktop_macos_integration.py -v
 ```
 

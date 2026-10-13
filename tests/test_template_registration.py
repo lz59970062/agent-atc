@@ -14,8 +14,8 @@ from unittest import mock
 
 import yaml
 
-from long_task_callback import cli, storage
-from long_task_callback.templates import load_template, user_template_dir
+from agent_atc import cli, storage
+from agent_atc.templates import load_template, user_template_dir
 
 
 class TemplateRegistrationTests(unittest.TestCase):
@@ -23,8 +23,8 @@ class TemplateRegistrationTests(unittest.TestCase):
     DESCRIPTION = "Review manuscript evidence and revise requested files."
     SYSTEM = "SYSTEM_FILE_SENTINEL\nPreserve evidence and the literal ${AUTHOR}.\n"
     PROMPT = "TASK_TEMPLATE_SENTINEL: carry out only the author's requested work."
-    INDEX_BEGIN = "<!-- ltc:registered-templates:begin -->"
-    INDEX_END = "<!-- ltc:registered-templates:end -->"
+    INDEX_BEGIN = "<!-- atc:registered-templates:begin -->"
+    INDEX_END = "<!-- atc:registered-templates:end -->"
 
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
@@ -44,10 +44,10 @@ class TemplateRegistrationTests(unittest.TestCase):
         environment = mock.patch.dict(os.environ, {
             "HOME": str(self.home),
             "USERPROFILE": str(self.home),
-            "CODEX_HOME": str(self.codex), "LTC_HOME": str(self.codex / "ltc-home"),
+            "CODEX_HOME": str(self.codex), "ATC_HOME": str(self.codex / "atc-home"),
             "CLAUDE_CONFIG_DIR": str(self.claude),
             "XDG_CONFIG_HOME": str(self.root / "xdg-config"),
-            "LTC_TEMPLATE_DIR": str(self.templates),
+            "ATC_TEMPLATE_DIR": str(self.templates),
             "PI_CODING_AGENT_DIR": str(self.root / "pi-profile"),
         })
         environment.start()
@@ -71,7 +71,7 @@ class TemplateRegistrationTests(unittest.TestCase):
 
     def invoke(self, *arguments):
         output = io.StringIO()
-        with mock.patch.object(sys, "argv", ["ltc", *map(str, arguments)]), \
+        with mock.patch.object(sys, "argv", ["atc", *map(str, arguments)]), \
                 contextlib.redirect_stdout(output), contextlib.redirect_stderr(output):
             try:
                 status = cli.main()
@@ -85,11 +85,11 @@ class TemplateRegistrationTests(unittest.TestCase):
 
     def skill(self, target="codex", name=None):
         profile = self.codex if target == "codex" else self.claude
-        return profile / "skills" / ("ltc-" + (name or self.NAME))
+        return profile / "skills" / ("atc-" + (name or self.NAME))
 
     def base_skill(self, target="codex"):
         profile = self.codex if target == "codex" else self.claude
-        return profile / "skills" / "long-task-callback"
+        return profile / "skills" / "agent-atc"
 
     def snapshot(self, *, metadata=False, directory=None):
         """Include directories so a failed request cannot leave an empty partial tree."""
@@ -113,8 +113,8 @@ class TemplateRegistrationTests(unittest.TestCase):
     def seed_custom_base(self, target="codex", *, newline="\n"):
         directory = self.base_skill(target)
         (directory / "agents").mkdir(parents=True)
-        text = ("---\nname: long-task-callback\ndescription: User's existing workflow.\n---\n"
-                "# Private LTC instructions\n\nPreserve this 用户维护段落 verbatim.\n")
+        text = ("---\nname: agent-atc\ndescription: User's existing workflow.\n---\n"
+                "# Private ATC instructions\n\nPreserve this 用户维护段落 verbatim.\n")
         text = text.replace("\n", newline)
         (directory / "SKILL.md").write_bytes(text.encode("utf-8"))
         (directory / "agents" / "openai.yaml").write_text("private_metadata: keep\n", encoding="utf-8")
@@ -135,9 +135,9 @@ class TemplateRegistrationTests(unittest.TestCase):
         end = lines.index("---", 1)
         frontmatter = yaml.safe_load("\n".join(lines[1:end]))
         body = "\n".join(lines[end + 1:])
-        self.assertEqual(frontmatter["name"], "ltc-" + name)
+        self.assertEqual(frontmatter["name"], "atc-" + name)
         self.assertIn(description or self.DESCRIPTION, frontmatter["description"])
-        self.assertRegex(body, rf"\bltc\s+agent\s+{worker}\b")
+        self.assertRegex(body, rf"\batc\s+agent\s+{worker}\b")
         self.assertIn("--cwd", body)
         self.assertTrue(f"--template {name}" in body or (
             "--template-file" in body and str(self.templates / f"{name}.yaml") in body
@@ -148,7 +148,7 @@ class TemplateRegistrationTests(unittest.TestCase):
             interface = metadata["interface"]
             self.assertTrue(interface["display_name"].strip())
             self.assertTrue(interface["short_description"].strip())
-            self.assertIn("$ltc-" + name, interface["default_prompt"])
+            self.assertIn("$atc-" + name, interface["default_prompt"])
 
     def listed(self):
         status, output = self.invoke("template", "list", "--json")
@@ -186,7 +186,7 @@ class TemplateRegistrationTests(unittest.TestCase):
         finally:
             os.chdir(previous)
 
-    def test_both_targets_receive_discoverable_skills_without_replacing_user_ltc(self):
+    def test_both_targets_receive_discoverable_skills_without_replacing_user_atc(self):
         originals = {target: self.seed_custom_base(target, newline="\r\n" if target == "claude" else "\n")
                      for target in ("codex", "claude")}
         status, output = self.register()
@@ -214,7 +214,7 @@ class TemplateRegistrationTests(unittest.TestCase):
                 argv = shlex.split(recipe)
                 delimiter = argv.index("--")
                 self.assertEqual(argv[:delimiter], [
-                    "ltc", "agent", "pi", "--template-file", str(template_file),
+                    "atc", "agent", "pi", "--template-file", str(template_file),
                     "--cwd", "/absolute/path/to/workspace",
                 ])
                 self.assertEqual(argv[delimiter + 1:], ["The user's concrete task requirements."])
@@ -234,11 +234,11 @@ class TemplateRegistrationTests(unittest.TestCase):
             os.environ.pop("CODEX_HOME", None)
             status, output = self.register(name=default_name, options=("--target", "codex"))
         self.assertEqual(status, 0, output)
-        standard = self.home / ".agents" / "skills" / ("ltc-" + default_name)
+        standard = self.home / ".agents" / "skills" / ("atc-" + default_name)
         if os.name == "nt":
             self.assert_discoverable(standard, name=default_name, codex=True)
         else:
-            primary = self.home / ".codex" / "skills" / ("ltc-" + default_name)
+            primary = self.home / ".codex" / "skills" / ("atc-" + default_name)
             self.assert_discoverable(primary, name=default_name, codex=True)
             self.assertTrue(standard.is_symlink())
             self.assertEqual(standard.resolve(), primary.resolve())
@@ -356,7 +356,7 @@ class TemplateRegistrationTests(unittest.TestCase):
         self.seed_custom_base("codex")
         foreign = self.skill("claude")
         foreign.mkdir(parents=True)
-        (foreign / "SKILL.md").write_text("---\nname: ltc-contract-review\ndescription: User-owned unrelated skill.\n---\nNever overwrite.\n", encoding="utf-8")
+        (foreign / "SKILL.md").write_text("---\nname: atc-contract-review\ndescription: User-owned unrelated skill.\n---\nNever overwrite.\n", encoding="utf-8")
         (foreign / "user-script.py").write_text("# User's unrelated program\n", encoding="utf-8")
         before = self.snapshot()
         for options in ((), ("--force",)):
@@ -370,7 +370,7 @@ class TemplateRegistrationTests(unittest.TestCase):
         self.assertEqual(status, 0, output)
         other_templates = self.root / "another template namespace"
         before = self.snapshot(metadata=True)
-        with mock.patch.dict(os.environ, {"LTC_TEMPLATE_DIR": str(other_templates)}):
+        with mock.patch.dict(os.environ, {"ATC_TEMPLATE_DIR": str(other_templates)}):
             for options in ((), ("--force",)):
                 with self.subTest(options=options):
                     status, _ = self.register(options=options)
@@ -466,7 +466,7 @@ class TemplateRegistrationTests(unittest.TestCase):
             status, output = self.register(options=("--target", "codex"))
         self.assertEqual(self.snapshot(directory=self.home), original_home)
         if status == 0:
-            self.assert_discoverable(other_profile / "skills" / ("ltc-" + self.NAME),
+            self.assert_discoverable(other_profile / "skills" / ("atc-" + self.NAME),
                                      description="Review under the newly selected profile.", codex=True)
         else:
             # Refusing an ambiguous cross-profile update is also safe; partial admission is not.
@@ -485,7 +485,7 @@ class TemplateRegistrationTests(unittest.TestCase):
                 self.skipTest(f"Creating test directory symlinks is unavailable: {exc}")
             raise
         before = self.snapshot()
-        owned_entry = backup / ("ltc-" + self.NAME) / "SKILL.md"
+        owned_entry = backup / ("atc-" + self.NAME) / "SKILL.md"
         saved_entry = owned_entry.read_bytes()
         status, _ = self.invoke("template", "unregister", self.NAME)
         self.assertNotEqual(status, 0)

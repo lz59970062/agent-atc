@@ -19,11 +19,11 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from long_task_callback import cli, diagnostics
-from long_task_callback.platforms import SystemdUserBackend
+from agent_atc import cli, diagnostics
+from agent_atc.platforms import SystemdUserBackend
 
 
-@unittest.skipUnless(os.environ.get("LTC_TEST_SCREEN") == "1", "set LTC_TEST_SCREEN=1 for real screen/container test")
+@unittest.skipUnless(os.environ.get("ATC_TEST_SCREEN") == "1", "set ATC_TEST_SCREEN=1 for real screen/container test")
 class RealStandaloneScreenTests(unittest.TestCase):
     def wait_until(self, predicate, explanation: str, timeout: float = 15.0) -> None:
         deadline = time.monotonic() + timeout
@@ -36,13 +36,13 @@ class RealStandaloneScreenTests(unittest.TestCase):
     def test_real_standalone_start_ignores_pid_reused_by_unrelated_live_process(self) -> None:
         if sys.platform not in ("linux", "darwin"):
             self.skipTest("Linux or macOS process identity is required")
-        with tempfile.TemporaryDirectory(prefix="ltc-stale-pid-") as temporary:
+        with tempfile.TemporaryDirectory(prefix="atc-stale-pid-") as temporary:
             directory = Path(temporary)
             home = directory / "codex-home"
             root = directory / "queue"
-            environment = dict(os.environ, CODEX_HOME=str(home), LTC_HOME=str(home / "ltc-home"),
-                               CODEX_LONG_TASK_WAKEUP_TARGET_LOCK_DIR=str(directory / "target-locks"),
-                               CODEX_LONG_TASK_WAKEUP_DESKTOP_APP_SERVER="0")
+            environment = dict(os.environ, CODEX_HOME=str(home), ATC_HOME=str(home / "atc-home"),
+                               ATC_TARGET_LOCK_DIR=str(directory / "target-locks"),
+                               ATC_DESKTOP_APP_SERVER="0")
             sleeper = subprocess.Popen(
                 [sys.executable, "-c", "import time; time.sleep(60)"],
                 stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
@@ -111,7 +111,7 @@ class RealStandaloneScreenTests(unittest.TestCase):
         screen = shutil.which("screen")
         if sys.platform not in ("linux", "darwin") or screen is None:
             self.skipTest("Linux/macOS and GNU screen are required")
-        with tempfile.TemporaryDirectory(prefix="ltc-real-screen-") as temporary:
+        with tempfile.TemporaryDirectory(prefix="atc-real-screen-") as temporary:
             directory = Path(temporary)
             sockets = directory / "screen-sockets"
             runtime = directory / "runtime"
@@ -164,7 +164,7 @@ class RealStandaloneScreenTests(unittest.TestCase):
                 import time
                 from pathlib import Path
                 sys.path.insert(0, {source!r})
-                from long_task_callback import cli
+                from agent_atc import cli
                 cli.recover_managed_tasks(Path(sys.argv[1]))
                 Path(sys.argv[2]).write_text("launched")
                 time.sleep(60)

@@ -1,19 +1,19 @@
 # Architecture
 
-Consider the quickstart task: an Agent submits a Python command, LTC saves its execution details, runs it in the background, and returns the result to the same conversation.
+Consider the quickstart task: an Agent submits a Python command, ATC saves its execution details, runs it in the background, and returns the result to the same conversation.
 
 ## How a task runs
 
-1. The Agent calls `ltc run`. LTC records the command, working directory, environment, and session ID, then assigns a task ID.
+1. The Agent calls `atc run`. ATC records the command, working directory, environment, and session ID, then assigns a task ID.
 2. The background coordinator, or Daemon, reads the task record and asks the execution backend to start it.
 3. A Worker runs the command and writes standard output and standard error to a log.
 4. When the command exits, the Worker saves its exit code and result and creates a callback.
-5. The Daemon delivers the callback to the original session. The Agent reads the artifacts, runs `ltc ack`, and decides what to do next.
+5. The Daemon delivers the callback to the original session. The Agent reads the artifacts, runs `atc ack`, and decides what to do next.
 
 ```mermaid
 sequenceDiagram
     participant A as Agent session
-    participant L as LTC CLI
+    participant L as ATC CLI
     participant D as Daemon
     participant W as Worker
     A->>L: Submit a command
@@ -43,14 +43,14 @@ With a native backend, the coordinator and tasks have their own system service o
 
 ## Three entry points
 
-`ltc run` starts with a command that a Worker executes. `ltc agent` gives instructions to a newly started Agent and saves its answer. Both share the task records, execution backends, and callback flow.
+`atc run` starts with a command that a Worker executes. `atc agent` gives instructions to a newly started Agent and saves its answer. Both share the task records, execution backends, and callback flow.
 
-`ltc done` handles work already running elsewhere. For example, a Slurm job reports its exit code at the end of a script, and LTC delivers that job's result to a specified conversation.
+`atc done` handles work already running elsewhere. For example, a Slurm job reports its exit code at the end of a script, and ATC delivers that job's result to a specified conversation.
 
 ## Finding results
 
-By default, task files live in `~/.ltc/tasks/<task-id>/`. `attempt-1.log` contains command output, and `result.json` records the execution result. The submission output and callback include their paths.
+By default, task files live in `~/.atc/tasks/<task-id>/`. `attempt-1.log` contains command output, and `result.json` records the execution result. The submission output and callback include their paths.
 
 A callback ACK records that the Agent has received and checked the result. Use a [goal plan](guides/goals.md) to track a larger workflow, such as training, evaluation, and report generation.
 
-To extend an execution backend or Agent adapter, see [module responsibilities](https://github.com/lz59970062/long-task-wakeup/blob/main/docs/architecture.md#responsibilities).
+To extend an execution backend or Agent adapter, see [module responsibilities](https://github.com/lz59970062/agent-atc/blob/main/docs/architecture.md#responsibilities).

@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg"
      width="1200" height="440" viewBox="0 0 1200 440"
      role="img" aria-labelledby="title desc">
-  <title id="title">How Long Task Callback works</title>
+  <title id="title">How Agent Traffic Control works</title>
   <desc id="desc">Five stage sequence: the agent submits a task to the daemon, the daemon requests an independent task owner, the task runs for hours, completion is queued, and the same agent session resumes to inspect, acknowledge, and continue.</desc>
 
   <rect width="1200" height="440" rx="26" fill="#0d1117"/>
@@ -41,7 +41,7 @@
       <rect width="200" height="180" rx="14" fill="#161b22" stroke="#30363d" stroke-width="2"/>
       <text x="20" y="40" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="20" fill="#d29922">03 CALLBACK</text>
       <text x="20" y="78" font-size="19" fill="#e6edf3">The exit path fires</text>
-      <text x="20" y="104" font-size="19" fill="#e6edf3">one explicit ltc</text>
+      <text x="20" y="104" font-size="19" fill="#e6edf3">one explicit atc</text>
       <text x="20" y="130" font-size="19" fill="#e6edf3">callback command</text>
       <text x="20" y="162" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="17" fill="#8b949e">exit code preserved</text>
     </g>
@@ -81,5 +81,5 @@
         font-size="19" fill="#3fb950">goal not done? queue the next stage — the loop repeats until ack</text>
 
   <text x="64" y="412" font-family="ui-monospace, SFMono-Regular, Menlo, monospace"
-        font-size="17" fill="#8b949e">resume: codex exec resume · claude -p --resume   |   ack: ltc ack --id &lt;callback-id&gt;</text>
+        font-size="17" fill="#8b949e">resume: codex exec resume · claude -p --resume   |   ack: atc ack --id &lt;callback-id&gt;</text>
 </svg>

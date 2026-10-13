@@ -5,7 +5,7 @@
 Callback delivery ACK confirms that one wakeup was received and inspected:
 
 ```bash
-ltc ack --queue-dir <queue-dir> --id <callback-id>
+atc ack --queue-dir <queue-dir> --id <callback-id>
 ```
 
 An unacknowledged callback is retried with backoff. ACK is monotonic.
@@ -38,12 +38,12 @@ amendments:
 ```
 
 ```bash
-ltc goal start --id report-goal --session <session-id> --cwd "$PWD" \
+atc goal start --id report-goal --session <session-id> --cwd "$PWD" \
   --task "finish the report" --plan-file goal-plan.yaml
-ltc goal check --id report-goal
-ltc goal ack --id report-goal --state completed --plan-sha256 <checked-sha256>
-ltc goal ack --id report-goal --state blocked_conditions --condition "awaiting dataset access"
-ltc goal resume --id report-goal
+atc goal check --id report-goal
+atc goal ack --id report-goal --state completed --plan-sha256 <checked-sha256>
+atc goal ack --id report-goal --state blocked_conditions --condition "awaiting dataset access"
+atc goal resume --id report-goal
 ```
 
 The YAML file is the mutable source of truth. Its ordered `path` uses `pending`, `in_progress`,
@@ -57,10 +57,10 @@ with the latest file. `goal ack --state completed` is rejected unless the suppli
 that check and every path item, including the final one, is `completed`. Any YAML edit invalidates
 the previous digest and forces a fresh check, so a remembered obsolete plan cannot finish a goal.
 Existing active goals created before 0.6.2 can be migrated with
-`ltc goal set-plan --id <goal-id> --plan-file goal-plan.yaml`; attaching or replacing a plan also
+`atc goal set-plan --id <goal-id> --plan-file goal-plan.yaml`; attaching or replacing a plan also
 clears the previous check.
 
-Use one file per independent goal, preferably `.ltc/goals/<goal-id>.yaml`. A clear, low-risk path
+Use one file per independent goal, preferably `.atc/goals/<goal-id>.yaml`. A clear, low-risk path
 may be drafted by the agent and announced without a blocking approval; strategic choices,
 material resource changes, or changed acceptance criteria should be agreed with the user first.
 Blocked, resumed, and revised work keeps the same file. A follow-on goal gets a new file. Completed

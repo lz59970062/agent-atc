@@ -14,9 +14,9 @@ import time
 import unittest
 from unittest import mock
 
-from long_task_callback import desktop_core as core
-from long_task_callback import desktop_bridge as bridge
-from long_task_callback.platforms import windows
+from agent_atc import desktop_core as core
+from agent_atc import desktop_bridge as bridge
+from agent_atc.platforms import windows
 
 
 def server_frame(opcode, payload, final=True):
@@ -70,7 +70,7 @@ class CoreUnitTests(unittest.TestCase):
             with self.assertRaises(core.RelayError):
                 core.real_core()
         with tempfile.TemporaryDirectory() as directory:
-            wrapper = Path(directory).resolve() / "ltc-desktop-core.exe"
+            wrapper = Path(directory).resolve() / "atc-desktop-core.exe"
             wrapper.touch()
             with mock.patch.dict(os.environ, {core.REAL_CODEX_ENV: str(wrapper)}):
                 with self.assertRaisesRegex(core.RelayError, "wrapper itself"):
@@ -190,18 +190,18 @@ while True:
 @unittest.skipUnless(os.name == "nt", "native Desktop Core relay")
 class NativeCoreTests(unittest.TestCase):
     def setUp(self):
-        self.temporary = tempfile.TemporaryDirectory(prefix="ltc-core-")
+        self.temporary = tempfile.TemporaryDirectory(prefix="atc-core-")
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name)
         self.profile = self.root / "profile"
         self.profile.mkdir()
-        self.metadata = self.profile / "long-task-wakeup" / "desktop-bridge.json"
+        self.metadata = self.profile / "agent-atc" / "desktop-bridge.json"
         (self.root / "app-server").write_text(FAKE_CORE, encoding="utf-8")
         self.env = os.environ.copy()
         self.env.update({core.REAL_CODEX_ENV: sys.executable, core.BRIDGE_FILE_ENV: str(self.metadata),
-                         "CODEX_HOME": str(self.profile), "LTC_HOME": str(self.profile / "ltc-home"), "CODEX_APP_TOOLS_PIPE_PATH": "fresh-test-desktop-pipe",
+                         "CODEX_HOME": str(self.profile), "ATC_HOME": str(self.profile / "atc-home"), "CODEX_APP_TOOLS_PIPE_PATH": "fresh-test-desktop-pipe",
                          "PYTHONPATH": str(Path(__file__).resolve().parents[1] / "src")})
-        self.command = [sys.executable, "-m", "long_task_callback.desktop_core"]
+        self.command = [sys.executable, "-m", "agent_atc.desktop_core"]
         self.process = None
         self.addCleanup(self.cleanup_process)
 
@@ -263,7 +263,7 @@ class NativeCoreTests(unittest.TestCase):
         answer = {"id": "approve/string", "result": {"decision": "accept"}}
         self.send(answer)
         self.assertEqual({"method": "fixture/approved", "params": answer}, self.response())
-        # A second LTC-side connection cannot outlive the owning Desktop stdin.
+        # A second ATC-side connection cannot outlive the owning Desktop stdin.
         client = socket.create_connection(("127.0.0.1", int(record["url"].rsplit(":", 1)[1])), timeout=2)
         self.addCleanup(client.close)
         self.process.stdin.close()

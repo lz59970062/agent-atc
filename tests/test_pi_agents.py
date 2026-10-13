@@ -20,9 +20,9 @@ import time
 import unittest
 from unittest import mock
 
-from long_task_callback import cli, diagnostics, pi_callback
-from long_task_callback.agents import AGENTS, CHILD_AGENT_NAMES, ChildOptions, get_agent, get_child_agent
-from long_task_callback.runtime import worker_command
+from agent_atc import cli, diagnostics, pi_callback
+from agent_atc.agents import AGENTS, CHILD_AGENT_NAMES, ChildOptions, get_agent, get_child_agent
+from agent_atc.runtime import worker_command
 from test_cli import assert_private_file, executable_python_fixture, patch_fixture_commands
 
 
@@ -68,7 +68,7 @@ class PiAdapterContractTests(unittest.TestCase):
             get_agent("pi").resume_command({"target": {"kind": "session", "value": session}}, {}),
             ["pi", "--print", "--session", session],
         )
-        with mock.patch.dict(os.environ, {"LONG_TASK_WAKEUP_PI_BIN": "/opt/my Pi/bin/pi"}, clear=False):
+        with mock.patch.dict(os.environ, {"ATC_PI_BIN": "/opt/my Pi/bin/pi"}, clear=False):
             self.assertEqual(
                 cli.resume_command({"agent": "pi", "target": {"kind": "session", "value": session}}),
                 ["/opt/my Pi/bin/pi", "--print", "--session", session],
@@ -98,12 +98,12 @@ class PiAdapterContractTests(unittest.TestCase):
         self.assertEqual(request["target"], {"kind": "session", "value": session})
         self.assertEqual(request["target_source"], "PI_SESSION_FILE")
         self.assertIn("called back into PI Agent", prompt)
-        acknowledgement = cli.build_acknowledgement_text("ltc ack --queue-dir /q --id abc", agent="pi")
+        acknowledgement = cli.build_acknowledgement_text("atc ack --queue-dir /q --id abc", agent="pi")
         self.assertIn("original PI Agent process through its native message API", acknowledgement)
         self.assertIn("--queue-dir /q --id abc", acknowledgement)
 
     def test_pi_command_is_pure_fresh_print_text_mode_with_no_positional_prompt(self):
-        environment = {"LONG_TASK_WAKEUP_PI_BIN": "/opt/my Pi/bin/pi", "PI_PROVIDER": "fixture"}
+        environment = {"ATC_PI_BIN": "/opt/my Pi/bin/pi", "PI_PROVIDER": "fixture"}
         before = dict(environment)
         command = get_child_agent("pi").child_command(
             self.options(model="provider/model with spaces", effort="high"), environment
@@ -154,7 +154,7 @@ class PiAgentContractTests(unittest.TestCase):
             platform.start()
             self.addCleanup(platform.stop)
         patch_fixture_commands(self)
-        temporary = tempfile.TemporaryDirectory(prefix="ltc Pi 中文 ")
+        temporary = tempfile.TemporaryDirectory(prefix="atc Pi 中文 ")
         self.addCleanup(temporary.cleanup)
         self.directory = Path(temporary.name).resolve()
         self.queue = self.directory / "queue with spaces"
@@ -163,11 +163,11 @@ class PiAgentContractTests(unittest.TestCase):
         self.codex_home = self.directory / "codex-profile"
         self.claude_home = self.directory / "claude-profile"
         for home in (self.codex_home, self.claude_home):
-            skill = home / "skills" / "long-task-callback" / "SKILL.md"
+            skill = home / "skills" / "agent-atc" / "SKILL.md"
             skill.parent.mkdir(parents=True)
-            skill.write_text("Fixture LTC skill", encoding="utf-8")
+            skill.write_text("Fixture ATC skill", encoding="utf-8")
         environment = mock.patch.dict(os.environ, {
-            "LTC_TEMPLATE_DIR": str(self.templates), "CODEX_HOME": str(self.codex_home), "LTC_HOME": str(self.codex_home / "ltc-home"),
+            "ATC_TEMPLATE_DIR": str(self.templates), "CODEX_HOME": str(self.codex_home), "ATC_HOME": str(self.codex_home / "atc-home"),
             "CLAUDE_CONFIG_DIR": str(self.claude_home),
             cli.TARGET_LOCK_DIR_ENV: str(self.directory / "target-locks"),
             "PYTHONIOENCODING": "utf-8",
@@ -182,7 +182,7 @@ class PiAgentContractTests(unittest.TestCase):
         cli._BACKGROUND_RESUMES.clear()
 
     def invoke(self, options=(), *, parent="codex", prompt="Inspect the public Pi child contract."):
-        argv = ["ltc", "agent", "pi", "--cwd", str(self.directory),
+        argv = ["atc", "agent", "pi", "--cwd", str(self.directory),
                 "--queue-dir", str(self.queue), "--backend", "screen", "--callback-mode", "cli",
                 "--agent", parent, "--session", f"parent-{parent}", "--task", "Pi contract fixture",
                 *options, "--", prompt]
@@ -223,7 +223,7 @@ class PiAgentContractTests(unittest.TestCase):
             import sys
 
             # Record process admission before reading any optional prompt file.
-            with Path(os.environ['LTC_TEST_PI_EXECUTIONS']).open('a', encoding='utf-8') as stream:
+            with Path(os.environ['ATC_TEST_PI_EXECUTIONS']).open('a', encoding='utf-8') as stream:
                 stream.write('executed\\n')
             names = {SESSION_MARKERS + ('PI_CODING_AGENT_DIR', 'PI_PROVIDER', 'PI_MODEL', 'PI_REASONING_LEVEL', 'OPENAI_API_KEY', 'CUSTOM_WORKLOAD_SETTING')!r}
             payload = {{'argv': sys.argv[1:], 'prompt': sys.stdin.read(), 'cwd': os.getcwd(),
@@ -235,18 +235,18 @@ class PiAgentContractTests(unittest.TestCase):
             else:
                 payload['system_prompt_path'] = None
                 payload['system_prompt'] = None
-            Path(os.environ['LTC_TEST_PI_CAPTURE']).write_text(json.dumps(payload), encoding='utf-8')
+            Path(os.environ['ATC_TEST_PI_CAPTURE']).write_text(json.dumps(payload), encoding='utf-8')
             sys.stderr.write('fixture Pi diagnostic\\n')
-            sys.stdout.write(os.environ['LTC_TEST_PI_REPORT'])
-            raise SystemExit(int(os.environ['LTC_TEST_PI_EXIT']))
+            sys.stdout.write(os.environ['ATC_TEST_PI_REPORT'])
+            raise SystemExit(int(os.environ['ATC_TEST_PI_EXIT']))
             """), encoding="utf-8")
         return executable_python_fixture(script)
 
     def fixture_environment(self, executable, capture, *, report, exit_code):
         return {
-            "LONG_TASK_WAKEUP_PI_BIN": str(executable), "LTC_TEST_PI_CAPTURE": str(capture),
-            "LTC_TEST_PI_EXECUTIONS": str(capture.with_suffix(".executions")),
-            "LTC_TEST_PI_REPORT": report, "LTC_TEST_PI_EXIT": str(exit_code),
+            "ATC_PI_BIN": str(executable), "ATC_TEST_PI_CAPTURE": str(capture),
+            "ATC_TEST_PI_EXECUTIONS": str(capture.with_suffix(".executions")),
+            "ATC_TEST_PI_REPORT": report, "ATC_TEST_PI_EXIT": str(exit_code),
             "CODEX_THREAD_ID": "submitter-codex", "CLAUDE_CODE_SESSION_ID": "submitter-claude",
             "CLAUDECODE": "1", "CODEX_INTERNAL_ORIGINATOR_OVERRIDE": "submitter-desktop",
             "PI_SESSION_ID": "submitter-pi", "PI_SESSION_FILE": "/fixture/parent-session.jsonl",
@@ -263,7 +263,7 @@ class PiAgentContractTests(unittest.TestCase):
         # This is the log redirection normally supplied by the execution owner;
         # no actual screen session or coordinator is needed to run admission.
         environment = dict(os.environ, STY="fixture-screen", PYTHONIOENCODING="utf-8",
-                           LONG_TASK_WAKEUP_PI_BIN="daemon-must-not-replace-frozen-executable",
+                           ATC_PI_BIN="daemon-must-not-replace-frozen-executable",
                            PI_CODING_AGENT_DIR="daemon-must-not-replace-submitter-config",
                            CUSTOM_WORKLOAD_SETTING="daemon-must-not-leak")
         with Path(task["log_path"]).open("wb") as log:
@@ -400,7 +400,7 @@ class PiAgentContractTests(unittest.TestCase):
         ):
             # Common options precede the remainder prompt or command.
             separator = arguments.index("--") if "--" in arguments else len(arguments)
-            argv = ["ltc", *arguments[:separator], "--queue-dir", str(self.queue),
+            argv = ["atc", *arguments[:separator], "--queue-dir", str(self.queue),
                     "--agent", "pi", "--session", session, "--dry-run", *arguments[separator:]]
             with self.subTest(arguments=arguments), mock.patch.object(sys, "argv", argv), \
                     contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()) as stderr:
@@ -446,12 +446,12 @@ class PiAgentContractTests(unittest.TestCase):
             from pathlib import Path
 
             payload = {{'argv': sys.argv[1:], 'cwd': os.getcwd(), 'prompt': sys.stdin.read()}}
-            Path(os.environ['LTC_TEST_PI_CALLBACK_CAPTURE']).write_text(
+            Path(os.environ['ATC_TEST_PI_CALLBACK_CAPTURE']).write_text(
                 json.dumps(payload), encoding='utf-8')
             os.environ['PYTHONPATH'] = {str(src_path)!r} + os.pathsep + os.environ.get('PYTHONPATH', '')
-            subprocess.run([sys.executable, '-m', 'long_task_callback', 'ack',
-                            '--queue-dir', os.environ['LTC_TEST_PI_CALLBACK_QUEUE'],
-                            '--id', os.environ['LTC_TEST_PI_CALLBACK_ID']], check=True)
+            subprocess.run([sys.executable, '-m', 'agent_atc', 'ack',
+                            '--queue-dir', os.environ['ATC_TEST_PI_CALLBACK_QUEUE'],
+                            '--id', os.environ['ATC_TEST_PI_CALLBACK_ID']], check=True)
             raise SystemExit(0)
             """), encoding="utf-8")
         return executable_python_fixture(script)
@@ -463,7 +463,7 @@ class PiAgentContractTests(unittest.TestCase):
                            '"timestamp":"2026-01-01T00:00:00.000Z","cwd":"/tmp"}\n', encoding="utf-8")
         capture = self.directory / "pi-callback-capture.json"
         fake_pi = self.fake_pi_callback()
-        argv = ["ltc", "done", "--exit-code", "0", "--cwd", str(self.directory),
+        argv = ["atc", "done", "--exit-code", "0", "--cwd", str(self.directory),
                 "--queue-dir", str(root), "--backend", "screen", "--callback-mode", "cli",
                 "--agent", "pi", "--session", str(session), "--task", "Pi callback fixture",
                 "--message", "Inspect the finished work."]
@@ -488,10 +488,10 @@ class PiAgentContractTests(unittest.TestCase):
                  "state": "closed", "owner_identity": cli.daemon_process_identity(os.getpid())}
         cli.write_request(channel / "owner.json", owner)
         environment = {
-            "LONG_TASK_WAKEUP_PI_BIN": str(fake_pi),
-            "LTC_TEST_PI_CALLBACK_CAPTURE": str(capture),
-            "LTC_TEST_PI_CALLBACK_QUEUE": str(root),
-            "LTC_TEST_PI_CALLBACK_ID": str(request["id"]),
+            "ATC_PI_BIN": str(fake_pi),
+            "ATC_TEST_PI_CALLBACK_CAPTURE": str(capture),
+            "ATC_TEST_PI_CALLBACK_QUEUE": str(root),
+            "ATC_TEST_PI_CALLBACK_ID": str(request["id"]),
         }
         args = argparse.Namespace(retries=3, retry_delay=0.0, retry_backoff=2.0, resume_timeout=15.0)
         with mock.patch.dict(os.environ, environment), \
@@ -512,7 +512,7 @@ class PiAgentContractTests(unittest.TestCase):
                                             "--extension", str(pi_callback.extension_path())])
         self.assertNotIn("--no-session", received["argv"])
         self.assertEqual(received["cwd"], str(self.directory))
-        self.assertIn("[long-task-callback]", received["prompt"])
+        self.assertIn("[atc]", received["prompt"])
         self.assertIn("Session: " + str(session) + " (only)", received["prompt"])
         self.assertIn("Details: " + str(request["prompt_details_path"]) + " (read before acting)", received["prompt"])
         self.assertIn("Inspect the finished work.",
@@ -780,7 +780,7 @@ class PiAgentContractTests(unittest.TestCase):
         source = self.directory / "valid-system.md"
         source.write_text("Valid system instructions.\n", encoding="utf-8")
         for worker in ("codex", "claude"):
-            argv = ["ltc", "agent", worker, "--queue-dir", str(self.queue), "--agent", "codex",
+            argv = ["atc", "agent", worker, "--queue-dir", str(self.queue), "--agent", "codex",
                     "--session", "parent-codex", "--system-prompt-file", str(source), "--", "User task."]
             with self.subTest(worker=worker), mock.patch.object(sys, "argv", argv), \
                     mock.patch.object(cli, "agent", return_value=0) as submit, \
@@ -791,13 +791,13 @@ class PiAgentContractTests(unittest.TestCase):
             self.assertFalse(cli.managed_tasks_root(self.queue).exists())
 
     def test_doctor_checks_pi_child_executable_separately_from_callback_agent(self):
-        environment = {"CODEX_LONG_TASK_WAKEUP_CODEX_BIN": "fixture-codex",
-                       "LONG_TASK_WAKEUP_CLAUDE_BIN": "fixture-claude",
-                       "LONG_TASK_WAKEUP_PI_BIN": "fixture-pi"}
+        environment = {"ATC_CODEX_BIN": "fixture-codex",
+                       "ATC_CLAUDE_BIN": "fixture-claude",
+                       "ATC_PI_BIN": "fixture-pi"}
         for parent, available in (("codex", True), ("claude", False)):
             with self.subTest(parent=parent, pi_available=available):
                 output = io.StringIO()
-                argv = ["ltc", "doctor", "--operation", "agent", "--agent-worker", "pi",
+                argv = ["atc", "doctor", "--operation", "agent", "--agent-worker", "pi",
                         "--agent", parent, "--session", f"parent-{parent}", "--backend", "screen",
                         "--callback-mode", "cli", "--queue-dir", str(self.queue)]
 
