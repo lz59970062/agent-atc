@@ -52,14 +52,14 @@ def executable_python_fixture(script: Path) -> Path:
 def patch_fixture_commands(test: unittest.TestCase) -> None:
     if os.name != "nt":
         return
-    for name in ("agent_wrapped_command", "resume_command"):
-        original = getattr(cli, name)
+    for owner, name in ((cli, "agent_wrapped_command"), (cli, "resume_command")):
+        original = getattr(owner, name)
 
         def fixture_command(*args, _original=original, **kwargs):
             command = _original(*args, **kwargs)
             return [sys.executable, *command] if command[0] in _PYTHON_FIXTURES else command
 
-        patcher = mock.patch.object(cli, name, side_effect=fixture_command)
+        patcher = mock.patch.object(owner, name, side_effect=fixture_command)
         patcher.start()
         test.addCleanup(patcher.stop)
 

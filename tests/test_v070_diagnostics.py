@@ -62,14 +62,14 @@ class DiagnosticBoundaryTests(unittest.TestCase):
 
     def test_help_version_ack_cancel_and_internal_workers_do_not_trigger_checks(self):
         for argv, handler in (
-            (["ack", "--id", "fixture"], "ack"),
-            (["cancel", "--id", "fixture"], "cancel"),
-            (["_screen-worker", "--task-file", "/fixture/task.json", "--token=fixture"], "run_screen_worker"),
-            (["_task-worker", "--task-file", "/fixture/task.json", "--attempt", "1"], "run_task_worker"),
-            (["_delivery-worker"], "delivery_worker_main"),
+            (["ack", "--id", "fixture"], (cli, "ack")),
+            (["cancel", "--id", "fixture"], (cli, "cancel")),
+            (["_screen-worker", "--task-file", "/fixture/task.json", "--token=fixture"], (cli, "run_screen_worker")),
+            (["_task-worker", "--task-file", "/fixture/task.json", "--attempt", "1"], (cli, "run_task_worker")),
+            (["_delivery-worker"], (cli, "delivery_worker_main")),
         ):
             with self.subTest(argv=argv), mock.patch.object(sys, "argv", ["atc", *argv]), mock.patch.object(
-                cli, handler, return_value=0
+                *handler, return_value=0
             ), mock.patch.object(diagnostics, "emit_if_needed") as emit:
                 self.assertEqual(cli.main(), 0)
                 emit.assert_not_called()

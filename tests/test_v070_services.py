@@ -46,9 +46,10 @@ class DaemonServiceSelectionTests(unittest.TestCase):
             stack.enter_context(mock.patch.object(cli, "running_in_container", return_value=True))
             stack.enter_context(mock.patch.object(cli.shutil, "which", side_effect=lambda name: "/usr/bin/" + name))
             stack.enter_context(mock.patch.object(cli, "systemd_user_dir", return_value=self.directory / "systemd"))
-            for name in ("install_skill", "install_systemd", "install_supervisor", "start_standalone_daemon",
-                         "configure_proxy_environment", "ensure_callback_hook_file", "report_claude_agent_readiness"):
-                spies[name] = stack.enter_context(mock.patch.object(cli, name, return_value=0))
+            for owner, name in ((cli, "install_skill"), (cli, "install_systemd"), (cli, "install_supervisor"),
+                                (cli, "start_standalone_daemon"), (cli, "configure_proxy_environment"),
+                                (cli, "ensure_callback_hook_file"), (cli, "report_claude_agent_readiness")):
+                spies[name] = stack.enter_context(mock.patch.object(owner, name, return_value=0))
             spies["run_systemctl"] = stack.enter_context(mock.patch.object(cli, "run_systemctl"))
             with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
                 status = cli.setup(args)
