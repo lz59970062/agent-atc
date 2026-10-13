@@ -36,7 +36,7 @@ from agent_atc.harness.codex import app_server
 from agent_atc.owners import host
 from agent_atc import runtime as atc_runtime
 from agent_atc.store import records as queue_store
-from agent_atc.system import commands
+from agent_atc.system import shell
 from agent_atc.store import layout
 
 
@@ -1865,7 +1865,7 @@ class CliTests(unittest.TestCase):
         output = io.StringIO()
         with (
             mock.patch.object(cli.shutil, "which", return_value="/opt/claude/bin/claude"),
-            mock.patch.object(commands, "process_command", side_effect=lambda command, environment=None: command),
+            mock.patch.object(shell, "process_command", side_effect=lambda command, environment=None: command),
             mock.patch.object(cli.subprocess, "run", return_value=completed) as auth_status,
             mock.patch.dict(
                 os.environ,

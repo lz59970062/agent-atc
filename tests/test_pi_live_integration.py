@@ -26,7 +26,7 @@ from agent_atc.engine import dispatch
 from agent_atc.engine import delivery as delivery_engine
 from agent_atc.harness.codex import app_server
 from agent_atc.store import records as queue_store
-from agent_atc.system import commands
+from agent_atc.system import shell
 from agent_atc.store import layout
 from agent_atc.harness.pi import channel as bridge
 from agent_atc.runtime import worker_command
@@ -429,7 +429,7 @@ class NativePiCallbackTests(unittest.TestCase):
         # Cancellation after recovery preparation, before print's input hook.
         queue_store.write_request(Path(payload['canceled_path']),request)
         requests_before=len(provider.requests)
-        process=subprocess.Popen(commands.process_command(plan.command),env=plan.environment,cwd=directory,
+        process=subprocess.Popen(shell.process_command(plan.command),env=plan.environment,cwd=directory,
                                  stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True)
         try:
             plan.monitor_owner(process)

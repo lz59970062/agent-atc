@@ -23,7 +23,7 @@ from ..runtime import worker_command
 from ..system import windows_process
 from ..store import layout
 from ..store import records as queue_store
-from ..system import commands
+from ..system import shell
 from .. import cli
 from . import dispatch
 from . import reminders as reminder_policy
@@ -648,7 +648,7 @@ def delivery_worker_main() -> int:
                 result = {"returncode": pi_callback.PUBLISHED_RETURN_CODE, "delivery": pi_delivery.delivery_name}
             else:
                 process = subprocess.Popen(
-                    commands.process_command([str(part) for part in command]),
+                    shell.process_command([str(part) for part in command]),
                     env=pi_delivery.environment if pi_delivery is not None else None,
                     stdin=subprocess.PIPE,
                     stdout=sys.stderr,

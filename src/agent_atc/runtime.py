@@ -7,7 +7,7 @@ from pathlib import Path
 import sys
 import os
 import shutil
-from .system import commands
+from .system import shell
 
 
 def worker_command(*arguments: str) -> list[str]:
@@ -29,4 +29,4 @@ def control_command(*arguments: str) -> str:
     """
     script = None if os.name == "nt" else console_script_path()
     command = [script, *arguments] if script else worker_command(*arguments)
-    return commands.format_command(command)
+    return shell.format_command(command)

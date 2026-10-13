@@ -23,7 +23,7 @@ from ..store import layout
 from ..owners import host
 from .. import runtime as atc_runtime
 from ..store import records as queue_store
-from ..system import commands
+from ..system import shell
 from . import delivery as delivery_engine
 from . import goals
 from . import tasks as managed_tasks
@@ -422,7 +422,7 @@ def submit_managed_run(args: argparse.Namespace) -> int:
         "outcome": "pending",
         "task": args.task,
         "cwd": os.path.abspath(args.cwd),
-        "command": args.command or commands.format_command(wrapped_command),
+        "command": args.command or shell.format_command(wrapped_command),
         "wrapped_command": wrapped_command,
         "message": args.message,
         "queue_dir": str(root),

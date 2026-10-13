@@ -1,4 +1,4 @@
-"""Environment flags and command lines in the platform's own conventions."""
+"""Environment flags and command lines in the platform shell's own conventions."""
 from __future__ import annotations
 
 import os

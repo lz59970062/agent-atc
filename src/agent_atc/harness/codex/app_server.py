@@ -14,7 +14,7 @@ from pathlib import Path
 from .desktop.connection import BridgeEndpoint, UnixBridgeEndpoint, load_bridge_endpoint, load_unix_bridge_endpoint
 from ...owners import macos as macos_platform
 from ...store import layout
-from ...system import commands
+from ...system import shell
 
 
 DESKTOP_APP_SERVER_ENV = "ATC_DESKTOP_APP_SERVER"
@@ -45,13 +45,13 @@ class CallbackTargetBusy(RuntimeError):
 
 def desktop_app_server_socket(request: dict[str, object]) -> Path | BridgeEndpoint | UnixBridgeEndpoint | None:
     target = request.get("target")
-    if DESKTOP_APP_SERVER_ENV in os.environ and not commands.truthy_env(DESKTOP_APP_SERVER_ENV):
+    if DESKTOP_APP_SERVER_ENV in os.environ and not shell.truthy_env(DESKTOP_APP_SERVER_ENV):
         if request.get("callback_mode") == "desktop":
             raise CallbackTransportBlocked("Desktop App Server delivery is explicitly disabled")
         return None
     if (
         request.get("callback_mode") == "manual"
-        or (not commands.truthy_env(DESKTOP_APP_SERVER_ENV) and request.get("callback_mode") not in ("cli", "desktop"))
+        or (not shell.truthy_env(DESKTOP_APP_SERVER_ENV) and request.get("callback_mode") not in ("cli", "desktop"))
         or not isinstance(target, dict)
         or target.get("kind") != "session"
         or not isinstance(target.get("value"), str)
@@ -69,7 +69,7 @@ def desktop_app_server_socket(request: dict[str, object]) -> Path | BridgeEndpoi
             return None
         return load_bridge_endpoint(Path(configured_bridge).expanduser(), layout.codex_home())
     configured = os.environ.get(APP_SERVER_SOCKET_ENV)
-    if configured and commands.truthy_env(ALLOW_APP_SERVER_SOCKET_OVERRIDE_ENV):
+    if configured and shell.truthy_env(ALLOW_APP_SERVER_SOCKET_OVERRIDE_ENV):
         return Path(configured).expanduser()
     return layout.codex_home() / "app-server-control" / "app-server-control.sock"
 

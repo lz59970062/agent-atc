@@ -14,7 +14,7 @@ from unittest import mock
 from agent_atc import cli
 from agent_atc.engine import tasks as managed_tasks
 from agent_atc.engine import delivery as delivery_engine
-from agent_atc.system import commands
+from agent_atc.system import shell
 
 
 class CodexCompatibilityTests(unittest.TestCase):
@@ -81,7 +81,7 @@ class CodexCompatibilityTests(unittest.TestCase):
             profile.mkdir()
             environment["CODEX_HOME"] = str(profile)
             environment["ATC_HOME"] = str(profile / "atc-home")
-            command = commands.process_command(command, environment)
+            command = shell.process_command(command, environment)
             result = subprocess.run(command, input="", text=True, capture_output=True, timeout=20,
                                     cwd=tmp, env=environment)
             output = (result.stdout + result.stderr).lower()

@@ -68,7 +68,7 @@ from .store import layout
 from .owners import host
 from . import runtime as atc_runtime
 from .store import records as queue_store
-from .system import commands
+from .system import shell
 from .engine import delivery as delivery_engine
 from .engine import reminders as reminder_policy
 from .harness.codex import app_server
@@ -91,7 +91,7 @@ def run(args: argparse.Namespace) -> int:
     if not args.wrapped_command:
         raise SystemExit("run mode requires a command after --")
 
-    args.command = args.command or commands.format_command(args.wrapped_command)
+    args.command = args.command or shell.format_command(args.wrapped_command)
     dispatch.bind_target(args)
     if args.dry_run:
         print(

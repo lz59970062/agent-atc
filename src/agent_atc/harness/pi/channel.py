@@ -142,7 +142,7 @@ def confirmed_owner_dead(owner: dict) -> bool:
     from ...engine import delivery as delivery_engine
     from ..codex import app_server
     from ...store import records as queue_store
-    from ...system import commands
+    from ...system import shell
     from ...store import layout
     identity = owner.get("owner_identity")
     current = tower.daemon_process_identity(os.getpid())
@@ -191,7 +191,7 @@ def valid_live_lease(owner: dict) -> bool:
     from ...engine import delivery as delivery_engine
     from ..codex import app_server
     from ...store import records as queue_store
-    from ...system import commands
+    from ...system import shell
     from ...store import layout
     pid = owner.get("lease_pid")
     return (type(pid) is int and pid > 0 and isinstance(owner.get("lease_identity"), dict)
@@ -215,7 +215,7 @@ def inspect_route(request: dict) -> dict:
     from ...engine import delivery as delivery_engine
     from ..codex import app_server
     from ...store import records as queue_store
-    from ...system import commands
+    from ...system import shell
     from ...store import layout
     report = {"transport": "pi_live_session", "status": "blocked", "end_to_end_verified": False,
               "pi_delivery": request.get("pi_delivery", "follow-up")}
@@ -278,7 +278,7 @@ class PiDelivery:
                         from ...engine import delivery as delivery_engine
                         from ..codex import app_server
                         from ...store import records as queue_store
-                        from ...system import commands
+                        from ...system import shell
                         from ...store import layout
                         delivery_engine.release_retained_target_lease(self.queue, self.request)
                 except (OSError, ValueError, RuntimeError):
@@ -333,7 +333,7 @@ def publication_outcome(root: Path, request: dict, timeout: float, now: float) -
     from ...engine import delivery as delivery_engine
     from ..codex import app_server
     from ...store import records as queue_store
-    from ...system import commands
+    from ...system import shell
     from ...store import layout
     published = request.get("pi_published_at")
     if not isinstance(published, (int, float)):
@@ -362,7 +362,7 @@ def reconcile_publications(root: Path, timeout: float) -> None:
     from ...engine import delivery as delivery_engine
     from ..codex import app_server
     from ...store import records as queue_store
-    from ...system import commands
+    from ...system import shell
     from ...store import layout
     now = time.time()
     for path in sorted((root / "pending").glob("*.json")):
@@ -416,7 +416,7 @@ def _reservation(directory: Path, session: str, profile: str) -> dict:
     from ...engine import delivery as delivery_engine
     from ..codex import app_server
     from ...store import records as queue_store
-    from ...system import commands
+    from ...system import shell
     from ...store import layout
     header = session_header(session)
     return {"version": 1, "session_file": session, "session_id": header["id"],
@@ -436,7 +436,7 @@ def prepare_delivery(payload: dict) -> PiDelivery:
     from ...engine import delivery as delivery_engine
     from ..codex import app_server
     from ...store import records as queue_store
-    from ...system import commands
+    from ...system import shell
     from ...store import layout
     request = payload["request"]
     try:
@@ -533,7 +533,7 @@ def install_extension(args: argparse.Namespace) -> int:
     from ...engine import delivery as delivery_engine
     from ..codex import app_server
     from ...store import records as queue_store
-    from ...system import commands
+    from ...system import shell
     from ...store import layout
     skill = profile / "skills" / "agent-atc"
     if skill_install.install_skill_tree(skill, include_codex_plugin=False, force=bool(getattr(args, "force", False)),
@@ -562,7 +562,7 @@ def _verify_owner_identity(directory: Path, nonce: str) -> bool:
     from ...engine import delivery as delivery_engine
     from ..codex import app_server
     from ...store import records as queue_store
-    from ...system import commands
+    from ...system import shell
     from ...store import layout
     try:
         owner = read_record(directory / "owner.json")
@@ -598,7 +598,7 @@ def record_spawn(directory: Path, nonce: str, process) -> None:
     from ...engine import delivery as delivery_engine
     from ..codex import app_server
     from ...store import records as queue_store
-    from ...system import commands
+    from ...system import shell
     from ...store import layout
     identity = tower.daemon_process_identity(process.pid)
     if identity is not None:
@@ -615,7 +615,7 @@ def managed_pi(args: argparse.Namespace) -> int:
     from ...engine import delivery as delivery_engine
     from ..codex import app_server
     from ...store import records as queue_store
-    from ...system import commands
+    from ...system import shell
     from ...store import layout
     forwarded = list(args.pi_args)
     if forwarded[:1] == ["--"]:
@@ -666,7 +666,7 @@ def managed_pi(args: argparse.Namespace) -> int:
         command = [cli.get_agent("pi").executable(environment), "--session", session,
                    "--extension", str(extension_path()), *forwarded]
         print(f"Pi session: {session}", file=sys.stderr)
-        process = subprocess.Popen(commands.process_command(command), cwd=cwd, env=environment)
+        process = subprocess.Popen(shell.process_command(command), cwd=cwd, env=environment)
         record_spawn(directory, reservation["owner_nonce"], process)
         deadline = time.monotonic() + 15
         verified = False

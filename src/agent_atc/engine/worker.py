@@ -14,7 +14,7 @@ from ..system import windows_io, windows_process
 from ..store import layout
 from ..owners import host
 from ..store import records as queue_store
-from ..system import commands
+from ..system import shell
 from . import tasks as managed_tasks
 
 
@@ -152,7 +152,7 @@ def run_managed_worker_locked(root: Path, task: dict[str, object]) -> int:
         if os.name == "nt":
             run_kwargs.update(stdout=sys.stdout, stderr=sys.stderr, env=environment,
                               **windows_process.background_popen_kwargs())
-            command = commands.process_command(command, environment)
+            command = shell.process_command(command, environment)
         if task.get("task_kind") == "agent":
             prompt_path = Path(str(task["agent_prompt_path"]))
             result_path = Path(str(task["agent_result_path"]))

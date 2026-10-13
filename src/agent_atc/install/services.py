@@ -19,7 +19,7 @@ from ..owners import windows as windows_platform
 from ..system import windows_process
 from ..store import layout
 from ..store import records as queue_store
-from ..system import commands
+from ..system import shell
 from ..engine import delivery as delivery_engine
 from ..engine import reminders as reminder_policy
 from ..harness.codex import app_server
@@ -74,7 +74,7 @@ def report_claude_agent_readiness(args: argparse.Namespace) -> None:
     try:
         environment = managed_tasks.child_agent_environment(dict(os.environ))
         result = subprocess.run(
-            commands.process_command([command, "auth", "status", "--json"], environment),
+            shell.process_command([command, "auth", "status", "--json"], environment),
             check=False,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
