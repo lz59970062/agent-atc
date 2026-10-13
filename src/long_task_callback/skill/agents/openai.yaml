@@ -1,0 +1,4 @@
+interface:
+  display_name: "Long Task Callback"
+  short_description: "Durable child agents, registered templates, callbacks"
+  default_prompt: "Use $long-task-callback to delegate this task to a fresh child agent or arrange its completion callback."

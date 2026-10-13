@@ -1,0 +1,15 @@
+{
+  "name": "@ltc-proto/ltc",
+  "version": "0.0.0",
+  "description": "Long Task Callback: wake a Codex, Claude Code or Pi session when a long task finishes",
+  "license": "MIT",
+  "bin": {
+    "ltc": "bin/ltc.js",
+    "codex-long-task-wakeup": "bin/ltc.js"
+  },
+  "files": ["bin"],
+  "engines": { "node": ">=18" },
+  "optionalDependencies": {
+    "@ltc-proto/linux-x64": "0.0.0"
+  }
+}

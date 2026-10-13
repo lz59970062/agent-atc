@@ -1,0 +1,268 @@
+# Native Windows
+
+LTC runs on Windows 10 or later with Python 3.9 or newer. A per-user Task Scheduler
+task keeps the callback coordinator available. Each business attempt has its own
+separate, on-demand scheduled task, and its runner owns a Job Object containing
+the command and its descendants. Screen, systemd and WSL are not prerequisites.
+WSL continues to use the Linux deployment separately.
+
+Use an ordinary logged-in Windows user account with access to Task Scheduler and
+an ACL-capable local filesystem, preferably NTFS. LTC uses the current interactive
+user token and does not request administrator elevation or store a Windows
+password. A locked desktop is still logged in; logging out or rebooting can
+interrupt work. LTC 0.7.0 does not provide an unattended Windows service that
+runs while the user is logged out.
+
+## Install and configure
+
+Install the 0.7.0 release from PowerShell:
+
+```powershell
+git clone --branch v0.7.0 --depth 1 https://github.com/lz59970062/long-task-wakeup.git
+Set-Location long-task-wakeup
+py -3 -m venv .venv
+& .\.venv\Scripts\python.exe -m pip install .
+& .\.venv\Scripts\ltc.exe --version
+& .\.venv\Scripts\ltc.exe setup --service windows-task --force --enable --now
+```
+
+If the Python launcher is unavailable, use the full path to your Python executable.
+No virtual-environment activation or PowerShell execution-policy change is needed.
+Keep the virtual environment and installed runtime at their configured locations:
+the scheduled tasks pin absolute paths. For an editable development installation,
+use `-m pip install -e .` and keep the checkout in place as well.
+
+`--service auto` selects `windows-task` on Windows. `--enable` adds the current
+user's login trigger; `--now` starts the coordinator immediately. Business tasks
+have no login/periodic trigger, restart-on-failure policy or missed-trigger catch-up.
+Their execution time limit is disabled and the multiple-instance policy is
+`IgnoreNew`, alongside LTC's per-attempt admission and locks.
+
+Setup installs the bundled Agent skill and preserves any existing callback hook.
+It uses the current `CODEX_HOME` (default `%USERPROFILE%\.codex`) and
+`CLAUDE_CONFIG_DIR` (default `%USERPROFILE%\.claude`), and pins their paths, Agent
+executables and PATH in private coordinator configuration. Authenticate the Agent
+CLI using that same account and profile. Setup's local checks do not establish that
+a model call or original-session callback will succeed.
+
+The default queue is `<LTC_HOME>\queue` (`LTC_HOME` defaults to `%USERPROFILE%\.ltc`). To select another one,
+pass the same absolute `--queue-dir` to setup, submission, doctor and ACK. A profile
+has one coordinator queue; do not point a live profile coordinator at a second
+queue. Use a separate profile for concurrent isolated deployments. To change an
+existing coordinator's queue, first drain its tasks and callbacks, uninstall it,
+then configure the new queue.
+
+### Desktop launcher in the 0.7.1 preview
+
+The 0.7.1 preview on `codex/macos-desktop-callback` extends this same `ltc setup` command to
+generate a Windows Desktop launcher. Published `v0.7.0` does not include this
+setup feature; install that preview branch (or a commit from it), then
+run setup using that installation. A wheel installation works without keeping
+the source checkout, `examples` directory or a repository-local `.venv`.
+
+The preview includes a native PowerShell Git installer. From a checkout of this
+branch, select the same branch when running the installer:
+
+```powershell
+& .\scripts\install_from_git.ps1 -RepoUrl 'https://github.com/lz59970062/long-task-wakeup.git@codex/macos-desktop-callback' -SetupArguments @('--desktop-launch-mode', 'package-context')
+```
+
+It runs pip and `setup --force --enable --now` with the same Python. `-Python`
+defaults to `python`; set it to an existing virtual environment's `python.exe`
+when needed. `-Subdirectory` selects an optional package subdirectory, and
+`-SetupArguments` passes an array of extra setup flags. Omit those extra flags
+for the default direct launch mode. Running against `v0.7.0` cannot add the new
+launcher feature; ordinary pip installation still requires a separate setup.
+
+Setup generates these files in `<CODEX_HOME>\long-task-wakeup`:
+
+- `Start LTC Desktop.cmd`, for double-click startup;
+- `Start LTC Desktop.ps1`, using the packaged launch implementation;
+- private `desktop.json`, with paths and choices from this installation.
+
+Setup binds the launcher to the installed Python environment and saves default
+dynamic discovery settings. `ltc desktop launch` and `ltc desktop launch --check-only`
+discover Desktop through the Store package manifest and select a Core that
+matches the installed bundle. Generated absolute paths belong to the local
+installation; do not copy another machine's generated files. Rerun setup after
+moving or replacing Python. An absent Desktop installation does not block CLI
+setup or launcher generation; after installing Desktop, use
+`ltc desktop launch --check-only` before launching it.
+
+The same commands work on Mac and Windows:
+
+```powershell
+ltc setup --force --enable --now
+ltc desktop status
+# Override automatic discovery when needed:
+ltc setup --desktop-app 'C:\Apps\Codex\Codex.exe' --force --enable --now
+# Or regenerate only the Desktop launcher/configuration:
+ltc desktop prepare --app 'C:\Apps\Codex\Codex.exe' --force
+```
+
+`desktop prepare` also accepts `--wrapper` and `--core` for explicit executable
+selection. `setup --no-desktop-launcher` skips launcher generation on both Mac
+and Windows. Setup/prepare generate files without starting Desktop, stopping an
+existing instance or running a native GUI-creation probe. Creating the launcher
+does not activate sharing. If configuration already exists, `desktop prepare`
+requires `--force` to replace it; it is not an application-discovery command.
+
+Windows defaults to direct launch. To select and save the experimental Store
+package route, use either `ltc setup --desktop-launch-mode package-context` or
+`ltc desktop prepare --launch-mode package-context --force`. There is no automatic
+fallback after direct launch fails. `ltc desktop launch --check-only` runs the
+existing suspended process-creation probe; actual activation uses
+`ltc desktop launch` or the generated `.cmd` after saving work and closing
+Desktop. Read the [bridge procedure and limits](windows-desktop-bridge.md) first.
+This packaging change was developed on macOS and has not received native Windows
+installation or callback acceptance. Historical Windows bridge success remains
+separate evidence.
+
+## Submit and acknowledge
+
+Run from the original Agent conversation so the session can be detected, or pass
+its actual ID with `--agent codex|claude|pi --session <original-session-id>`. Never
+substitute `--last` or copy a Mac's session binding to Windows.
+
+```powershell
+$ltcPython = (Resolve-Path .\.venv\Scripts\python.exe).Path
+$ltcExe = (Resolve-Path .\.venv\Scripts\ltc.exe).Path
+& $ltcExe run --backend windows-task --task 'two-minute work' -- $ltcPython -c 'import time; time.sleep(120)'
+& $ltcExe agent codex --task 'review changes' -- 'Review this repository and return evidence.'
+& $ltcExe done --task 'external job' --exit-code 0
+```
+
+These examples assume the invoking shell carries the original session binding.
+Use native executables with an argument list. Recognized npm and simple forwarding
+`.cmd` launchers are resolved without passing user arguments through `cmd.exe`.
+An unrecognized batch wrapper is rejected; configure its underlying executable
+with `--codex-bin` / `--claude-bin` / `--pi-bin` or the corresponding Agent binary environment
+variable. For deliberate shell syntax, invoke the shell explicitly, for example
+`powershell.exe -NoProfile -Command <script>`.
+
+In release 0.7.0, Windows callbacks use the Agent CLI to resume the exact bound
+session by default. The 0.7.1 preview adds [explicit callback modes](callback-modes.md).
+An [experimental explicit Desktop bridge](windows-desktop-bridge.md) can connect
+Desktop and LTC to one shared App Server. The tested Windows Store package still
+fails default direct startup with error 5. The original launcher's explicit
+`-PackageContext -CheckOnly` option is based on a successful suspended-creation
+probe under package identity. In the preview, select `package-context` during
+setup/prepare and run `ltc desktop launch --check-only`. The probe reports
+`native_creation_passed` separately from running-Desktop and other
+`launch_blockers` that fail the full preflight. After saving work, closing Desktop
+and passing the full preflight, `ltc desktop launch` requests startup using the
+saved route.
+It uses a standard-library base-`pythonw.exe` helper under package identity,
+without persistent environment changes, package debugging policy changes or
+`-PreventBreakaway`. Microsoft's
+[tool limitations](https://learn.microsoft.com/en-us/powershell/module/appx/invoke-commandindesktoppackage?view=windowsserver2025-ps)
+include a token that differs from normal activation and no guarantee of other app
+behavior. GUI execution, one App Tools call, original-session delivery and ACK passed
+on the tested installation on 2026-09-27; other Desktop versions, workflows and
+the preview's new generated installation path remain unverified. Read the linked
+bridge procedure before closing Desktop for a test.
+LTC does not guess a Desktop socket or silently switch sessions. Each callback includes a PowerShell
+ACK command pinned to this installation. Copy that command exactly, including
+the leading `&` and single-quoted paths; doubled single quotes inside paths are
+intentional. For example:
+
+```powershell
+& 'C:\LTC\.venv\Scripts\python.exe' 'C:\LTC\src\long_task_callback\_entry.py' 'ack' '--queue-dir' 'C:\LTC state\queue' '--id' '<callback-id>'
+```
+
+The actual emitted runtime path may differ. Inspect the result and requested
+details before ACK. ACK records callback receipt; it does not mark a goal complete.
+Delivery is at least once, so inspect existing work before acting on a repeated
+callback. `cancel` continues to cancel callbacks only, not the business process.
+
+An earlier Windows live test could not resume its already-open Codex Desktop
+session: Codex 0.153.4 reported `already has an active writer`. Native workload
+completion and fake-Agent delivery/ACK passed, but that original-session delivery
+did not. Ending a turn does not establish that Desktop releases its session owner.
+Do not delete Codex's writer lock or change the callback target to work around it;
+retain the failed callback for a supported Desktop transport or valid CLI ownership.
+The bridge's isolated real App Server protocol test demonstrates two clients resuming
+one owned test thread, without any model call; this is narrower than real Desktop
+receipt and ACK. The later package-context Desktop acceptance is recorded above.
+
+## Inspect, update and remove
+
+```powershell
+& .\.venv\Scripts\ltc.exe install-windows-task --print
+& .\.venv\Scripts\ltc.exe doctor --backend windows-task --agent codex --session '<original-session-id>'
+Get-ScheduledTask | Where-Object TaskName -Like 'ltc-coordinator-*'
+```
+
+Coordinator configuration is
+`<LTC_HOME>\windows-codex-long-task-wakeup.json`; its log is
+`<LTC_HOME>\daemon.log`. The task registration contains the
+fixed runtime and private file references, not the full environment or prompts.
+`install-windows-task --print` previews that registration without printing the
+private configuration payload.
+
+After upgrading the package, update the same profile/queue with:
+
+```powershell
+& .\.venv\Scripts\ltc.exe setup --service windows-task --keep-skill --force --enable --now
+```
+
+The live coordinator verifies its process identity, waits for active callback
+deliveries to drain and exits; its scheduled supervisor starts the replacement
+with the updated configuration. Business runners remain independently owned.
+An unverifiable existing owner is left running for inspection.
+
+To remove the coordinator's login registration:
+
+```powershell
+& .\.venv\Scripts\ltc.exe uninstall-windows-task
+# If installed under a custom name, use that same --name here.
+```
+
+Uninstall requests a verified, drained coordinator shutdown. It does not delete
+task records, ACKs or business-task registrations, or cancel live business work.
+Drain tasks before retiring a deployment so completed work can still deliver its
+callback. Do not remove lock files manually: an inherited handle may still hold
+the lease after its original coordinator exits.
+
+## Guarantees and limits
+
+- Closing the submitting terminal or replacing the coordinator does not own the
+  lifetime of an independently scheduled business runner. Runner exit closes its
+  Job Object and ends surviving descendants; interrupted work is not called success.
+- Missing owners, access errors, Scheduler timeouts, boot changes and ambiguous
+  submission responses never authorize automatic business replay. Saved results
+  take precedence; missing callbacks are reconstructed with the same ID.
+- New private files and directories have protected ACLs granting the current user
+  and SYSTEM access at creation. Filesystems without persistent ACL support are
+  rejected. A restricted Agent sandbox token may be unable to access those files
+  or Task Scheduler; perform authorized installation/testing in an ordinary user
+  process without broadening the ACL or switching to an administrator account.
+- File data is flushed before same-volume replacement, with a Windows write-through
+  request. A reader that denies deletion sharing can make replacement fail while
+  leaving the old destination intact. Windows has no supported POSIX-equivalent
+  directory fsync: persistence of creates, renames and deletes through sudden power
+  loss is not guaranteed. Keep queue state on a local ACL-capable volume.
+- Sleep pauses execution; logout, reboot and machine loss can interrupt it. No
+  backend preserves a running process across reboot, and LTC does not auto-replay it.
+
+See [Windows validation](validation-windows.md) for actual native test and callback
+evidence, including remaining limitations. The [Mac-to-Windows handoff](handoff-macos-to-windows.md)
+is the historical implementation plan, not the current support status.
+
+## Isolated developer checks
+
+The normal suite includes real ACL, handle handoff, process-tree and PowerShell ACK
+checks. Native Task Scheduler tests are explicit opt-ins and use disposable task
+names, profiles and queues, with local fake Agents and no model calls:
+
+```powershell
+$env:LTC_TEST_WINDOWS_SCHEDULER = '1'
+$env:LTC_TEST_WINDOWS_TASK = '1'
+& .\.venv\Scripts\python.exe -m unittest discover -s tests -p test_windows_backend.py -v
+& .\.venv\Scripts\python.exe -m unittest discover -s tests -p test_windows_integration.py -v
+```
+
+Run as the ordinary logged-in user outside a restricted Agent sandbox. The CI
+matrix includes Windows Python 3.9 and 3.12 alongside Linux/macOS; its native jobs
+are configured to use the runner's own Task Scheduler session without alternate
+credentials. A configured workflow is not evidence of a completed remote CI run.
