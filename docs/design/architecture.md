@@ -54,7 +54,7 @@ agent_atc/
 
   store/           持久化，只关心"怎么可靠地存"
     layout.py        ~/.atc 目录布局，唯一的路径来源
-    files.py         原子写入（现 storage.py）
+    files.py         原子写入（原 storage.py）
     locks.py         文件锁、租约
     inbox.py         CLI 提交请求的收件箱（见第 5 节）
     repo.py          按 schema 读写 Task、Callback、Result、Ack
@@ -68,9 +68,12 @@ agent_atc/
     （预留）acp/     通用 ACP 客户端，只用于启动子代理
     （预留）endpoint/ 给 SDK 框架用的命令或 HTTP 投递
 
-  owners/          谁托着进程（现 platforms/）
+  owners/          谁托着进程（原 platforms/ 中的后端）
     base.py          ExecutionBackend、OwnerState
-    systemd.py  launchd.py  windows/  screen.py  posix.py
+    linux.py（systemd）  macos.py（launchd）  windows.py（Task Scheduler）  screen.py
+
+  system/          操作系统原语，只依赖标准库
+    posix.py  windows_io.py  windows_process.py  windows_tcp.py
 
   engine/          生命周期六步的业务逻辑
     dispatch.py      派发：校验 Worker 与 Target，建任务记录
@@ -94,7 +97,7 @@ agent_atc/
     services.py      systemd unit、launchd plist、Windows 计划任务、supervisor
     skills.py        各 Harness 的 skill 安装
     migrate.py       从旧 LTC 一次性迁移
-    doctor.py        诊断（现 diagnostics.py）
+    diagnostics.py   诊断
 
   assets/          随包分发的非 Python 文件：skill、JS 扩展、PowerShell 脚本
 ```
@@ -106,12 +109,13 @@ cli ──→ tower ──→ engine ──→ harness ──→ core
                      │   └──→ owners  ──→ core
                      └──────→ store   ──→ core
 install ──→ owners、harness、store
+（system 是最底层，store、owners、harness 都可以依赖它）
 ```
 
 规则：
 
 1. `core` 不依赖任何包，也不做 I/O，所以协议逻辑可以单独测试。
-2. `harness` 和 `owners` 只依赖 `core`，**不碰 `store`**。适配器只负责"构造命令、建立连接、汇报能力"，不拥有任何状态。这条延续现在 `agents/base.py` 里写明的原则。
+2. `harness` 和 `owners` 只依赖 `core` 和 `system`，**不碰 `store`**。适配器只负责"构造命令、建立连接、汇报能力"，不拥有任何状态。这条延续现在 `agents/base.py` 里写明的原则。
 3. `engine` 是唯一把 Harness、托管者和存储组合起来的地方。
 4. `cli` 不直接改共享状态，只往收件箱提交请求、读取记录。
 5. 加一个测试扫描 import 语句，违反方向就失败，防止架构慢慢退化。
@@ -190,6 +194,8 @@ class Injector(Protocol):      # 热投递：注入运行中的会话
 | 最后 | 跨 Harness 演示场景和对照实验 | 证据 |
 
 前 4 步只移动代码、不改行为，审查时只需确认"测试没改断言"；后 3 步才改行为，每步都有新的测试。
+
+搬家时改了文件名的模块，会用旧名字作为别名导入（例如 `from .harness.pi import channel as pi_callback`），这样函数体一行不用改。这些别名在第 3 步拆分 `cli.py` 时逐步清理。
 
 ## 9. 已拍板
 
