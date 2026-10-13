@@ -42,17 +42,17 @@ coordinator before submitting new tasks.
 | `owners/screen.py` | GNU screen owner for Linux/containers and macOS | Infer no process from a failed query |
 | `owners/linux.py` | Independent systemd user units, native identity | Restart arbitrary user commands |
 | `owners/macos.py` | Independent one-shot launchd jobs, native host/boot/process identity | Register business commands for login or automatically restart them |
-| `launchd_service.py` | macOS coordinator LaunchAgent installation and safe activation | Stop a live coordinator to apply configuration |
+| `install/launchd_service.py` | macOS coordinator LaunchAgent installation and safe activation | Stop a live coordinator to apply configuration |
 | `owners/windows.py`, `windows_scheduler.ps1` | Per-attempt Task Scheduler owners, host/boot/process identity and admission | Replay ambiguous submissions or infer absence from RPC failure |
 | `system/windows_io.py` | Protected ACLs, atomic replacement, transferable exclusive file handles | Claim POSIX directory-fsync or power-loss guarantees |
 | `system/windows_process.py` | Runner-owned Jobs, shell-free executable resolution, explicit handle inheritance | Launch an uncontained workload or pass prompts through cmd.exe |
-| `windows_service.py` | Per-user scheduled coordinator supervisor and drain/replacement | Stop active business jobs during coordinator updates |
+| `install/windows_service.py` | Per-user scheduled coordinator supervisor and drain/replacement | Stop active business jobs during coordinator updates |
 | `system/posix.py` | OS-held file locks and directory syncing | Pretend these primitives work on Windows |
 | `store/files.py` | Atomic private JSON/text persistence | Store state in installation directories |
 | `harness/` | Agent metadata, session discovery, child/resume commands and capabilities | Launch tasks or change queue lifecycle |
 | `harness/pi/adapter.py` | Pi child command, stdout result capture, thinking levels, and print-mode resume of the bound session file | Open the interactive TUI or resume an ephemeral session |
 | `core/envelope.py` | Compact, transport-independent envelopes | Drop custom instructions without an explicit details-read requirement |
-| `diagnostics.py` | Environment, configuration and lifecycle observations with Agent-owned recovery guidance | Execute repairs, change producer exit codes, or equate local checks with authenticated delivery |
+| `install/diagnostics.py` | Environment, configuration and lifecycle observations with Agent-owned recovery guidance | Execute repairs, change producer exit codes, or equate local checks with authenticated delivery |
 | `runtime.py`, `_entry.py` | Launch workers from this exact installation | Rediscover another ATC on PATH |
 | `templates.py` | Validated user and built-in task templates | Execute template text as a shell command |
 

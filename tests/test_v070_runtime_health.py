@@ -9,7 +9,8 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from agent_atc import cli, diagnostics
+from agent_atc import cli
+from agent_atc.install import diagnostics
 from agent_atc.owners import OwnerState
 
 
@@ -24,7 +25,7 @@ class HealthArtifacts:
         self.addCleanup(self.patches.close)
         self.patches.enter_context(mock.patch.object(cli, "current_machine_id", return_value="this-machine"))
         self.patches.enter_context(mock.patch.object(cli, "current_boot_id", return_value="this-boot"))
-        self.patches.enter_context(mock.patch("agent_atc.diagnostics.time.time", return_value=1000.0))
+        self.patches.enter_context(mock.patch("agent_atc.install.diagnostics.time.time", return_value=1000.0))
 
     def write_json(self, path, value):
         path.parent.mkdir(parents=True, exist_ok=True)

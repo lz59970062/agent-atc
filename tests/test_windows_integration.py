@@ -19,7 +19,8 @@ import time
 import unittest
 from unittest import mock
 
-from agent_atc import cli, diagnostics, windows_service
+from agent_atc import cli
+from agent_atc.install import diagnostics, windows_service
 from agent_atc.owners import OwnerState
 from agent_atc.owners.windows import WindowsBackend, scheduler_call, process_identity
 from agent_atc.system import windows_io

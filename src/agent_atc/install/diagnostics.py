@@ -17,13 +17,13 @@ import sys
 import tempfile
 import time
 
-from . import __version__, callback_transport
-from .harness.claude import session as claude_code
-from .harness import get_agent, get_child_agent
-from .system import posix, windows_io
-from .owners import OwnerState
-from .owners.screen import ScreenBackend
-from .runtime import worker_command
+from .. import __version__, callback_transport
+from ..harness.claude import session as claude_code
+from ..harness import get_agent, get_child_agent
+from ..system import posix, windows_io
+from ..owners import OwnerState
+from ..owners.screen import ScreenBackend
+from ..runtime import worker_command
 
 SCHEMA = "atc.health.v1"
 PRODUCERS = {"run", "agent", "done"}
@@ -77,7 +77,7 @@ def queue_writable(root: Path) -> bool:
 
 def coordinator_issue(root: Path) -> dict[str, str] | None:
     """Observe the existing singleton inode without creating a new lock file."""
-    from . import cli
+    from .. import cli
 
     path = cli.owner_lock_path(root, "daemon-singleton")
     try:
@@ -111,7 +111,7 @@ def coordinator_issue(root: Path) -> dict[str, str] | None:
 
 def environment_profile() -> dict[str, object]:
     """Describe this runtime; supported backends determine useful checks."""
-    from . import cli
+    from .. import cli
 
     operating_system = {"linux": "linux", "darwin": "macos", "win32": "windows"}.get(sys.platform, "other")
     return {"os": operating_system, "container": cli.running_in_container() if sys.platform == "linux" else False,
@@ -126,7 +126,7 @@ def runtime_issues(root: Path) -> list[dict[str, object]]:
     to tolerate a worker finishing while its manager is queried. Group faults so
     a manager outage does not flood the calling Agent with one block per task.
     """
-    from . import cli
+    from .. import cli
 
     grouped: dict[tuple[str, str], dict[str, object]] = {}
     now = time.time()
@@ -262,7 +262,7 @@ def _work(args: argparse.Namespace) -> dict[str, object]:
 
 def inspect(args: argparse.Namespace) -> dict[str, object]:
     """Check supported environment, configuration and observed lifecycle state."""
-    from . import cli
+    from .. import cli
 
     operation = _operation(args)
     root = cli.queue_dir(args).expanduser().absolute()
@@ -474,7 +474,7 @@ def delivery_issues(root: Path) -> list[dict[str, object]]:
     Output is grouped by issue and Agent; only five example IDs are included in
     each group. Commands, prompts and recorded exception text are never emitted.
     """
-    from . import cli
+    from .. import cli
 
     actions = {
         "callback_transport_blocked": (

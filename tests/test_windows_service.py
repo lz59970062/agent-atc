@@ -12,7 +12,8 @@ import tempfile
 import unittest
 from unittest import mock
 
-from agent_atc import cli, windows_service
+from agent_atc import cli
+from agent_atc.install import windows_service
 from agent_atc.owners import windows
 from agent_atc.system import windows_io
 

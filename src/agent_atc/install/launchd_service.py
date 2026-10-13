@@ -12,8 +12,8 @@ from pathlib import Path
 import subprocess
 import sys
 
-from .owners import OwnerState
-from .owners import macos
+from ..owners import OwnerState
+from ..owners import macos
 
 
 def agent_directory() -> Path:
@@ -21,7 +21,7 @@ def agent_directory() -> Path:
 
 
 def service_text(args: argparse.Namespace) -> str:
-    from . import cli
+    from .. import cli
 
     label = macos.validate_label(args.name)
     command = cli.daemon_command(args)
@@ -47,7 +47,7 @@ def service_text(args: argparse.Namespace) -> str:
 
 
 def install(args: argparse.Namespace) -> int:
-    from . import cli
+    from .. import cli
 
     try:
         text = service_text(args)

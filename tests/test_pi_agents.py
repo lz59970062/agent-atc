@@ -20,7 +20,8 @@ import time
 import unittest
 from unittest import mock
 
-from agent_atc import cli, diagnostics
+from agent_atc import cli
+from agent_atc.install import diagnostics
 from agent_atc.harness.pi import channel as pi_callback
 from agent_atc.harness import AGENTS, CHILD_AGENT_NAMES, ChildOptions, get_agent, get_child_agent
 from agent_atc.runtime import worker_command

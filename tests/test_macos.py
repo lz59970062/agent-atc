@@ -14,7 +14,8 @@ import tempfile
 import unittest
 from unittest import mock
 
-from agent_atc import cli, diagnostics, launchd_service
+from agent_atc import cli
+from agent_atc.install import diagnostics, launchd_service
 from agent_atc.owners import LaunchdBackend, LaunchError, OwnerState
 from agent_atc.owners import macos, screen
 from test_cli import assert_private_file

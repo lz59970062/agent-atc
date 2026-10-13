@@ -36,7 +36,7 @@ from .core import envelope as callbacks
 from . import callback_transport
 from .harness.claude import session as claude_code
 from .harness.pi import channel as pi_callback
-from . import diagnostics
+from .install import diagnostics
 from .store import files as storage
 from . import template_registration
 from .harness.codex.desktop.connection import BridgeEndpoint, UnixBridgeEndpoint, load_bridge_endpoint, load_unix_bridge_endpoint
@@ -4830,12 +4830,12 @@ def install_systemd(args: argparse.Namespace) -> int:
 
 
 def install_launchd(args: argparse.Namespace) -> int:
-    from . import launchd_service
+    from .install import launchd_service
     return launchd_service.install(args)
 
 
 def install_windows_task(args: argparse.Namespace) -> int:
-    from . import windows_service
+    from .install import windows_service
     return windows_service.install(args)
 
 
@@ -5791,7 +5791,7 @@ def main() -> int:
     if args.mode == "_delivery-worker":
         return delivery_worker_main()
     if args.mode == "_windows-coordinator":
-        from . import windows_service
+        from .install import windows_service
         return windows_service.run_coordinator(Path(args.config_file))
     if args.mode == "daemon":
         return daemon(args)
@@ -5802,7 +5802,7 @@ def main() -> int:
     if args.mode == "install-windows-task":
         return install_windows_task(args)
     if args.mode == "uninstall-windows-task":
-        from . import windows_service
+        from .install import windows_service
         return windows_service.uninstall(args)
     if args.mode == "install-skill":
         return install_skill(args)

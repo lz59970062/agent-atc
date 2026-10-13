@@ -16,9 +16,9 @@ import subprocess
 import sys
 import time
 
-from .owners import windows
-from .system import windows_io, windows_process
-from .runtime import worker_command
+from ..owners import windows
+from ..system import windows_io, windows_process
+from ..runtime import worker_command
 
 
 def service_owner(name: str, profile: Path) -> str:
@@ -29,13 +29,13 @@ def service_owner(name: str, profile: Path) -> str:
 
 
 def config_path(name: str) -> Path:
-    from . import cli
+    from .. import cli
     service_owner(name, cli.codex_home())  # Validate before making a path.
     return cli.daemon_state_dir() / f"windows-{name}.json"
 
 
 def configuration(args: argparse.Namespace) -> dict[str, object]:
-    from . import cli
+    from .. import cli
     root = cli.queue_dir(args).resolve()
     command = cli.daemon_command(args)
     if "--queue-dir" in command:
@@ -60,7 +60,7 @@ def configuration(args: argparse.Namespace) -> dict[str, object]:
 
 
 def install(args: argparse.Namespace) -> int:
-    from . import cli
+    from .. import cli
     try:
         config = configuration(args)
         target = config_path(args.name).resolve()
@@ -161,7 +161,7 @@ def run_coordinator(path: Path) -> int:
 
 def uninstall(args: argparse.Namespace) -> int:
     """Remove login registration, allowing live callback owners to drain."""
-    from . import cli
+    from .. import cli
     try:
         path = config_path(args.name)
         config = json.loads(path.read_text(encoding="utf-8"))
