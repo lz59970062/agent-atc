@@ -1900,36 +1900,6 @@ class CliTests(unittest.TestCase):
             with mock.patch.dict(os.environ, environment, clear=True):
                 self.assertEqual(cli.daemon_state_dir(), Path(tmp) / ".ltc")
 
-    def test_legacy_codex_profile_state_moves_and_leaves_a_link(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            legacy = Path(tmp) / "codex" / "long-task-wakeup"
-            (legacy / "queue" / "pending").mkdir(parents=True)
-            (legacy / "callback-hook.md").write_text("Keep going.\n", encoding="utf-8")
-            new = Path(tmp) / "ltc"
-            with (
-                mock.patch.dict(os.environ, {"CODEX_HOME": str(Path(tmp) / "codex")}),
-                mock.patch.object(cli, "ltc_home", return_value=new),
-                mock.patch.dict(os.environ, {"LTC_HOME": ""}),
-                mock.patch("sys.stderr", new_callable=io.StringIO),
-            ):
-                cli.migrate_legacy_state_dir()
-                cli.migrate_legacy_state_dir()  # Idempotent once the link exists.
-
-            self.assertTrue(new.is_dir() and not new.is_symlink())
-            self.assertTrue(legacy.is_symlink())
-            self.assertEqual(legacy.resolve(), new.resolve())
-            self.assertEqual((legacy / "callback-hook.md").read_text(encoding="utf-8"), "Keep going.\n")
-            self.assertTrue((new / "queue" / "pending").is_dir())
-
-    def test_explicit_ltc_home_never_adopts_legacy_state(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            legacy = Path(tmp) / "codex" / "long-task-wakeup"
-            legacy.mkdir(parents=True)
-            with mock.patch.dict(os.environ, {"CODEX_HOME": str(Path(tmp) / "codex"), "LTC_HOME": str(Path(tmp) / "ltc")}):
-                cli.migrate_legacy_state_dir()
-            self.assertFalse((Path(tmp) / "ltc").exists())
-            self.assertFalse(legacy.is_symlink())
-
     def test_callback_hook_file_is_created_once_and_preserves_user_content(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / "ltc-home"

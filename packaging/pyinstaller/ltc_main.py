@@ -1,7 +1,6 @@
 """Frozen entry point: one executable serves every console script.
 
-pyproject.toml declares ``ltc``, ``codex-long-task-wakeup`` and
-``ltc-desktop-core``. A frozen build ships a single binary, so the name it was
+pyproject.toml declares ``ltc`` and ``ltc-desktop-core``. A frozen build ships a single binary, so the name it was
 invoked under selects the entry point.
 """
 from pathlib import Path

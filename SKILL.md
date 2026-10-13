@@ -154,7 +154,7 @@ Choose the execution path before launching the command:
 If a supposedly short foreground command unexpectedly remains active, keep the current turn
 responsible for it; do not abandon it as an agent-owned background process.
 
-The command name is `ltc`; `codex-long-task-wakeup` remains a compatibility alias.
+The command name is `ltc`.
 
 ## Install
 

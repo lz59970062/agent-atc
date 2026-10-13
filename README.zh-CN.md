@@ -4,7 +4,7 @@
 
 # Long Task Callback（中文说明）
 
-[English](README.md) · 原名 `codex-long-task-wakeup`（旧命令仍可用）
+[English](README.md)
 
 [文档站](https://lz59970062.github.io/long-task-wakeup/) · [快速开始](docs/quickstart.md) · [架构概览](docs/overview.md)
 
