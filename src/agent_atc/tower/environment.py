@@ -7,7 +7,7 @@ import shlex
 import shutil
 import uuid
 from pathlib import Path
-from ..harness.claude import session as claude_code
+from ..harness.claude import session as claude_session
 from ..harness.claude.adapter import CLAUDE_BIN_ENV
 from ..harness.pi.adapter import PI_BIN_ENV
 from ..store import layout
@@ -40,7 +40,7 @@ def claude_bin_path(args: argparse.Namespace) -> str:
     claude_bin = getattr(args, "claude_bin", None)
     if claude_bin:
         return str(Path(claude_bin).expanduser())
-    found = claude_code.discover_executable(os.environ, which=shutil.which)
+    found = claude_session.discover_executable(os.environ, which=shutil.which)
     return found.path if found is not None else "claude"
 
 

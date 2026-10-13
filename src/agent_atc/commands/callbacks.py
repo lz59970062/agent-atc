@@ -6,8 +6,8 @@ import re
 import sys
 import time
 from pathlib import Path
-from ..engine import routes as callback_transport
-from ..harness.pi import channel as pi_callback
+from ..engine import routes
+from ..harness.pi import channel as pi_channel
 from ..store import layout
 from ..store import records as queue_store
 from ..engine import delivery as delivery_engine
@@ -77,15 +77,15 @@ def retry_callback(args: argparse.Namespace) -> int:
             raise ValueError("the bound session has an active or unresolved delivery")
         if args.callback_mode:
             options = argparse.Namespace(callback_mode=args.callback_mode, agent=dispatch.request_agent(request))
-            pi_route = {key: request[key] for key in pi_callback.ROUTE_FIELDS if key in request}
-            for key in callback_transport.ROUTE_FIELDS:
+            pi_route = {key: request[key] for key in pi_channel.ROUTE_FIELDS if key in request}
+            for key in routes.ROUTE_FIELDS:
                 request.pop(key, None)
-            request.update(callback_transport.selection(options))
+            request.update(routes.selection(options))
             request.update(pi_route)
             request["version"] = 3 if dispatch.request_agent(request) == "pi" else 2
             if request.get("pi_delivery") == "steer":
                 request["version"] = 4
-        capability = callback_transport.inspect_route(request)
+        capability = routes.inspect_route(request)
         if capability["status"] == "blocked":
             raise ValueError("callback route remains blocked: " + str(capability.get("reason")))
         history = request.setdefault("retry_history", [])

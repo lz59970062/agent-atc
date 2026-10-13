@@ -17,7 +17,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from agent_atc.core import envelope as callbacks
+from agent_atc.core import envelope
 from agent_atc import cli
 from agent_atc.engine import dispatch
 from agent_atc.engine import reminders as reminder_policy
@@ -91,7 +91,7 @@ class CompactCallbackTests(unittest.TestCase):
                                   (59.96, "1m 0.0s"), (3600, "1h 0.0s"),
                                   (90061.2, "1d 1h 1m 1.2s")):
             with self.subTest(seconds=seconds):
-                self.assertEqual(callbacks.format_duration(seconds), expected)
+                self.assertEqual(envelope.format_duration(seconds), expected)
         for seconds in (None, True, -1, "12.5", float("nan"), float("inf")):
             with self.subTest(seconds=seconds):
                 request, prompt = self.make_callback("runtime-unknown")

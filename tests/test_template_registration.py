@@ -16,7 +16,7 @@ import yaml
 
 from agent_atc import cli
 from agent_atc.install import skills as skill_install
-from agent_atc.system import files as storage
+from agent_atc.system import files as private_files
 from agent_atc.templates import load_template, user_template_dir
 
 
@@ -499,7 +499,7 @@ class TemplateRegistrationTests(unittest.TestCase):
         self.write_source(version=2, description="Updated entry after a publication failure.")
         self.system.write_text("UPDATED SYSTEM FOR PUBLICATION FAILURE\n", encoding="utf-8")
         before = self.snapshot()
-        actual_write = storage.write_private_text
+        actual_write = private_files.write_private_text
         calls = 0
         failed = False
 
@@ -511,7 +511,7 @@ class TemplateRegistrationTests(unittest.TestCase):
                 raise OSError(errno.EIO, "Simulated one-time publication failure")
             return actual_write(path, text, **kwargs)
 
-        with mock.patch.object(storage, "write_private_text", side_effect=fail_once):
+        with mock.patch.object(private_files, "write_private_text", side_effect=fail_once):
             status, _ = self.register()
         self.assertTrue(failed, "The injected failure must occur after earlier publication writes.")
         self.assertNotEqual(status, 0)

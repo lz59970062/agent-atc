@@ -140,7 +140,7 @@ class TemplateRegistrationNamespaceTests(unittest.TestCase):
         self.assertEqual(set(self.base.rglob(".atc-registration.lock")), existing_locks)
         self.assertEqual(self.workflow.read_bytes(), original)
 
-        write = registration.storage.write_private_text
+        write = registration.private_files.write_private_text
         failed = False
 
         def fail_registry_publication(path, text, **kwargs):
@@ -150,7 +150,7 @@ class TemplateRegistrationNamespaceTests(unittest.TestCase):
                 raise OSError("injected registry publication failure")
             return write(path, text, **kwargs)
 
-        with mock.patch.object(registration.storage, "write_private_text", side_effect=fail_registry_publication):
+        with mock.patch.object(registration.private_files, "write_private_text", side_effect=fail_registry_publication):
             with self.assertRaisesRegex(OSError, "injected registry publication failure"):
                 self.register("beta", self.second_directory)
         self.assertTrue(failed)

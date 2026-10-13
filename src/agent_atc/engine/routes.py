@@ -61,8 +61,8 @@ def selection(args: argparse.Namespace) -> dict[str, str]:
     if mode == "desktop":
         route["callback_bridge_file"] = str(bridge_file(layout.codex_home()))
     if dispatch.resolve_agent(args) == "pi":
-        from ..harness.pi import channel as pi_callback
-        route.update(pi_callback.route_fields())
+        from ..harness.pi import channel as pi_channel
+        route.update(pi_channel.route_fields())
     return route
 
 
@@ -77,8 +77,8 @@ def inspect_route(request: dict[str, object], *, timeout: float = 2) -> dict[str
         return dict(report, status="manual", reason="automatic_delivery_disabled",
                     action="Inspect saved results in the bound session and ACK when received.")
     if dispatch.request_agent(request) == "pi":
-        from ..harness.pi import channel as pi_callback
-        return dict(report, **pi_callback.inspect_route(request))
+        from ..harness.pi import channel as pi_channel
+        return dict(report, **pi_channel.inspect_route(request))
     if dispatch.request_agent(request) != "codex":
         return dict(report, transport="cli_resume", reason="session_delivery_not_probed")
     connection = None

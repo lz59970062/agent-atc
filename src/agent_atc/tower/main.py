@@ -9,7 +9,7 @@ import sys
 import time
 from pathlib import Path
 from .. import __version__
-from ..harness.pi import channel as pi_callback
+from ..harness.pi import channel as pi_channel
 from ..runtime import worker_command
 from ..owners import linux as linux_platform
 from ..store import layout
@@ -136,7 +136,7 @@ def daemon(args: argparse.Namespace) -> int:
             delivery_engine.reap_background_resumes()
             delivery_engine.recover_running(root)
             delivery_engine.reconcile_acknowledged_retained_leases(root)
-            pi_callback.reconcile_publications(root, max(1.0, float(getattr(args, "resume_timeout", delivery_engine.DEFAULT_RESUME_TIMEOUT))))
+            pi_channel.reconcile_publications(root, max(1.0, float(getattr(args, "resume_timeout", delivery_engine.DEFAULT_RESUME_TIMEOUT))))
             managed_work = managed_tasks.recover_managed_tasks(root)
             recovery.recover_active(root)
             if managed_work:

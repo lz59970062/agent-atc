@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 
 import yaml
 
-from .system import files as storage
+from .system import files as private_files
 from .harness import get_child_agent
 from .system import posix, windows_io
 from .templates import _UniqueSafeLoader, load_template, user_template_dir
@@ -202,7 +202,7 @@ class _Plan:
                 if text is None:
                     path.unlink(missing_ok=True)
                 else:
-                    storage.write_private_text(path, text, preserve_newlines=True)
+                    private_files.write_private_text(path, text, preserve_newlines=True)
             for path, destination in self.links.items():
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.symlink_to(destination, target_is_directory=True)
@@ -214,7 +214,7 @@ class _Plan:
             for path, text in self.writes.items():
                 if path.name == REGISTRY_NAME:
                     completed.append(path)
-                    storage.write_private_text(path, text, preserve_newlines=True)
+                    private_files.write_private_text(path, text, preserve_newlines=True)
         except BaseException as exc:
             failures = []
             for path, destination in reversed(removed):
@@ -233,7 +233,7 @@ class _Plan:
                     if original is None:
                         path.unlink(missing_ok=True)
                     else:
-                        storage.write_private_text(path, original, preserve_newlines=True)
+                        private_files.write_private_text(path, original, preserve_newlines=True)
                 except OSError:
                     failures.append(str(path))
             if failures:
@@ -505,7 +505,7 @@ def preserve_installed_index(target: Path):
         entries = _registry()["templates"]
         updated = _index(text, entries, root)
         if updated != _read(skill_path):
-            storage.write_private_text(skill_path, updated, preserve_newlines=True)
+            private_files.write_private_text(skill_path, updated, preserve_newlines=True)
 
 
 def refresh_installed_skill(target: Path) -> None:

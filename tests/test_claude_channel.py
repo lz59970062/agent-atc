@@ -13,7 +13,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from agent_atc.harness.claude import channel as claude_channel, session as claude_code
+from agent_atc.harness.claude import channel as claude_channel, session as claude_session
 from agent_atc import cli
 from agent_atc.commands import callbacks as callback_commands
 from agent_atc.engine import dispatch
@@ -130,21 +130,21 @@ class ChannelServerTests(unittest.TestCase):
         self.assertEqual(event["params"]["meta"], {"callback_id": "cb-mine"})
         self.assertIn("[atc]", event["params"]["content"])
         self.assertTrue(mine.exists())  # Back in pending until ACKed.
-        self.assertTrue(claude_code.channel_is_held(SESSION))
-        self.assertFalse(claude_code.channel_is_held(OTHER_SESSION))
+        self.assertTrue(claude_session.channel_is_held(SESSION))
+        self.assertFalse(claude_session.channel_is_held(OTHER_SESSION))
         # The daemon only sees callbacks the channel does not own.
-        selected = delivery_engine.select_pending(self.root, time.time() + 2 * claude_code.LIVE_ACK_GRACE_SECONDS)
+        selected = delivery_engine.select_pending(self.root, time.time() + 2 * claude_session.LIVE_ACK_GRACE_SECONDS)
         self.assertIn(selected, (codex, layout.request_path(self.root, "pending", "cb-other")))
         self.assertNotEqual(selected, mine)
         # A stray `atc wait` in the channel session exits instead of printing a duplicate.
         errors = io.StringIO()
         with contextlib.redirect_stdout(io.StringIO()) as output, contextlib.redirect_stderr(errors):
-            status = claude_code.wait(argparse.Namespace(queue_dir=str(self.root), session=SESSION, task=None,
+            status = claude_session.wait(argparse.Namespace(queue_dir=str(self.root), session=SESSION, task=None,
                                                          timeout=1.0, poll_interval=0.05))
         self.assertEqual((status, output.getvalue()), (0, ""))
         self.assertIn("atc channel", errors.getvalue())
         server.release()
-        self.assertFalse(claude_code.channel_is_held(SESSION))
+        self.assertFalse(claude_session.channel_is_held(SESSION))
 
     def test_follows_the_window_to_a_new_session(self) -> None:
         server = self.server()
@@ -152,8 +152,8 @@ class ChannelServerTests(unittest.TestCase):
         self.set_session(OTHER_SESSION)
         self.enqueue("cb-other", session=OTHER_SESSION)
         self.poll(server)
-        self.assertFalse(claude_code.channel_is_held(SESSION))
-        self.assertTrue(claude_code.channel_is_held(OTHER_SESSION))
+        self.assertFalse(claude_session.channel_is_held(SESSION))
+        self.assertTrue(claude_session.channel_is_held(OTHER_SESSION))
         (event,) = self.messages(server)
         self.assertEqual(event["params"]["meta"]["callback_id"], "cb-other")
 
@@ -163,7 +163,7 @@ class ChannelServerTests(unittest.TestCase):
         self.poll(server)
         errors = self.poll(server)
         self.assertIn("daemon takes over", errors)
-        self.assertFalse(claude_code.channel_is_held(SESSION))
+        self.assertFalse(claude_session.channel_is_held(SESSION))
         self.poll(server)
         self.assertEqual(len(self.messages(server)), 1)
 
@@ -183,7 +183,7 @@ class ChannelServerTests(unittest.TestCase):
             self.assertEqual(server.run(stdin), 0)
         (reply,) = self.messages(server)
         self.assertEqual(reply["id"], 1)
-        self.assertFalse(claude_code.channel_is_held(SESSION))
+        self.assertFalse(claude_session.channel_is_held(SESSION))
 
     def test_stdio_server_pushes_and_exits_when_claude_closes_the_pipe(self) -> None:
         # The parent's command line carries the channel opt-in, like `atc claude`.
@@ -205,7 +205,7 @@ class ChannelServerTests(unittest.TestCase):
         initialize, event = (json.loads(line) for line in result.stdout.splitlines())
         self.assertIn("claude/channel", initialize["result"]["capabilities"]["experimental"])
         self.assertEqual(event["params"]["meta"]["callback_id"], "cb-mine")
-        self.assertFalse(claude_code.channel_is_held(SESSION))
+        self.assertFalse(claude_session.channel_is_held(SESSION))
 
 
 if __name__ == "__main__":

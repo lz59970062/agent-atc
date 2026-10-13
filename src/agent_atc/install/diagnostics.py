@@ -24,8 +24,8 @@ except ImportError:  # pragma: no cover - Windows uses its own file locks
 
 from .. import __version__
 from ..harness.pi import channel as pi_channel
-from ..engine import routes as callback_transport
-from ..harness.claude import session as claude_code
+from ..engine import routes
+from ..harness.claude import session as claude_session
 from ..harness import get_agent, get_child_agent
 from ..system import posix, windows_io
 from ..owners import OwnerState
@@ -363,7 +363,7 @@ def inspect(args: argparse.Namespace) -> dict[str, object]:
         child_executable = shutil.which(get_child_agent(child_agent).executable(delivery_engine.agent_environment(child_agent)))
         if child_executable is None:
             issues.append({"code": "child_agent_unavailable", "action": "Install or configure the selected child Agent CLI before executing this delegated task."})
-        elif child_agent == "claude" and claude_code.is_desktop_bundle(child_executable):
+        elif child_agent == "claude" and claude_session.is_desktop_bundle(child_executable):
             issues.append({"code": "child_agent_desktop_only", "action": (
                 "Only the Claude desktop app's bundled CLI was found; it cannot sign in outside the app. "
                 "Install the standalone Claude Code CLI and run `claude auth login` before delegating to a Claude child.")})
@@ -383,8 +383,8 @@ def inspect(args: argparse.Namespace) -> dict[str, object]:
     capability = getattr(args, "_callback_capability", None)
     if not isinstance(capability, dict):
         try:
-            route = callback_transport.selection(args)
-            capability = callback_transport.inspect_route({**route, "agent": callback_agent, "target": target})
+            route = routes.selection(args)
+            capability = routes.inspect_route({**route, "agent": callback_agent, "target": target})
         except (OSError, ValueError):
             capability = {"status": "blocked", "reason": "invalid_callback_configuration",
                           "action": "Inspect the selected callback mode and private Desktop configuration."}
@@ -453,10 +453,10 @@ def inspect(args: argparse.Namespace) -> dict[str, object]:
 
 def claude_code_profile(executable: str | None) -> dict[str, object]:
     """Explain Claude's two callback routes; a live session needs no extra CLI."""
-    desktop_only = executable is not None and claude_code.is_desktop_bundle(executable)
+    desktop_only = executable is not None and claude_session.is_desktop_bundle(executable)
     return {
         "executable": executable,
-        "desktop_session": claude_code.is_desktop_session(os.environ),
+        "desktop_session": claude_session.is_desktop_session(os.environ),
         "live_callback": "Run `atc wait --task <id>` with run_in_background; it wakes this session when the callback is queued.",
         "headless_fallback": (
             "unavailable: no Claude CLI found" if executable is None

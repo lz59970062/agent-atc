@@ -11,7 +11,7 @@ import tempfile
 import unittest
 from unittest import mock
 
-from agent_atc.system import files as storage
+from agent_atc.system import files as private_files
 from agent_atc.system import windows_io
 
 
@@ -110,26 +110,26 @@ class WindowsIOTests(unittest.TestCase):
 
     def test_atomic_private_publication_and_unicode_path(self) -> None:
         path = self.directory / "提示词 带空格" / "提示.json"
-        storage.write_request(path, {"prompt": "你好 世界", "value": 1})
-        storage.write_request(path, {"prompt": "新内容", "value": 2})
+        private_files.write_request(path, {"prompt": "你好 世界", "value": 1})
+        private_files.write_request(path, {"prompt": "新内容", "value": 2})
         self.assertIn('"prompt": "新内容"', path.read_text(encoding="utf-8"))
         self.assert_private_acl(path)
         self.assertEqual(list(path.parent.glob("*.tmp")), [])
 
     def test_failed_replace_preserves_old_value_and_removes_temporary(self) -> None:
         path = self.directory / "result.json"
-        storage.write_private_text(path, "old")
+        private_files.write_private_text(path, "old")
         # A reader without FILE_SHARE_DELETE causes an actual Windows replace failure.
         with path.open("rb"):
             with self.assertRaises(OSError):
-                storage.write_private_text(path, "new")
+                private_files.write_private_text(path, "new")
         self.assertEqual(path.read_text(encoding="utf-8"), "old")
         self.assertEqual(list(path.parent.glob("*.tmp")), [])
 
     def test_sync_hook_failure_can_follow_successful_publication(self) -> None:
         path = self.directory / "result.json"
         with self.assertRaisesRegex(OSError, "hook"):
-            storage.write_private_text(path, "new", sync_directory=mock.Mock(side_effect=OSError("hook")))
+            private_files.write_private_text(path, "new", sync_directory=mock.Mock(side_effect=OSError("hook")))
         self.assertEqual(path.read_text(encoding="utf-8"), "new")
 
     def test_directory_hook_checks_path_without_claiming_directory_flush(self) -> None:

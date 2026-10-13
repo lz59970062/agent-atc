@@ -8,7 +8,7 @@ try:
     import fcntl
 except ImportError:  # pragma: no cover - the durable run lifecycle is POSIX-only
     fcntl = None
-from ..system import files as storage
+from ..system import files as private_files
 from ..system import posix as posix_platform
 from ..system import windows_io
 from . import layout
@@ -54,11 +54,11 @@ def fsync_directory(path: Path) -> None:
 
 
 def write_request(path: Path, request: dict[str, object]) -> None:
-    storage.write_request(path, request, sync_directory=fsync_directory)
+    private_files.write_request(path, request, sync_directory=fsync_directory)
 
 
 def write_private_text(path: Path, text: str) -> None:
-    storage.write_private_text(path, text, sync_directory=fsync_directory)
+    private_files.write_private_text(path, text, sync_directory=fsync_directory)
 
 
 def move_request(source: Path, destination_dir: Path) -> Path:

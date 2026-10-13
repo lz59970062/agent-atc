@@ -8,7 +8,7 @@ import os
 import sys
 from pathlib import Path
 import yaml
-from ..core import envelope as callbacks
+from ..core import envelope
 from ..system import windows_io
 from ..store import layout
 from ..store import records as queue_store
@@ -149,7 +149,7 @@ def select_delivery_prompt(payload: dict[str, object]) -> str:
     if cadence is not None:
         if not cadence["system_due"] and request.get("prompt_format") != "full" and isinstance(request.get("prompt_compact"), str):
             prompt = request["prompt_compact"]
-        if request.get("prompt_format") != callbacks.FORMAT:
+        if request.get("prompt_format") != envelope.FORMAT:
             prompt += (f"\n\nReminder cadence: callback #{cadence['sequence']}; "
                        f"system every {cadence['system_every']}; user every {cadence['user_every']}.")
     if (cadence is None or cadence["user_due"]) and isinstance(hook_path, str) and hook_path:

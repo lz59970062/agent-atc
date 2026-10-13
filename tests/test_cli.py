@@ -1012,7 +1012,7 @@ class CliTests(unittest.TestCase):
         self.assertEqual(request["permission_mode"], "auto")
 
     def test_claude_resume_command_shape(self) -> None:
-        with mock.patch.object(cli.claude_code, "discover_executable", return_value=None):
+        with mock.patch.object(cli.claude_session, "discover_executable", return_value=None):
             command = delivery_engine.resume_command(
                 {
                     "agent": "claude",

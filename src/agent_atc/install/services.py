@@ -9,8 +9,8 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from ..harness.claude import session as claude_code
-from ..harness.pi import channel as pi_callback
+from ..harness.claude import session as claude_session
+from ..harness.pi import channel as pi_channel
 from ..harness.claude.adapter import CLAUDE_BIN_ENV
 from ..harness.pi.adapter import PI_BIN_ENV
 from ..owners import SystemdUserBackend, LaunchdBackend
@@ -89,7 +89,7 @@ def report_claude_agent_readiness(args: argparse.Namespace) -> None:
             "Claude Code agent mode: CLI and local authentication detected; configuration values were not printed."
         )
         return
-    if claude_code.is_desktop_bundle(command):
+    if claude_session.is_desktop_bundle(command):
         print(
             "atc: warning: only the Claude desktop app's bundled CLI was found, and it is not signed in "
             "outside the app. Live Claude Code sessions still receive callbacks through `atc wait`; "
@@ -491,10 +491,10 @@ def select_daemon_service(args: argparse.Namespace) -> str:
 
 
 def setup(args: argparse.Namespace) -> int:
-    from ..harness.codex.desktop import launcher as desktop
+    from ..harness.codex.desktop import launcher as desktop_launcher
 
     try:
-        desktop.validate_setup(args)
+        desktop_launcher.validate_setup(args)
         service = select_daemon_service(args)
         if not getattr(args, "callback_only", False):
             managed_tasks.select_execution_backend(args)
@@ -512,14 +512,14 @@ def setup(args: argparse.Namespace) -> int:
         return skill_status
     if getattr(args, "with_pi_extension", False):
         try:
-            pi_callback.install_extension(argparse.Namespace(profile=None, force=args.force))
+            pi_channel.install_extension(argparse.Namespace(profile=None, force=args.force))
         except (OSError, ValueError) as exc:
             print(f"atc: could not install the Pi extension: {exc}", file=sys.stderr)
             return 2
     reminder_policy.ensure_callback_hook_file()
     report_claude_agent_readiness(args)
     try:
-        desktop.install_for_setup(layout.codex_home(), args)
+        desktop_launcher.install_for_setup(layout.codex_home(), args)
     except (OSError, ValueError) as exc:
         print(f"atc: could not prepare the optional Desktop launcher: {exc}; "
               "CLI setup can continue. Retry with atc desktop prepare.", file=sys.stderr)

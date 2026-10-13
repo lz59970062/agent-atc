@@ -13,8 +13,8 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 from .. import __version__
-from ..harness.claude import session as claude_code
-from ..harness.pi import channel as pi_callback
+from ..harness.claude import session as claude_session
+from ..harness.pi import channel as pi_channel
 from ..harness.codex.desktop.connection import BridgeEndpoint, UnixBridgeEndpoint
 from ..harness import get_agent
 from ..harness.base import DEFAULT_CLAUDE_PERMISSION_MODE
@@ -68,7 +68,7 @@ def codex_command() -> str:
 def agent_environment(agent: str) -> dict[str, str]:
     """Environment for building an agent command; Claude's binary is located on demand."""
     if agent == "claude":
-        return claude_code.with_resolved_executable(os.environ, which=shutil.which)
+        return claude_session.with_resolved_executable(os.environ, which=shutil.which)
     return dict(os.environ)
 
 
@@ -80,7 +80,7 @@ def resume_command(request: dict[str, object]) -> list[str]:
 def resume_cwd(request: dict[str, object]) -> str:
     """Claude looks sessions up by their starting directory, not the task's."""
     if dispatch.request_agent(request) == "claude":
-        session_cwd = claude_code.resume_cwd(request, os.environ)
+        session_cwd = claude_session.resume_cwd(request, os.environ)
         if session_cwd:
             return session_cwd
     return str(request["cwd"])
@@ -113,7 +113,7 @@ def callback_target_key(request: dict[str, object]) -> str | None:
     value = target.get("value")
     if kind == "session" and isinstance(value, str) and value:
         if dispatch.request_agent(request) == "pi":
-            value = pi_callback.canonical_session(value)
+            value = pi_channel.canonical_session(value)
         return f"session:{value}"
     if kind == "last":
         return "last"
@@ -346,7 +346,7 @@ def select_pending(root: Path, now: float) -> Path | None:
             return path
         if isinstance(request, dict) and (request.get("callback_mode") == "manual"
                                          or target_has_live_resume(root, request)
-                                         or claude_code.live_watcher_is_held(request)):
+                                         or claude_session.live_watcher_is_held(request)):
             continue
         return path
     return None
@@ -536,7 +536,7 @@ def start_desktop_app_server_turn(payload: dict[str, object]) -> app_server.Desk
 def wait_for_remote_delivery(payload: dict, delivery, timeout: float) -> dict:
     """Wait for native delivery without starting or killing its owner."""
     delivery_context = app_server.desktop_delivery_context(payload)
-    delivery_name = "pi_live_session" if isinstance(delivery, pi_callback.PiDelivery) else "desktop_app_server"
+    delivery_name = "pi_live_session" if isinstance(delivery, pi_channel.PiDelivery) else "desktop_app_server"
     deadline = time.monotonic() + timeout
     while True:
         acknowledged = Path(str(payload["ack_path"])).exists()
@@ -613,7 +613,7 @@ def delivery_worker_main() -> int:
     result: dict[str, object] = {"returncode": 127}
     process: subprocess.Popen[str] | None = None
     desktop_delivery: app_server.DesktopAppServerDelivery | None = None
-    pi_delivery: pi_callback.PiDelivery | None = None
+    pi_delivery: pi_channel.PiDelivery | None = None
 
     class WorkerInterrupted(Exception):
         def __init__(self, signum: int) -> None:
@@ -635,7 +635,7 @@ def delivery_worker_main() -> int:
             request = payload.get("request")
             if isinstance(request, dict) and dispatch.request_agent(request) == "pi":
                 payload["prompt"] = prompt
-                pi_delivery = pi_callback.prepare_delivery(payload)
+                pi_delivery = pi_channel.prepare_delivery(payload)
                 if not pi_delivery.online:
                     command = pi_delivery.command
             if pi_delivery is not None and (Path(str(payload["ack_path"])).exists() or Path(str(payload["canceled_path"])).exists()):
@@ -644,7 +644,7 @@ def delivery_worker_main() -> int:
             elif pi_delivery is not None and pi_delivery.online:
                 # The live Pi process owns it now; the daemon supervises the ACK
                 # without blocking other callbacks and task launches.
-                result = {"returncode": pi_callback.PUBLISHED_RETURN_CODE, "delivery": pi_delivery.delivery_name}
+                result = {"returncode": pi_channel.PUBLISHED_RETURN_CODE, "delivery": pi_delivery.delivery_name}
             else:
                 process = subprocess.Popen(
                     shell.process_command([str(part) for part in command]),
@@ -846,7 +846,7 @@ def run_resume_until_exit_or_ack(
             if returncode is not None:
                 child_returncode = finish_delivery_worker(process)
                 acked = layout.ack_path(root, request_id).exists()
-                if (not acked and child_returncode != pi_callback.PUBLISHED_RETURN_CODE
+                if (not acked and child_returncode != pi_channel.PUBLISHED_RETURN_CODE
                         and not queue_store.is_canceled(root, request_id) and desktop_submission_pending(root, request)):
                     child_returncode = 125
                 return subprocess.CompletedProcess(command, child_returncode), acked, False
@@ -909,14 +909,14 @@ def process_one(root: Path, args: argparse.Namespace) -> bool:
             return True
         if result is None:
             return True
-        if result.returncode == pi_callback.PUBLISHED_RETURN_CODE and not acked:
+        if result.returncode == pi_channel.PUBLISHED_RETURN_CODE and not acked:
             # Not a failed attempt: the retained target lease keeps later
             # callbacks for this session in order until ACK or recovery.
             now = time.time()
             request["attempts"] = max(0, attempts - 1)
             request.setdefault("pi_published_at", now)
             request.setdefault("live_delivered_at", now)
-            request["last_deferred_reason"] = pi_callback.PUBLISHED_REASON
+            request["last_deferred_reason"] = pi_channel.PUBLISHED_REASON
             if running.exists() and not queue_store.is_canceled(root, request_id):
                 queue_store.write_request(running, request)
                 queue_store.move_request(running, root / "pending")

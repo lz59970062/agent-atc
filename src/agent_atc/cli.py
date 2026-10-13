@@ -32,12 +32,12 @@ except ImportError:  # pragma: no cover - the durable run lifecycle is POSIX-onl
     fcntl = None
 
 from . import __version__
-from .core import envelope as callbacks
-from .engine import routes as callback_transport
-from .harness.claude import session as claude_code
-from .harness.pi import channel as pi_callback
+from .core import envelope
+from .engine import routes
+from .harness.claude import session as claude_session
+from .harness.pi import channel as pi_channel
 from .install import diagnostics
-from .system import files as storage
+from .system import files as private_files
 from . import template_registration
 from .harness.codex.desktop.connection import BridgeEndpoint, UnixBridgeEndpoint, load_bridge_endpoint, load_unix_bridge_endpoint
 from .harness import AGENTS, AGENT_NAMES, CHILD_AGENT_NAMES, ChildOptions, get_agent, get_child_agent
@@ -87,7 +87,7 @@ from .commands import work as work_commands
 
 
 def add_common_flags(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--callback-mode", choices=callback_transport.MODES, default="auto",
+    parser.add_argument("--callback-mode", choices=routes.MODES, default="auto",
                         help="Callback route: auto detects Codex Desktop; cli uses existing CLI/shared service; desktop requires its bridge; manual saves for later receipt")
     parser.add_argument("--backend", choices=("auto", "systemd", "launchd", "windows-task", "screen"),
                         default=os.environ.get("ATC_EXECUTION_BACKEND", "auto"),
@@ -197,7 +197,7 @@ def main() -> int:
                                help="Workflow whose prerequisites are checked (default: run)")
     doctor_parser.add_argument("--agent", choices=AGENT_NAMES, help="Callback Agent (default: detect current Agent)")
     doctor_parser.add_argument("--agent-worker", choices=CHILD_AGENT_NAMES, help="Child Agent for --operation agent")
-    doctor_parser.add_argument("--callback-mode", choices=callback_transport.MODES, default="auto")
+    doctor_parser.add_argument("--callback-mode", choices=routes.MODES, default="auto")
     doctor_target = doctor_parser.add_mutually_exclusive_group()
     doctor_target.add_argument("--session", help="Original Agent session to preserve during repair")
     doctor_target.add_argument("--last", action="store_true", help="Inspect an already explicitly chosen unsafe last-session target")
@@ -209,7 +209,7 @@ def main() -> int:
     retry_parser = sub.add_parser("retry", help="Requeue a failed/manual callback without rerunning its workload")
     retry_parser.add_argument("--id", required=True)
     retry_parser.add_argument("--queue-dir")
-    retry_parser.add_argument("--callback-mode", choices=callback_transport.MODES)
+    retry_parser.add_argument("--callback-mode", choices=routes.MODES)
 
     desktop_parser = sub.add_parser("desktop", help="Prepare, inspect or launch the opt-in Mac/Windows Desktop shared Core")
     desktop_actions = desktop_parser.add_subparsers(dest="desktop_action", required=True)
@@ -469,8 +469,8 @@ def main() -> int:
 
     args = parser.parse_args()
     if args.mode == "desktop":
-        from .harness.codex.desktop import launcher as desktop
-        return desktop.command(args)
+        from .harness.codex.desktop import launcher as desktop_launcher
+        return desktop_launcher.command(args)
     if args.mode == "retry":
         return callback_commands.retry_callback(args)
     if args.mode == "doctor":
@@ -507,7 +507,7 @@ def main() -> int:
         return skill_install.install_skill(args)
     if args.mode in ("install-pi-extension", "pi"):
         try:
-            return pi_callback.install_extension(args) if args.mode == "install-pi-extension" else pi_callback.managed_pi(args)
+            return pi_channel.install_extension(args) if args.mode == "install-pi-extension" else pi_channel.managed_pi(args)
         except (OSError, ValueError, RuntimeError) as exc:
             print(f"atc: {exc}", file=sys.stderr)
             return 2
@@ -520,7 +520,7 @@ def main() -> int:
     if args.mode == "ack":
         return callback_commands.ack(args)
     if args.mode == "wait":
-        return claude_code.wait(args)
+        return claude_session.wait(args)
     if args.mode == "claude":
         from .harness.claude import channel as claude_channel
         return claude_channel.launch(args)

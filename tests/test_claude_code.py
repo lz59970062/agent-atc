@@ -13,7 +13,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from agent_atc.harness.claude import session as claude_code
+from agent_atc.harness.claude import session as claude_session
 from agent_atc import cli
 from agent_atc.commands import callbacks as callback_commands
 from agent_atc.engine import dispatch
@@ -51,59 +51,59 @@ class ExecutableDiscoveryTests(unittest.TestCase):
         )
 
     def test_nothing_installed(self) -> None:
-        self.assertIsNone(claude_code.discover_executable(self.environment, which=no_which))
-        resolved = claude_code.with_resolved_executable(self.environment, which=no_which)
-        self.assertNotIn(claude_code.CLAUDE_BIN_ENV, resolved)
+        self.assertIsNone(claude_session.discover_executable(self.environment, which=no_which))
+        resolved = claude_session.with_resolved_executable(self.environment, which=no_which)
+        self.assertNotIn(claude_session.CLAUDE_BIN_ENV, resolved)
 
     def test_path_lookup_is_preferred_to_known_locations(self) -> None:
         make_executable(self.home / ".local/bin/claude")
-        found = claude_code.discover_executable(self.environment, which=lambda name: "/usr/bin/claude")
-        self.assertEqual(found, claude_code.Executable("/usr/bin/claude", "path"))
+        found = claude_session.discover_executable(self.environment, which=lambda name: "/usr/bin/claude")
+        self.assertEqual(found, claude_session.Executable("/usr/bin/claude", "path"))
 
     def test_standalone_install_is_found_without_path(self) -> None:
         standalone = make_executable(self.home / ".local/bin/claude")
         self.bundle("2.1.0")
-        found = claude_code.discover_executable(self.environment, which=no_which)
-        self.assertEqual(found, claude_code.Executable(str(standalone), "standalone"))
+        found = claude_session.discover_executable(self.environment, which=no_which)
+        self.assertEqual(found, claude_session.Executable(str(standalone), "standalone"))
 
     def test_session_execpath_then_newest_desktop_bundle(self) -> None:
         old = self.bundle("2.1.0")
         new = self.bundle("2.2.0")
         os.utime(old, (1, 1))
-        found = claude_code.discover_executable(self.environment, which=no_which)
-        self.assertEqual(found, claude_code.Executable(str(new), "desktop-bundle"))
+        found = claude_session.discover_executable(self.environment, which=no_which)
+        self.assertEqual(found, claude_session.Executable(str(new), "desktop-bundle"))
         session_binary = make_executable(self.home / "custom/claude")
         environment = dict(self.environment, CLAUDE_CODE_EXECPATH=str(session_binary))
-        found = claude_code.discover_executable(environment, which=no_which)
-        self.assertEqual(found, claude_code.Executable(str(session_binary), "session"))
+        found = claude_session.discover_executable(environment, which=no_which)
+        self.assertEqual(found, claude_session.Executable(str(session_binary), "session"))
 
     def test_explicit_path_is_honored_even_when_missing(self) -> None:
-        environment = dict(self.environment, **{claude_code.CLAUDE_BIN_ENV: "/opt/claude"})
-        found = claude_code.discover_executable(environment, which=no_which)
-        self.assertEqual(found, claude_code.Executable("/opt/claude", "configured"))
+        environment = dict(self.environment, **{claude_session.CLAUDE_BIN_ENV: "/opt/claude"})
+        found = claude_session.discover_executable(environment, which=no_which)
+        self.assertEqual(found, claude_session.Executable("/opt/claude", "configured"))
 
     def test_explicit_name_is_honored_but_the_bare_default_is_rediscovered(self) -> None:
         standalone = make_executable(self.home / ".local/bin/claude")
-        named = dict(self.environment, **{claude_code.CLAUDE_BIN_ENV: "claude-nightly"})
-        self.assertEqual(claude_code.discover_executable(named, which=no_which),
-                         claude_code.Executable("claude-nightly", "configured"))
-        default = dict(self.environment, **{claude_code.CLAUDE_BIN_ENV: "claude"})
-        self.assertEqual(claude_code.discover_executable(default, which=no_which),
-                         claude_code.Executable(str(standalone), "standalone"))
+        named = dict(self.environment, **{claude_session.CLAUDE_BIN_ENV: "claude-nightly"})
+        self.assertEqual(claude_session.discover_executable(named, which=no_which),
+                         claude_session.Executable("claude-nightly", "configured"))
+        default = dict(self.environment, **{claude_session.CLAUDE_BIN_ENV: "claude"})
+        self.assertEqual(claude_session.discover_executable(default, which=no_which),
+                         claude_session.Executable(str(standalone), "standalone"))
 
     def test_vanished_desktop_bundle_is_rediscovered(self) -> None:
         current = self.bundle("2.2.0")
         stale = str(current).replace("2.2.0", "2.1.0")
-        environment = dict(self.environment, **{claude_code.CLAUDE_BIN_ENV: stale})
-        found = claude_code.discover_executable(environment, which=no_which)
-        self.assertEqual(found, claude_code.Executable(str(current), "desktop-bundle"))
+        environment = dict(self.environment, **{claude_session.CLAUDE_BIN_ENV: stale})
+        found = claude_session.discover_executable(environment, which=no_which)
+        self.assertEqual(found, claude_session.Executable(str(current), "desktop-bundle"))
 
     def test_newest_nvm_install_is_found_without_path(self) -> None:
         old = make_executable(self.home / ".nvm/versions/node/v20.1.0/bin/claude")
         new = make_executable(self.home / ".nvm/versions/node/v22.3.0/bin/claude")
         os.utime(old, (1, 1))
-        found = claude_code.discover_executable(self.environment, which=no_which)
-        self.assertEqual(found, claude_code.Executable(str(new), "standalone"))
+        found = claude_session.discover_executable(self.environment, which=no_which)
+        self.assertEqual(found, claude_session.Executable(str(new), "standalone"))
 
     def test_linux_desktop_remote_cli_is_found_and_rediscovered(self) -> None:
         # The desktop app's SSH sessions install a versioned CLI under ~/.claude/remote.
@@ -111,23 +111,23 @@ class ExecutableDiscoveryTests(unittest.TestCase):
         old = make_executable(remote / "2.1.293-aaaa")
         new = make_executable(remote / "2.1.295-bbbb")
         os.utime(old, (1, 1))
-        found = claude_code.discover_executable(self.environment, which=no_which)
-        self.assertEqual(found, claude_code.Executable(str(new), "desktop-remote"))
-        self.assertFalse(claude_code.is_desktop_bundle(new))  # It shares ~/.claude sign-in.
+        found = claude_session.discover_executable(self.environment, which=no_which)
+        self.assertEqual(found, claude_session.Executable(str(new), "desktop-remote"))
+        self.assertFalse(claude_session.is_desktop_bundle(new))  # It shares ~/.claude sign-in.
         session = dict(self.environment, CLAUDE_CODE_EXECPATH=str(new))
-        self.assertEqual(claude_code.discover_executable(session, which=no_which),
-                         claude_code.Executable(str(new), "desktop-remote"))
-        stale = dict(self.environment, **{claude_code.CLAUDE_BIN_ENV: str(remote / "2.1.200-gone")})
-        self.assertEqual(claude_code.discover_executable(stale, which=no_which),
-                         claude_code.Executable(str(new), "desktop-remote"))
+        self.assertEqual(claude_session.discover_executable(session, which=no_which),
+                         claude_session.Executable(str(new), "desktop-remote"))
+        stale = dict(self.environment, **{claude_session.CLAUDE_BIN_ENV: str(remote / "2.1.200-gone")})
+        self.assertEqual(claude_session.discover_executable(stale, which=no_which),
+                         claude_session.Executable(str(new), "desktop-remote"))
         standalone = make_executable(self.home / ".local/bin/claude")
-        self.assertEqual(claude_code.discover_executable(self.environment, which=no_which),
-                         claude_code.Executable(str(standalone), "standalone"))
+        self.assertEqual(claude_session.discover_executable(self.environment, which=no_which),
+                         claude_session.Executable(str(standalone), "standalone"))
 
     def test_resume_command_uses_discovered_binary(self) -> None:
         request = {"agent": "claude", "target": {"kind": "session", "value": SESSION}, "cwd": "/tmp", "prompt": "x"}
-        with mock.patch.object(cli.claude_code, "discover_executable",
-                               return_value=claude_code.Executable("/found/claude", "standalone")):
+        with mock.patch.object(cli.claude_session, "discover_executable",
+                               return_value=claude_session.Executable("/found/claude", "standalone")):
             self.assertEqual(delivery_engine.resume_command(request)[0], "/found/claude")
 
 
@@ -152,13 +152,13 @@ class SessionDirectoryTests(unittest.TestCase):
         later = self.project / "subdir"
         later.mkdir()
         self.write_session({"type": "queue-operation"}, {"cwd": str(self.project)}, {"cwd": str(later)})
-        self.assertEqual(claude_code.session_project_cwd(SESSION, self.environment), str(self.project))
+        self.assertEqual(claude_session.session_project_cwd(SESSION, self.environment), str(self.project))
 
     def test_missing_unsafe_or_deleted_sessions_have_no_cwd(self) -> None:
-        self.assertIsNone(claude_code.session_project_cwd(SESSION, self.environment))
-        self.assertIsNone(claude_code.session_project_cwd("../escape", self.environment))
+        self.assertIsNone(claude_session.session_project_cwd(SESSION, self.environment))
+        self.assertIsNone(claude_session.session_project_cwd("../escape", self.environment))
         self.write_session({"cwd": str(self.root / "deleted")})
-        self.assertIsNone(claude_code.session_project_cwd(SESSION, self.environment))
+        self.assertIsNone(claude_session.session_project_cwd(SESSION, self.environment))
 
     def test_daemon_resumes_claude_where_the_session_started(self) -> None:
         self.write_session({"cwd": str(self.project)})
@@ -203,7 +203,7 @@ class LiveWaiterTests(unittest.TestCase):
         values.update(overrides)
         stdout, stderr = io.StringIO(), io.StringIO()
         with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
-            status = claude_code.wait(argparse.Namespace(**values))
+            status = claude_session.wait(argparse.Namespace(**values))
         return status, stdout.getvalue(), stderr.getvalue()
 
     def ack(self, ident: str) -> None:
@@ -213,27 +213,27 @@ class LiveWaiterTests(unittest.TestCase):
     def test_watcher_registration_is_visible_only_for_claude_and_stale_files_are_cleaned(self) -> None:
         claude = {"agent": "claude", "target": {"kind": "session", "value": SESSION}}
         codex = dict(claude, agent="codex")
-        self.assertFalse(claude_code.live_watcher_is_held(claude))
-        watcher = claude_code.register_live_watcher(SESSION)
-        self.assertTrue(claude_code.live_watcher_is_held(claude))
-        self.assertFalse(claude_code.live_watcher_is_held(codex))
-        claude_code.release_live_watcher(watcher)
-        self.assertFalse(claude_code.live_watcher_is_held(claude))
-        stale = claude_code.live_watcher_dir(SESSION) / "999-dead.lock"
+        self.assertFalse(claude_session.live_watcher_is_held(claude))
+        watcher = claude_session.register_live_watcher(SESSION)
+        self.assertTrue(claude_session.live_watcher_is_held(claude))
+        self.assertFalse(claude_session.live_watcher_is_held(codex))
+        claude_session.release_live_watcher(watcher)
+        self.assertFalse(claude_session.live_watcher_is_held(claude))
+        stale = claude_session.live_watcher_dir(SESSION) / "999-dead.lock"
         stale.write_text("", encoding="utf-8")
-        self.assertFalse(claude_code.live_watcher_is_held(claude))
+        self.assertFalse(claude_session.live_watcher_is_held(claude))
         self.assertFalse(stale.exists())
 
     def test_daemon_leaves_only_claude_callbacks_to_a_live_waiter(self) -> None:
         claude = self.enqueue("cb-claude")
         codex = self.enqueue("cb-codex", agent="codex")
-        watcher = claude_code.register_live_watcher(SESSION)
+        watcher = claude_session.register_live_watcher(SESSION)
         try:
             self.assertEqual(delivery_engine.select_pending(self.root, time.time()), codex)
             codex.unlink()
             self.assertIsNone(delivery_engine.select_pending(self.root, time.time()))
         finally:
-            claude_code.release_live_watcher(watcher)
+            claude_session.release_live_watcher(watcher)
         self.assertEqual(delivery_engine.select_pending(self.root, time.time()), claude)
 
     def test_wait_refuses_outside_claude_code_and_never_claims_other_agents(self) -> None:
@@ -317,7 +317,7 @@ class LiveWaiterTests(unittest.TestCase):
         request = {"agent": "claude", "target": {"kind": "session", "value": SESSION}}
         try:
             deadline = time.monotonic() + 10
-            while not claude_code.live_watcher_is_held(request):
+            while not claude_session.live_watcher_is_held(request):
                 if process.poll() is not None:
                     self.fail("waiter exited early: " + process.communicate()[1])
                 self.assertLess(time.monotonic(), deadline, "waiter never registered")
@@ -331,7 +331,7 @@ class LiveWaiterTests(unittest.TestCase):
                 process.communicate()
         self.assertEqual(process.returncode, 0, stderr)
         self.assertIn("[atc] cb-async", stdout)
-        self.assertFalse(claude_code.live_watcher_is_held(request))
+        self.assertFalse(claude_session.live_watcher_is_held(request))
 
 
 class ControlCommandTests(unittest.TestCase):

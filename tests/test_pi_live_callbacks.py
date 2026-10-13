@@ -10,7 +10,7 @@ import tempfile
 import time
 import unittest
 
-from agent_atc.engine import routes as callback_transport
+from agent_atc.engine import routes
 from agent_atc import cli
 from agent_atc.commands import callbacks as callback_commands
 from agent_atc.tower import main as tower
@@ -103,7 +103,7 @@ class PiLiveCallbackTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'Pi delivery'):
             dispatch.load_request(path)
         args = argparse.Namespace(agent='codex', callback_mode='cli')
-        assert 'pi_delivery' not in callback_transport.selection(args)
+        assert 'pi_delivery' not in routes.selection(args)
 
     def test_retry_keeps_steer_and_original_profile(self):
         request, _, _, queue, _ = self.bound
@@ -231,11 +231,11 @@ class PiLiveCallbackTests(unittest.TestCase):
         bound = self.bound
         tmp_path = self.directory
         request, _, _, _, payload = bound
-        original = bridge.storage.write_request
+        original = bridge.private_files.write_request
         def fail_envelope(path, data, **kwargs):
             if path.parent.name == 'inbox': raise OSError('disk full')
             return original(path, data, **kwargs)
-        with mock.patch.object(bridge.storage, 'write_request', side_effect=fail_envelope):
+        with mock.patch.object(bridge.private_files, 'write_request', side_effect=fail_envelope):
             with self.assertRaises(app_server.CallbackTransportBlocked): bridge.prepare_delivery(payload)
         assert delivery_engine.retained_target_lease_is_held(request)
 
@@ -336,7 +336,7 @@ class PiLiveCallbackTests(unittest.TestCase):
         assert len(list((directory / 'inbox').glob('*.json'))) == 1
         legacy = dict(request); legacy.pop('pi_callback_protocol')
         assert bridge.inspect_route(legacy)['status'] == 'blocked'
-        assert callback_transport.inspect_route(dict(legacy, callback_mode='manual'))['status'] == 'manual'
+        assert routes.inspect_route(dict(legacy, callback_mode='manual'))['status'] == 'manual'
 
 
 

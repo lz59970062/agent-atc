@@ -27,7 +27,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Optional
 
-from . import session as claude_code
+from . import session as claude_session
 from ...runtime import worker_command
 
 SERVER_NAME = "atc"
@@ -75,13 +75,13 @@ def channel_enabled(argv: list[str]) -> bool:
 
 def session_of_process(pid: int, environment: Mapping[str, str]) -> Optional[str]:
     """Current session of the Claude process ``pid``; it changes on /clear or /resume."""
-    path = claude_code.config_dir(environment) / "sessions" / f"{pid}.json"
+    path = claude_session.config_dir(environment) / "sessions" / f"{pid}.json"
     try:
         record = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return None
     session = record.get("sessionId") if isinstance(record, dict) else None
-    if isinstance(session, str) and claude_code.SESSION_ID_PATTERN.fullmatch(session):
+    if isinstance(session, str) and claude_session.SESSION_ID_PATTERN.fullmatch(session):
         return session
     return None
 
@@ -156,7 +156,7 @@ class ChannelServer:
 
     def release(self) -> None:
         if self.watcher is not None:
-            claude_code.release_live_watcher(self.watcher)
+            claude_session.release_live_watcher(self.watcher)
             self.watcher = None
 
     def follow_session(self) -> None:
@@ -167,7 +167,7 @@ class ChannelServer:
         self.session = session
         self.pushed.clear()
         if session is not None:
-            self.watcher = claude_code.register_live_watcher(session, prefix=claude_code.CHANNEL_WATCHER_PREFIX)
+            self.watcher = claude_session.register_live_watcher(session, prefix=claude_session.CHANNEL_WATCHER_PREFIX)
             self.log(f"delivering callbacks for Claude Code session {session}")
 
     def step_aside(self, callback_id: str) -> None:
@@ -193,7 +193,7 @@ class ChannelServer:
                     request = json.loads(path.read_text(encoding="utf-8"))
                 except (OSError, ValueError):
                     continue
-                if (not isinstance(request, dict) or not claude_code._matches(request, self.session, None)
+                if (not isinstance(request, dict) or not claude_session._matches(request, self.session, None)
                         or layout.ack_path(self.root, callback_id).exists()):
                     continue
                 pushed_at = self.pushed.get(callback_id)
@@ -202,7 +202,7 @@ class ChannelServer:
                         self.step_aside(callback_id)
                         return
                     continue
-                prompt = claude_code._claim(self.root, path)
+                prompt = claude_session._claim(self.root, path)
                 if prompt is None:
                     continue
                 meta = {"callback_id": callback_id}
@@ -243,7 +243,7 @@ def serve(args: argparse.Namespace) -> int:
     root = layout.queue_dir(args).expanduser().absolute()
     queue_store.ensure_daemon_dirs(root)
     server = ChannelServer(root, parent_pid=args.parent_pid or os.getppid(), environment=os.environ,
-                           poll_interval=args.poll_interval, ack_grace=claude_code.LIVE_ACK_GRACE_SECONDS)
+                           poll_interval=args.poll_interval, ack_grace=claude_session.LIVE_ACK_GRACE_SECONDS)
     return server.run(sys.stdin)
 
 
@@ -273,7 +273,7 @@ def launch(args: argparse.Namespace) -> int:
     from ...store import layout
 
     root = layout.queue_dir(args).expanduser().absolute()
-    found = claude_code.discover_executable(os.environ)
+    found = claude_session.discover_executable(os.environ)
     if found is None:
         print("atc claude: Claude Code was not found; set ATC_CLAUDE_BIN", file=sys.stderr)
         return 2

@@ -11,10 +11,10 @@ import time
 import uuid
 from datetime import datetime
 from pathlib import Path
-from ..core import envelope as callbacks
-from . import routes as callback_transport
-from ..harness.claude import session as claude_code
-from ..harness.pi import channel as pi_callback
+from ..core import envelope
+from . import routes
+from ..harness.claude import session as claude_session
+from ..harness.pi import channel as pi_channel
 from ..harness import AGENTS, AGENT_NAMES, get_agent
 from ..harness.base import DEFAULT_APPROVALS_REVIEWER, DEFAULT_APPROVAL_POLICY, DEFAULT_SANDBOX_MODE, DEFAULT_CLAUDE_PERMISSION_MODE
 from ..harness.claude.adapter import CLAUDE_PERMISSION_MODE_ENV
@@ -96,7 +96,7 @@ def request_agent(request: dict[str, object]) -> str:
 
 def resolve_target(args: argparse.Namespace) -> tuple[dict[str, str], str]:
     if args.session:
-        value = pi_callback.canonical_session(args.session) if resolve_agent(args) == "pi" else args.session
+        value = pi_channel.canonical_session(args.session) if resolve_agent(args) == "pi" else args.session
         return {"kind": "session", "value": value}, "--session"
     if args.last:
         if resolve_agent(args) == "pi":
@@ -108,7 +108,7 @@ def resolve_target(args: argparse.Namespace) -> tuple[dict[str, str], str]:
     session = os.environ.get(env_name, "").strip()
     if session:
         if agent == "pi":
-            session = pi_callback.canonical_session(session)
+            session = pi_channel.canonical_session(session)
         return {"kind": "session", "value": session}, env_name
 
     raise SystemExit(
@@ -178,7 +178,7 @@ def make_request(
         "target": target,
         "target_source": target_source,
         "prompt": prompt,
-        "prompt_format": callbacks.FORMAT if getattr(args, "callback_format", "compact") == "compact" else "full",
+        "prompt_format": envelope.FORMAT if getattr(args, "callback_format", "compact") == "compact" else "full",
         "task": getattr(args, "task", "Task update"),
         "exit_code": getattr(args, "exit_code", None),
         "message": getattr(args, "message", None),
@@ -188,7 +188,7 @@ def make_request(
     }
     if duration is not None:
         request["duration_seconds"] = duration
-    request.update(callback_transport.selection(args))
+    request.update(routes.selection(args))
     if request.get("callback_mode"):
         request["version"] = 3 if agent == "pi" else 2  # Older daemons must reject new route semantics.
         if agent == "pi" and request.get("pi_delivery") == "steer":
@@ -210,7 +210,7 @@ def prepare_request_for_queue(root: Path, request: dict[str, object], prompt: st
     acknowledgement = atc_runtime.control_command("ack", "--queue-dir", str(root), "--id", request_id)
     routed_prompt = attach_routing_text(prompt, request)
     request["prompt"] = f"{routed_prompt}\n\n{build_acknowledgement_text(acknowledgement, agent=request_agent(request))}"
-    if request.get("prompt_format") == callbacks.FORMAT:
+    if request.get("prompt_format") == envelope.FORMAT:
         # Keep complete evidence locally; neither retries nor rendering counters
         # need to repeat command lines and boilerplate in the model context.
         if not re.fullmatch(r"[A-Za-z0-9_-]+", request_id):
@@ -218,9 +218,9 @@ def prepare_request_for_queue(root: Path, request: dict[str, object], prompt: st
         details_path = root.absolute() / "details" / f"{request_id}.md"
         queue_store.write_private_text(details_path, str(request["prompt"]))
         request["prompt_details_path"] = str(details_path)
-        compact = callbacks.render(request, details_path, acknowledgement)
+        compact = envelope.render(request, details_path, acknowledgement)
         request["prompt_compact"] = compact
-        request["prompt"] = compact + "\n" + callbacks.REMINDER
+        request["prompt"] = compact + "\n" + envelope.REMINDER
         return request
     # Only remove the known generated wrapper, never task-specific messages,
     # template handoffs, recovery instructions, or routing constraints.
@@ -312,7 +312,7 @@ def load_request(path: Path) -> dict[str, object]:
     if data.get("version") in (3, 4):
         if request_agent(data) != "pi":
             raise ValueError("version 3 callback requires a frozen Pi route")
-        pi_callback.validate_route(data)
+        pi_channel.validate_route(data)
     if data.get("version") == 4 and data.get("pi_delivery") != "steer":
         raise ValueError("version 4 callback requires explicit Pi steer delivery")
     delivery_engine.resume_command(data)
@@ -349,7 +349,7 @@ def build_acknowledgement_text(command: str, agent: str = "codex") -> str:
 
 
 def submit_managed_run(args: argparse.Namespace) -> int:
-    if not callback_transport.preflight(args):
+    if not routes.preflight(args):
         return 125
     try:
         backend = managed_tasks.select_execution_backend(args)
@@ -440,7 +440,7 @@ def submit_managed_run(args: argparse.Namespace) -> int:
         "environment_path": str(environment_path),
         "token": managed_tasks.MANAGED_WORKER_TOKEN_PREFIX + secrets.token_urlsafe(32),
     }
-    task.update(callback_transport.selection(args))
+    task.update(routes.selection(args))
     if task.get("pi_delivery") == "steer":
         task["version"] = 5  # Old coordinators must not downgrade steer to follow-up.
     if task_kind == "agent" and agent_prompt_path is not None and agent_result_path is not None:
@@ -489,7 +489,7 @@ def submit_managed_run(args: argparse.Namespace) -> int:
     if agent_system_prompt_path is not None:
         print(f"atc: agent system prompt: {agent_system_prompt_path}", file=sys.stderr)
     if task["agent"] == "claude" and target.get("kind") == "session":
-        if claude_code.channel_is_held(str(target.get("value"))):
+        if claude_session.channel_is_held(str(target.get("value"))):
             print("atc: Claude Code live callback: arrives through the atc channel; no `atc wait` needed",
                   file=sys.stderr)
         else:

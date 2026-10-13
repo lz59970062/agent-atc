@@ -20,7 +20,7 @@ import threading
 import time
 import uuid
 
-from ...system import files as storage
+from ...system import files as private_files
 from ...system import windows_io
 
 PROTOCOL = "live-v1"
@@ -266,7 +266,7 @@ class PiDelivery:
                 try:
                     owner = read_record(self.directory / "owner.json")
                     if owner.get("owner_nonce") == self.nonce and owner.get("state") == "reserved":
-                        storage.write_request(self.directory / "owner.json", self.previous_owner)
+                        private_files.write_request(self.directory / "owner.json", self.previous_owner)
                         from ...install import services
                         from ...install import skills as skill_install
                         from ...tower import main as tower
@@ -287,7 +287,7 @@ class PiDelivery:
                             and owner.get("owner_pid") == spawn.get("owner_pid")
                             and owner.get("owner_identity") is None):
                         owner["owner_identity"] = spawn["owner_identity"]
-                        storage.write_request(self.directory / "owner.json", owner)
+                        private_files.write_request(self.directory / "owner.json", owner)
                 except (OSError, ValueError, KeyError):
                     pass  # Missing evidence conservatively disables further recovery.
             self.lease[0].close()
@@ -463,7 +463,7 @@ def prepare_delivery(payload: dict) -> PiDelivery:
                 if old.get("pi_delivery", "follow-up") != delivery:
                     raise ValueError("Preserving a Pi callback envelope with a different delivery policy")
             else:
-                storage.write_request(envelope, content)
+                private_files.write_request(envelope, content)
             return PiDelivery()
 
         if not confirmed_owner_dead(owner):
@@ -484,7 +484,7 @@ def prepare_delivery(payload: dict) -> PiDelivery:
                 raise ValueError("Pi session ownership changed before offline recovery")
             reservation = _reservation(directory, session, request["pi_profile_dir"])
             delivery_engine.retain_target_lease(queue, request)
-            storage.write_request(directory / "owner.json", reservation)
+            private_files.write_request(directory / "owner.json", reservation)
             environment = dict(os.environ, **{PROFILE_ENV: request["pi_profile_dir"],
                                              CHANNEL_ROOT_ENV: request["pi_channel_root"],
                                              RESERVATION_ENV: reservation["owner_nonce"]})
@@ -513,7 +513,7 @@ def install_extension(args: argparse.Namespace) -> int:
         raise ValueError(f"Preserving an existing Pi extension: {target}; review it before using --force")
     if not target.exists() or target.read_bytes() != source:
         ensure_private_directory(target.parent)
-        storage.write_private_text(target, source.decode("utf-8"), preserve_newlines=True)
+        private_files.write_private_text(target, source.decode("utf-8"), preserve_newlines=True)
     # Windows children inherit the protected ACL initialized by the installer.
     ensure_private_directory(profile / "agent-atc" / "channels")
     print(f"Installed Pi callback extension: {target}")
@@ -566,7 +566,7 @@ def _verify_owner_identity(directory: Path, nonce: str) -> bool:
             if identity is None:
                 return False
             owner["owner_identity"] = identity
-            storage.write_request(directory / "owner.json", owner)
+            private_files.write_request(directory / "owner.json", owner)
         return True
     except (OSError, ValueError):
         return False
@@ -591,7 +591,7 @@ def record_spawn(directory: Path, nonce: str, process) -> None:
     from ...store import layout
     identity = tower.daemon_process_identity(process.pid)
     if identity is not None:
-        storage.write_request(directory / f"spawn-{nonce}.json", {
+        private_files.write_request(directory / f"spawn-{nonce}.json", {
             "version": 1, "owner_nonce": nonce, "owner_pid": process.pid, "owner_identity": identity})
 
 
@@ -633,7 +633,7 @@ def managed_pi(args: argparse.Namespace) -> int:
         if not Path(session).exists():
             if args.session:
                 raise ValueError("The requested Pi session does not exist")
-            storage.write_request(Path(session), {"type": "session", "version": 3,
+            private_files.write_request(Path(session), {"type": "session", "version": 3,
                                   "id": str(uuid.uuid4()), "cwd": str(cwd),
                                   "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime())})
         session_header(session)
@@ -647,7 +647,7 @@ def managed_pi(args: argparse.Namespace) -> int:
         if existing and existing.get("managed") is True and not confirmed_owner_dead(existing):
             raise ValueError("Cannot confirm the previous managed Pi owner exited in this host/process scope; inspect ownership manually")
         reservation = _reservation(directory, session, route["pi_profile_dir"])
-        storage.write_request(directory / "owner.json", reservation)
+        private_files.write_request(directory / "owner.json", reservation)
         environment = dict(os.environ, **{PROFILE_ENV: route["pi_profile_dir"],
                                          CHANNEL_ROOT_ENV: route["pi_channel_root"],
                                          RESERVATION_ENV: reservation["owner_nonce"]})
@@ -684,7 +684,7 @@ def managed_pi(args: argparse.Namespace) -> int:
                 owner = read_record(directory / "owner.json")
                 if owner.get("owner_nonce") == reservation["owner_nonce"]:
                     owner["state"] = "closed"
-                    storage.write_request(directory / "owner.json", owner)
+                    private_files.write_request(directory / "owner.json", owner)
             except (OSError, ValueError):
                 pass
         lease[0].close()

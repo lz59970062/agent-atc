@@ -9,7 +9,7 @@ import shutil
 import sys
 import uuid
 from pathlib import Path
-from ..harness.pi import channel as pi_callback
+from ..harness.pi import channel as pi_channel
 from .. import template_registration
 from ..store import layout
 from .. import runtime as atc_runtime
@@ -80,7 +80,7 @@ def install_skill(args: argparse.Namespace) -> int:
         status |= install_skill_tree(layout.claude_home() / "skills" / "agent-atc", include_codex_plugin=False, force=args.force,
                                      keep_existing=keep, focused="claude")
     if target_name in ("pi", "all"):
-        status |= install_skill_tree(pi_callback.profile_dir() / "skills" / "agent-atc", include_codex_plugin=False,
+        status |= install_skill_tree(pi_channel.profile_dir() / "skills" / "agent-atc", include_codex_plugin=False,
                                      force=args.force, keep_existing=keep, focused="pi")
     return status
 

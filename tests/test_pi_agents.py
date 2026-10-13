@@ -29,7 +29,7 @@ from agent_atc.engine import delivery as delivery_engine
 from agent_atc.store import records as queue_store
 from agent_atc.store import layout
 from agent_atc.install import diagnostics
-from agent_atc.harness.pi import channel as pi_callback
+from agent_atc.harness.pi import channel as pi_channel
 from agent_atc.harness import AGENTS, CHILD_AGENT_NAMES, ChildOptions, get_agent, get_child_agent
 from agent_atc.runtime import worker_command
 from test_cli import assert_private_file, executable_python_fixture, patch_fixture_commands
@@ -430,7 +430,7 @@ class PiAgentContractTests(unittest.TestCase):
                 mock.patch.object(diagnostics, "runtime_issues", return_value=[]), \
                 mock.patch.object(diagnostics, "delivery_issues", return_value=[]), \
                 mock.patch.object(diagnostics.ScreenBackend, "available", return_value=True), \
-                mock.patch.object(diagnostics.callback_transport, "inspect_route",
+                mock.patch.object(diagnostics.routes, "inspect_route",
                                   return_value={"status": "ready", "mode": "cli", "transport": "cli_resume"}), \
                 mock.patch.object(diagnostics.shutil, "which", side_effect=lambda name: "/fixture/bin/" + name):
             report = diagnostics.inspect(args)
@@ -489,8 +489,8 @@ class PiAgentContractTests(unittest.TestCase):
         self.assertIn("Bound session: " + str(session),
                       Path(str(request["prompt_details_path"])).read_text(encoding="utf-8"))
 
-        channel = pi_callback.channel_dir(str(session), Path(request["pi_channel_root"]))
-        pi_callback.ensure_private_directory(channel)
+        channel = pi_channel.channel_dir(str(session), Path(request["pi_channel_root"]))
+        pi_channel.ensure_private_directory(channel)
         owner = {"version": 1, "session_file": str(session), "session_id": "1",
                  "channel_dir": str(channel), "profile_dir": request["pi_profile_dir"],
                  "owner_nonce": "fixture", "owner_pid": 99999999, "managed": True,
@@ -518,7 +518,7 @@ class PiAgentContractTests(unittest.TestCase):
         self.assertTrue((root / "done" / f"{request['id']}.json").exists())
         received = json.loads(capture.read_text(encoding="utf-8"))
         self.assertEqual(received["argv"], ["--print", "--session", str(session),
-                                            "--extension", str(pi_callback.extension_path())])
+                                            "--extension", str(pi_channel.extension_path())])
         self.assertNotIn("--no-session", received["argv"])
         self.assertEqual(received["cwd"], str(self.directory))
         self.assertIn("[atc]", received["prompt"])
@@ -819,7 +819,7 @@ class PiAgentContractTests(unittest.TestCase):
                         mock.patch.object(diagnostics, "runtime_issues", return_value=[]), \
                         mock.patch.object(diagnostics, "delivery_issues", return_value=[]), \
                         mock.patch.object(diagnostics.ScreenBackend, "available", return_value=True), \
-                        mock.patch.object(diagnostics.callback_transport, "inspect_route", return_value={"status": "ready"}), \
+                        mock.patch.object(diagnostics.routes, "inspect_route", return_value={"status": "ready"}), \
                         mock.patch.object(diagnostics.shutil, "which", side_effect=which) as probe, \
                         contextlib.redirect_stdout(output):
                     result = cli.main()

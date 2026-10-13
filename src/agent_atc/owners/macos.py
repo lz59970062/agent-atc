@@ -192,7 +192,7 @@ class LaunchdBackend:
         return validate_label(f"atc.{queue_key}.{task_key}.a{attempt}")
 
     def launch(self, owner: str, argv: list[str], cwd: Path, log_path: Path) -> None:
-        from ..system import files as storage  # Avoid a storage/platform package import cycle.
+        from ..system import files as private_files  # Avoid a storage/platform package import cycle.
 
         try:
             validate_label(owner)
@@ -212,7 +212,7 @@ class LaunchdBackend:
                 "EnvironmentVariables": {OWNER_ENV: owner, "PYTHONUNBUFFERED": "1"},
             }
             path = output.parent / f"{owner}.plist"
-            storage.write_private_text(path, plist_text(configuration))
+            private_files.write_private_text(path, plist_text(configuration))
         except (OSError, ValueError, TypeError) as error:
             raise LaunchError("could not prepare launchd worker configuration", uncertain=False) from error
         try:

@@ -8,8 +8,8 @@ import shutil
 import sys
 import time
 from pathlib import Path
-from . import routes as callback_transport
-from ..harness.pi import channel as pi_callback
+from . import routes
+from ..harness.pi import channel as pi_channel
 from ..harness import AGENTS, CHILD_AGENT_NAMES, ChildOptions, get_agent, get_child_agent
 from ..harness.base import DEFAULT_APPROVALS_REVIEWER, DEFAULT_APPROVAL_POLICY, DEFAULT_SANDBOX_MODE, DEFAULT_CLAUDE_PERMISSION_MODE
 from ..runtime import worker_command
@@ -77,7 +77,7 @@ def load_managed_task(path: Path) -> dict[str, object]:
     if task.get("version") in (4, 5):
         if dispatch.request_agent(task) != "pi":
             raise ValueError("version 4 task requires a frozen Pi parent route")
-        pi_callback.validate_route(task)
+        pi_channel.validate_route(task)
     if task.get("version") == 5 and task.get("pi_delivery") != "steer":
         raise ValueError("version 5 task requires explicit Pi steer delivery")
     if backend not in ("screen", "systemd-user", "launchd", "windows-task"):
@@ -132,7 +132,7 @@ def managed_task_namespace(task: dict[str, object]) -> argparse.Namespace:
         _callback_target_source=str(task.get("target_source", "managed-task")),
         _callback_agent=str(task.get("agent", "codex")),
         callback_format=str(task.get("callback_format", "compact")),
-        _callback_route={k: task[k] for k in callback_transport.ROUTE_FIELDS if k in task},
+        _callback_route={k: task[k] for k in routes.ROUTE_FIELDS if k in task},
     )
 
 
