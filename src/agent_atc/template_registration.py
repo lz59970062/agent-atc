@@ -21,7 +21,7 @@ import yaml
 
 from . import storage
 from .agents import get_child_agent
-from .platforms import posix, windows_io
+from .system import posix, windows_io
 from .templates import _UniqueSafeLoader, load_template, user_template_dir
 
 INDEX_BEGIN = "<!-- atc:registered-templates:begin -->"

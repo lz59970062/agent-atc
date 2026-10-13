@@ -19,9 +19,9 @@ import time
 
 from . import __version__, callback_transport, claude_code
 from .agents import get_agent, get_child_agent
-from .platforms import posix, windows_io
-from .platforms import OwnerState
-from .platforms.screen import ScreenBackend
+from .system import posix, windows_io
+from .owners import OwnerState
+from .owners.screen import ScreenBackend
 from .runtime import worker_command
 
 SCHEMA = "atc.health.v1"

@@ -11,7 +11,7 @@ from pathlib import Path
 from unittest import mock
 
 from agent_atc import cli
-from agent_atc.platforms import SystemdUserBackend
+from agent_atc.owners import SystemdUserBackend
 
 
 class DaemonServiceSelectionTests(unittest.TestCase):

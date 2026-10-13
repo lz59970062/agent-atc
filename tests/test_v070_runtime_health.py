@@ -10,7 +10,7 @@ from pathlib import Path
 from unittest import mock
 
 from agent_atc import cli, diagnostics
-from agent_atc.platforms import OwnerState
+from agent_atc.owners import OwnerState
 
 
 class HealthArtifacts:

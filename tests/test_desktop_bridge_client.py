@@ -16,7 +16,7 @@ from unittest import mock
 
 from agent_atc import cli, windows_service
 from agent_atc.desktop_connection import BridgeEndpoint, load_bridge_endpoint
-from agent_atc.platforms import windows
+from agent_atc.owners import windows
 
 
 @unittest.skipUnless(os.name == "nt", "native Windows bridge peer verification")

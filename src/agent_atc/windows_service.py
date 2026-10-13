@@ -16,7 +16,8 @@ import subprocess
 import sys
 import time
 
-from .platforms import windows, windows_io, windows_process
+from .owners import windows
+from .system import windows_io, windows_process
 from .runtime import worker_command
 
 

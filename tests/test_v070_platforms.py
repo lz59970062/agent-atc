@@ -12,8 +12,8 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from agent_atc.platforms import LaunchError, OwnerState, SystemdUserBackend
-from agent_atc.platforms import linux
+from agent_atc.owners import LaunchError, OwnerState, SystemdUserBackend
+from agent_atc.owners import linux
 
 
 class SystemdOwnershipTests(unittest.TestCase):

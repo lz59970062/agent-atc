@@ -8,8 +8,8 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from agent_atc.platforms import LaunchError, OwnerState, ScreenBackend
-from agent_atc.platforms import screen
+from agent_atc.owners import LaunchError, OwnerState, ScreenBackend
+from agent_atc.owners import screen
 
 
 class ScreenOwnershipTests(unittest.TestCase):

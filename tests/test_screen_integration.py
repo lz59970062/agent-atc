@@ -20,7 +20,7 @@ from pathlib import Path
 from unittest import mock
 
 from agent_atc import cli, diagnostics
-from agent_atc.platforms import SystemdUserBackend
+from agent_atc.owners import SystemdUserBackend
 
 
 @unittest.skipUnless(os.environ.get("ATC_TEST_SCREEN") == "1", "set ATC_TEST_SCREEN=1 for real screen/container test")

@@ -12,7 +12,7 @@ import tempfile
 import unittest
 from unittest import mock
 
-from agent_atc.platforms import windows_process as processes
+from agent_atc.system import windows_process as processes
 
 
 NPM_PREAMBLE = """@ECHO off
@@ -162,7 +162,7 @@ class WindowsProcessTests(unittest.TestCase):
             "print(json.dumps([os.getpid(),leaf.pid]),flush=True); time.sleep(60)"
         )
         runner = (
-            "from agent_atc.platforms.windows_process import enter_worker_job; "
+            "from agent_atc.system.windows_process import enter_worker_job; "
             "import os,subprocess,sys,json,time; "
             "job=enter_worker_job(); again=enter_worker_job(); "
             f"child=subprocess.Popen([sys.executable,'-c',{child!r}],stdout=subprocess.PIPE,text=True); "
@@ -200,13 +200,13 @@ class WindowsProcessTests(unittest.TestCase):
                 api.CloseHandle(handle)
 
     def test_delivery_worker_retains_exclusive_lock_after_parent_close(self):
-        from agent_atc.platforms.windows_io import acquire_path_lock
+        from agent_atc.system.windows_io import acquire_path_lock
 
         with tempfile.TemporaryDirectory(prefix="atc transfer ") as temporary:
             path = Path(temporary) / "lease.lock"
             handle, _ = acquire_path_lock(path, blocking=False)
             program = (
-                "from agent_atc.platforms.windows_process import inherited_lock_fds; "
+                "from agent_atc.system.windows_process import inherited_lock_fds; "
                 "import json,os,sys; fds=inherited_lock_fds(); "
                 "print(json.dumps([os.get_inheritable(fd) for fd in fds]),flush=True); sys.stdin.read(); "
                 "[os.close(fd) for fd in fds]"
@@ -236,7 +236,7 @@ class WindowsProcessTests(unittest.TestCase):
                     processes.inherited_lock_fds()
 
     def test_graceful_job_drain_waits_nested_children_and_does_not_kill_foreign_pid(self):
-        from agent_atc.platforms import windows
+        from agent_atc.owners import windows
 
         outsider = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"],
                                     **processes.background_popen_kwargs())
@@ -245,14 +245,15 @@ class WindowsProcessTests(unittest.TestCase):
                 folder = Path(temporary)
                 program = folder / "runner.py"
                 program.write_text('''
-from agent_atc.platforms import windows_process as p, windows
-from agent_atc.platforms.windows_io import open_private_text
+from agent_atc.system import windows_process as p
+from agent_atc.owners import windows
+from agent_atc.system.windows_io import open_private_text
 import json, os, pathlib, subprocess, sys, time
 directory=pathlib.Path(sys.argv[1]); outsider=int(sys.argv[2])
 job=p.enter_worker_job()
 marker=directory/'children.json'
 child_code="""
-from agent_atc.platforms.windows_process import enter_worker_job
+from agent_atc.system.windows_process import enter_worker_job
 import json,os,pathlib,subprocess,sys,time
 enter_worker_job()
 leaf=subprocess.Popen([sys.executable,'-c','import time; time.sleep(30)'])

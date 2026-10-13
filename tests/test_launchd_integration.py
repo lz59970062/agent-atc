@@ -20,7 +20,7 @@ import unittest
 from unittest import mock
 
 from agent_atc import cli, diagnostics, launchd_service
-from agent_atc.platforms import LaunchdBackend, OwnerState, macos
+from agent_atc.owners import LaunchdBackend, OwnerState, macos
 
 
 @unittest.skipUnless(sys.platform == "darwin" and os.environ.get("ATC_TEST_LAUNCHD") == "1",

@@ -18,7 +18,7 @@ import sys
 import threading
 
 from .desktop_bridge import DesktopBridge, BridgeError, _verify_peer, read_http_header, validate_upgrade
-from .platforms.windows_process import background_popen_kwargs
+from .system.windows_process import background_popen_kwargs
 
 
 REAL_CODEX_ENV = "ATC_DESKTOP_REAL_CODEX"

@@ -16,7 +16,7 @@ from unittest import mock
 from urllib.parse import urlsplit
 
 from agent_atc import desktop_bridge as bridge
-from agent_atc.platforms import windows
+from agent_atc.owners import windows
 
 
 KEY = base64.b64encode(b"0123456789abcdef").decode("ascii")

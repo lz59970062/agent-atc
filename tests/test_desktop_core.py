@@ -16,7 +16,7 @@ from unittest import mock
 
 from agent_atc import desktop_core as core
 from agent_atc import desktop_bridge as bridge
-from agent_atc.platforms import windows
+from agent_atc.owners import windows
 
 
 def server_frame(opcode, payload, final=True):

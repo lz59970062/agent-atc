@@ -20,9 +20,9 @@ import unittest
 from unittest import mock
 
 from agent_atc import cli, diagnostics, windows_service
-from agent_atc.platforms import OwnerState
-from agent_atc.platforms.windows import WindowsBackend, scheduler_call, process_identity
-from agent_atc.platforms import windows_io
+from agent_atc.owners import OwnerState
+from agent_atc.owners.windows import WindowsBackend, scheduler_call, process_identity
+from agent_atc.system import windows_io
 from agent_atc.runtime import worker_command
 
 

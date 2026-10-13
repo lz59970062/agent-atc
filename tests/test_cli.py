@@ -441,7 +441,7 @@ class CliTests(unittest.TestCase):
             with (
                 mock.patch.object(cli, "screen_binary", return_value="/usr/bin/screen"),
                 mock.patch.object(cli, "screen_owner_state", return_value=cli.OwnerState.ABSENT),
-                mock.patch("agent_atc.platforms.screen.screen_binary", return_value="/usr/bin/screen"),
+                mock.patch("agent_atc.owners.screen.screen_binary", return_value="/usr/bin/screen"),
                 mock.patch.object(cli, "console_script_path", return_value="/usr/bin/atc"),
                 mock.patch.object(cli.subprocess, "run", return_value=completed) as launch,
             ):
@@ -470,7 +470,7 @@ class CliTests(unittest.TestCase):
             with (
                 mock.patch.object(cli, "screen_binary", return_value="/usr/bin/screen"),
                 mock.patch.object(cli, "screen_owner_state", return_value=cli.OwnerState.ABSENT),
-                mock.patch("agent_atc.platforms.screen.screen_binary", return_value="/usr/bin/screen"),
+                mock.patch("agent_atc.owners.screen.screen_binary", return_value="/usr/bin/screen"),
                 mock.patch.object(cli.subprocess, "run", return_value=completed) as launch,
                 mock.patch.object(cli, "MANAGED_WORKER_HANDSHAKE_SECONDS", 60.0),
             ):
@@ -494,7 +494,7 @@ class CliTests(unittest.TestCase):
             with (
                 mock.patch.object(cli, "screen_binary", return_value="/usr/bin/screen"),
                 mock.patch.object(cli, "screen_owner_state", return_value=cli.OwnerState.ABSENT),
-                mock.patch("agent_atc.platforms.screen.screen_binary", return_value="/usr/bin/screen"),
+                mock.patch("agent_atc.owners.screen.screen_binary", return_value="/usr/bin/screen"),
                 mock.patch.object(cli.subprocess, "run", return_value=completed) as launch,
                 mock.patch.object(cli, "MANAGED_WORKER_HANDSHAKE_SECONDS", 0.0),
                 mock.patch.object(cli, "MANAGED_LAUNCH_MAX_ATTEMPTS", 2),

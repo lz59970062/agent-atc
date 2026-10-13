@@ -13,7 +13,7 @@ import threading
 import time
 
 from .desktop_core import BRIDGE_FILE_ENV, RelayError, WebSocketRelay, _stdin_messages, _stdout_messages
-from .platforms import macos
+from .owners import macos
 from .storage import write_request
 
 

@@ -21,7 +21,7 @@ import socket
 import struct
 import sys
 
-from . import windows
+from ..owners import windows
 
 
 _IDENTITY_FIELDS = frozenset({"boot_id", "machine_id", "sid", "creation_time"})

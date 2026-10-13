@@ -55,13 +55,13 @@ from .agents.claude import (
 )
 from .agents.pi import PI_BIN_ENV, PI_SESSION_FILE_ENV
 from .runtime import worker_command
-from .platforms import LaunchError, OwnerState, ScreenBackend, SystemdUserBackend, LaunchdBackend
-from .platforms import linux as linux_platform
-from .platforms import macos as macos_platform
-from .platforms import posix as posix_platform
-from .platforms import windows as windows_platform
-from .platforms import windows_io, windows_process
-from .platforms.windows import WindowsBackend
+from .owners import LaunchError, OwnerState, ScreenBackend, SystemdUserBackend, LaunchdBackend
+from .owners import linux as linux_platform
+from .owners import macos as macos_platform
+from .system import posix as posix_platform
+from .owners import windows as windows_platform
+from .system import windows_io, windows_process
+from .owners.windows import WindowsBackend
 from .templates import TEMPLATES, REASONING_EFFORTS, load_template
 
 DEFAULT_RETRIES = 3
@@ -1354,7 +1354,7 @@ class AppServerConnection:
         try:
             connection.settimeout(max(0.1, deadline - time.monotonic()))
             if isinstance(self.path, BridgeEndpoint):
-                from .platforms.windows_tcp import verify_loopback_peer
+                from .system.windows_tcp import verify_loopback_peer
                 connection.connect(("127.0.0.1", self.path.port))
                 verify_loopback_peer(connection, expected_pid=self.path.pid,
                                      expected_identity=self.path.identity)

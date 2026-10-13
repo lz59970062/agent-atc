@@ -1,6 +1,6 @@
 """Installation of the macOS per-user callback coordinator.
 
-Business commands are owned by separate jobs in platforms/macos.py. Updating a
+Business commands are owned by separate jobs in owners/macos.py. Updating a
 coordinator never boots out a live process or interrupts its callback delivery.
 """
 from __future__ import annotations
@@ -12,8 +12,8 @@ from pathlib import Path
 import subprocess
 import sys
 
-from .platforms import OwnerState
-from .platforms import macos
+from .owners import OwnerState
+from .owners import macos
 
 
 def agent_directory() -> Path:

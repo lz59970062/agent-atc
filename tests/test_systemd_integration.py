@@ -18,7 +18,7 @@ import unittest
 from pathlib import Path
 
 from agent_atc import cli
-from agent_atc.platforms import OwnerState, SystemdUserBackend
+from agent_atc.owners import OwnerState, SystemdUserBackend
 
 
 @unittest.skipUnless(os.environ.get("ATC_TEST_SYSTEMD") == "1", "set ATC_TEST_SYSTEMD=1 for real user-service test")

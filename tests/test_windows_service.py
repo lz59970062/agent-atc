@@ -13,7 +13,8 @@ import unittest
 from unittest import mock
 
 from agent_atc import cli, windows_service
-from agent_atc.platforms import windows, windows_io
+from agent_atc.owners import windows
+from agent_atc.system import windows_io
 
 
 @unittest.skipUnless(os.name == "nt", "Windows service contracts with native private files")

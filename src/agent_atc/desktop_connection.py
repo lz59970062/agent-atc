@@ -35,7 +35,7 @@ class UnixBridgeEndpoint:
 
 
 def load_unix_bridge_endpoint(path: Path, profile: Path) -> UnixBridgeEndpoint:
-    from .platforms import macos
+    from .owners import macos
 
     if sys.platform != "darwin" or not path.is_absolute():
         raise ValueError("macOS Desktop bridge requires an absolute metadata path")
@@ -68,7 +68,7 @@ def load_unix_bridge_endpoint(path: Path, profile: Path) -> UnixBridgeEndpoint:
 
 
 def load_bridge_endpoint(path: Path, profile: Path) -> BridgeEndpoint:
-    from .platforms import windows
+    from .owners import windows
 
     if os.name != "nt":
         raise ValueError("the Desktop bridge currently requires native Windows")

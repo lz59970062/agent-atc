@@ -66,7 +66,7 @@ jobs:
           export XDG_RUNTIME_DIR="/run/user/$(id -u)"
           export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
           sudo systemctl start "user@$(id -u).service"
-          python -c "from agent_atc.platforms import SystemdUserBackend; assert SystemdUserBackend().available(), 'systemd user manager required'"
+          python -c "from agent_atc.owners import SystemdUserBackend; assert SystemdUserBackend().available(), 'systemd user manager required'"
           python -m unittest discover -s tests -p test_systemd_integration.py -v
           python -m unittest discover -s tests -p test_screen_integration.py -v
 

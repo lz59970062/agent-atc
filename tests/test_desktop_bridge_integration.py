@@ -15,7 +15,7 @@ import unittest
 from agent_atc import cli
 from agent_atc.desktop_connection import load_bridge_endpoint
 from agent_atc.desktop_bridge import bridge_status, stop_bridge
-from agent_atc.platforms import windows_process
+from agent_atc.system import windows_process
 
 
 @unittest.skipUnless(os.name == "nt" and os.environ.get("ATC_TEST_CODEX_BRIDGE") == "1",

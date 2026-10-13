@@ -16,9 +16,9 @@ import unittest
 from unittest import mock
 
 from agent_atc import cli
-from agent_atc.platforms import LaunchError, OwnerState
-from agent_atc.platforms.windows import WindowsBackend
-from agent_atc.platforms import windows_process
+from agent_atc.owners import LaunchError, OwnerState
+from agent_atc.owners.windows import WindowsBackend
+from agent_atc.system import windows_process
 
 
 @unittest.skipUnless(os.name == "nt", "requires native Windows locks, ACLs and processes")

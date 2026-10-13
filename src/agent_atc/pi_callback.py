@@ -21,7 +21,7 @@ import time
 import uuid
 
 from . import storage
-from .platforms import windows_io
+from .system import windows_io
 
 PROTOCOL = "live-v1"
 CHANNEL_ROOT_ENV = "ATC_PI_CHANNEL_ROOT"
@@ -153,7 +153,7 @@ def confirmed_owner_dead(owner: dict) -> bool:
     if os.name == "nt":
         import ctypes
         try:
-            from .platforms.windows import _kernel32
+            from .owners.windows import _kernel32
             kernel = _kernel32()
             handle = kernel.OpenProcess(0x100000, False, pid)
             if not handle:

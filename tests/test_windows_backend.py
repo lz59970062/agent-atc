@@ -11,8 +11,8 @@ from unittest import mock
 import uuid
 import xml.etree.ElementTree as ET
 
-from agent_atc.platforms import LaunchError, OwnerState
-from agent_atc.platforms import windows
+from agent_atc.owners import LaunchError, OwnerState
+from agent_atc.owners import windows
 
 
 class WindowsBackendContracts(unittest.TestCase):
@@ -212,7 +212,7 @@ class NativeWindowsSchedulerTests(unittest.TestCase):
             script.write_text(
                 "import json,os,sys,time\n"
                 f"sys.path.insert(0, {str(Path(windows.__file__).resolve().parents[2])!r})\n"
-                "from agent_atc.platforms import windows\n"
+                "from agent_atc.owners import windows\n"
                 "from pathlib import Path\n"
                 "Path(sys.argv[1]).write_text(json.dumps({'pid':os.getpid(),'ppid':os.getppid(),"
                 "'admitted':windows.WindowsBackend().admits_worker(sys.argv[2]),"

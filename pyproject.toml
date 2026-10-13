@@ -28,4 +28,4 @@ atc-desktop-core = "agent_atc.desktop_core:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-agent_atc = ["skill/SKILL.md", "claude_skill/SKILL.md", "pi_skill/SKILL.md", "skill/agents/openai.yaml", "templates/*.md", "platforms/*.ps1", "desktop_windows_assets/*.ps1", "desktop_windows_assets/*.py", "pi_extension/*.js"]
+agent_atc = ["skill/SKILL.md", "claude_skill/SKILL.md", "pi_skill/SKILL.md", "skill/agents/openai.yaml", "templates/*.md", "owners/*.ps1", "desktop_windows_assets/*.ps1", "desktop_windows_assets/*.py", "pi_extension/*.js"]
