@@ -15,6 +15,9 @@ import unittest
 from unittest import mock
 
 from agent_atc import cli
+from agent_atc.install import services
+from agent_atc.tower import environment as tower_environment
+from agent_atc.tower import main as tower
 from agent_atc.engine import tasks as managed_tasks
 from agent_atc.engine import worker as task_worker
 from agent_atc.owners import host
@@ -51,12 +54,12 @@ class MacOSContracts(unittest.TestCase):
     def test_native_selection_and_explicit_wrong_platform_fail_closed(self):
         with mock.patch.object(LaunchdBackend, "available", return_value=True):
             self.assertEqual(managed_tasks.select_execution_backend(self.arguments()), "launchd")
-            self.assertEqual(cli.select_daemon_service(self.arguments()), "launchd")
+            self.assertEqual(services.select_daemon_service(self.arguments()), "launchd")
         with mock.patch.object(LaunchdBackend, "available", return_value=False), mock.patch.object(
             managed_tasks, "screen_binary", return_value="/usr/bin/screen"
         ):
             self.assertEqual(managed_tasks.select_execution_backend(self.arguments()), "screen")
-            self.assertEqual(cli.select_daemon_service(self.arguments()), "standalone")
+            self.assertEqual(services.select_daemon_service(self.arguments()), "standalone")
             with self.assertRaises(ValueError):
                 managed_tasks.select_execution_backend(self.arguments(backend="launchd"))
         with self.assertRaises(ValueError):
@@ -185,15 +188,15 @@ class MacOSContracts(unittest.TestCase):
     def test_reload_is_consumed_only_by_matching_process_without_signals(self):
         identity = {"boot_id": "boot", "start_microseconds": 123}
         payload = {"pid": os.getpid(), "process_identity": identity,
-                   "reload_protocol": cli.RELOAD_PROTOCOL_VERSION, "queue_dir": str(self.queue)}
-        with mock.patch.object(cli, "read_daemon_runtime", return_value=payload), mock.patch.object(
-            cli, "daemon_process_identity", return_value=identity
+                   "reload_protocol": tower.RELOAD_PROTOCOL_VERSION, "queue_dir": str(self.queue)}
+        with mock.patch.object(tower, "read_daemon_runtime", return_value=payload), mock.patch.object(
+            tower, "daemon_process_identity", return_value=identity
         ), mock.patch.object(os, "kill") as kill:
-            self.assertTrue(cli.send_standalone_reload(os.getpid(), expected_queue=self.queue))
-            self.assertTrue(cli.consume_daemon_reload_request(self.queue))
-            self.assertFalse(cli.consume_daemon_reload_request(self.queue))
+            self.assertTrue(tower.send_standalone_reload(os.getpid(), expected_queue=self.queue))
+            self.assertTrue(tower.consume_daemon_reload_request(self.queue))
+            self.assertFalse(tower.consume_daemon_reload_request(self.queue))
             queue_store.write_request(self.queue / "daemon-reload.json", dict(payload, pid=os.getpid() + 1))
-            self.assertFalse(cli.consume_daemon_reload_request(self.queue))
+            self.assertFalse(tower.consume_daemon_reload_request(self.queue))
             kill.assert_not_called()
 
     def test_coordinator_preview_is_read_only_private_and_pins_profiles(self):
@@ -201,7 +204,7 @@ class MacOSContracts(unittest.TestCase):
             layout, "claude_home", return_value=self.directory / "claude"
         ), mock.patch.dict(os.environ, {"HTTPS_PROXY": "SECRET_PROXY", "API_KEY": "SECRET_API"}), mock.patch.object(
             macos, "launchctl"
-        ) as control, mock.patch.object(cli, "configure_proxy_environment") as configure, contextlib.redirect_stdout(io.StringIO()) as output:
+        ) as control, mock.patch.object(tower_environment, "configure_proxy_environment") as configure, contextlib.redirect_stdout(io.StringIO()) as output:
             self.assertEqual(launchd_service.install(self.arguments(print=True)), 0)
         data = plistlib.loads(output.getvalue().encode())
         self.assertTrue(data["KeepAlive"])
@@ -217,10 +220,10 @@ class MacOSContracts(unittest.TestCase):
     def test_installation_reloads_live_coordinator_without_bootout(self):
         with mock.patch.object(launchd_service, "agent_directory", return_value=self.directory / "agents"), mock.patch.object(
             layout, "daemon_state_dir", return_value=self.directory / "state"
-        ), mock.patch.object(cli, "configure_proxy_environment"), mock.patch.object(
+        ), mock.patch.object(tower_environment, "configure_proxy_environment"), mock.patch.object(
             macos, "launchctl", return_value=subprocess.CompletedProcess([], 0)
         ) as control, mock.patch.object(macos, "job_status", return_value=(OwnerState.ALIVE, 1234, True)), mock.patch.object(
-            cli, "send_standalone_reload", return_value=True
+            tower, "send_standalone_reload", return_value=True
         ) as reload, contextlib.redirect_stdout(io.StringIO()):
             self.assertEqual(launchd_service.install(self.arguments()), 0)
         reload.assert_called_once_with(1234, expected_queue=self.queue)

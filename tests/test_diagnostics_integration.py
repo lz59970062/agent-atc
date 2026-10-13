@@ -21,6 +21,8 @@ import unittest
 from unittest import mock
 
 from agent_atc import cli
+from agent_atc.install import services
+from agent_atc.tower import main as tower
 from agent_atc.store import records as queue_store
 from agent_atc.store import layout
 from agent_atc.owners import SystemdUserBackend
@@ -123,7 +125,7 @@ class RealDiagnosticsRepairTests(unittest.TestCase):
                     self.assertEqual(repair[repair.index("--queue-dir") + 1], str(root))
                     self.assertEqual(repair[repair.index("--codex-bin") + 1], str(fake_cli))
                     self.assertNotIn("--last", repair)
-                    with mock.patch.object(cli, "report_claude_agent_readiness") as auth_advisory, mock.patch.object(
+                    with mock.patch.object(services, "report_claude_agent_readiness") as auth_advisory, mock.patch.object(
                         cli.subprocess, "Popen", side_effect=capture_owned_process
                     ):
                         repair_code, repair_output, repair_errors = self.invoke(repair_arguments)
@@ -140,16 +142,16 @@ class RealDiagnosticsRepairTests(unittest.TestCase):
                             daemon.poll(),
                             log_path.read_text(encoding="utf-8") if log_path.exists() else "coordinator exited",
                         )
-                        runtime = cli.read_daemon_runtime()
+                        runtime = tower.read_daemon_runtime()
                         if (runtime is not None and runtime.get("pid") == daemon.pid
-                                and cli.daemon_supports_hot_reload(daemon.pid, expected_queue=root)):
+                                and tower.daemon_supports_hot_reload(daemon.pid, expected_queue=root)):
                             break
                         time.sleep(0.05)
                     else:
                         self.fail("coordinator did not publish verified runtime identity within 15 seconds")
 
                     self.assertEqual(runtime["queue_dir"], str(root.resolve()))
-                    self.assertEqual(runtime["process_identity"], cli.daemon_process_identity(daemon.pid))
+                    self.assertEqual(runtime["process_identity"], tower.daemon_process_identity(daemon.pid))
                     self.assertEqual(int((state / "daemon.pid").read_text()), daemon.pid)
                     lock = queue_store.acquire_owner_lock(root, "daemon-singleton", blocking=False)
                     if lock is not None:

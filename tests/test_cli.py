@@ -21,6 +21,10 @@ from pathlib import Path
 from unittest import mock
 
 from agent_atc import cli
+from agent_atc.install import services
+from agent_atc.install import skills as skill_install
+from agent_atc.tower import environment as tower_environment
+from agent_atc.tower import main as tower
 from agent_atc.engine import dispatch
 from agent_atc.engine import goals
 from agent_atc.engine import recovery
@@ -1103,7 +1107,7 @@ class CliTests(unittest.TestCase):
                 {"CODEX_HOME": str(codex_home), "CLAUDE_CONFIG_DIR": str(claude_home)},
                 clear=False,
             ):
-                self.assertEqual(cli.install_skill(args), 0)
+                self.assertEqual(skill_install.install_skill(args), 0)
 
             codex_skill = codex_home / "skills" / "agent-atc"
             claude_skill = claude_home / "skills" / "agent-atc"
@@ -1127,7 +1131,7 @@ class CliTests(unittest.TestCase):
                 {"CODEX_HOME": str(codex_home), "CLAUDE_CONFIG_DIR": str(claude_home)},
                 clear=False,
             ):
-                self.assertEqual(cli.install_skill(args), 0)
+                self.assertEqual(skill_install.install_skill(args), 0)
 
             self.assertFalse((codex_home / "skills").exists())
             self.assertTrue((claude_home / "skills" / "agent-atc" / "SKILL.md").exists())
@@ -1137,7 +1141,7 @@ class CliTests(unittest.TestCase):
             homes = {"CODEX_HOME": Path(tmp) / "codex", "CLAUDE_CONFIG_DIR": Path(tmp) / "claude",
                      "PI_CODING_AGENT_DIR": Path(tmp) / "pi"}
             with mock.patch.dict(os.environ, {name: str(path) for name, path in homes.items()}, clear=False):
-                self.assertEqual(cli.install_skill(argparse.Namespace(path=None, target="all", force=False)), 0)
+                self.assertEqual(skill_install.install_skill(argparse.Namespace(path=None, target="all", force=False)), 0)
             skills = {name: (path / "skills" / "agent-atc") for name, path in homes.items()}
             codex = (skills["CODEX_HOME"] / "SKILL.md").read_text(encoding="utf-8")
             claude = (skills["CLAUDE_CONFIG_DIR"] / "SKILL.md").read_text(encoding="utf-8")
@@ -1836,12 +1840,12 @@ class CliTests(unittest.TestCase):
         with (
             mock.patch.object(sys, "platform", "linux"),
             mock.patch.object(managed_tasks, "screen_binary", return_value="/usr/bin/screen"),
-            mock.patch.object(cli, "install_skill", return_value=0) as install_skill,
+            mock.patch.object(skill_install, "install_skill", return_value=0) as install_skill,
             mock.patch.object(reminder_policy, "ensure_callback_hook_file") as ensure_callback_hook_file,
-            mock.patch.object(cli, "report_claude_agent_readiness") as report_claude_agent_readiness,
-            mock.patch.object(cli, "install_systemd", return_value=0) as install_systemd,
+            mock.patch.object(services, "report_claude_agent_readiness") as report_claude_agent_readiness,
+            mock.patch.object(services, "install_systemd", return_value=0) as install_systemd,
         ):
-            self.assertEqual(cli.setup(args), 0)
+            self.assertEqual(services.setup(args), 0)
 
         skill_args = install_skill.call_args.args[0]
         self.assertEqual(skill_args.path, "/tmp/skills")
@@ -1876,7 +1880,7 @@ class CliTests(unittest.TestCase):
             ),
             mock.patch("sys.stdout", output),
         ):
-            cli.report_claude_agent_readiness(args)
+            services.report_claude_agent_readiness(args)
 
         call = auth_status.call_args
         self.assertEqual(call.args[0], ["/opt/claude/bin/claude", "auth", "status", "--json"])
@@ -1896,7 +1900,7 @@ class CliTests(unittest.TestCase):
             mock.patch.object(cli.subprocess, "run") as auth_status,
             mock.patch("sys.stderr", errors),
         ):
-            cli.report_claude_agent_readiness(argparse.Namespace(claude_bin=None))
+            services.report_claude_agent_readiness(argparse.Namespace(claude_bin=None))
 
         auth_status.assert_not_called()
         self.assertIn("setup will continue", errors.getvalue())
@@ -1944,10 +1948,10 @@ class CliTests(unittest.TestCase):
         args = argparse.Namespace()
         with (
             mock.patch.object(managed_tasks, "screen_binary", return_value=None),
-            mock.patch.object(cli, "install_skill") as install_skill,
-            mock.patch.object(cli, "install_systemd") as install_systemd,
+            mock.patch.object(skill_install, "install_skill") as install_skill,
+            mock.patch.object(services, "install_systemd") as install_systemd,
         ):
-            self.assertEqual(cli.setup(args), 2)
+            self.assertEqual(services.setup(args), 2)
         install_skill.assert_not_called()
         install_systemd.assert_not_called()
 
@@ -1980,13 +1984,13 @@ class CliTests(unittest.TestCase):
             home = Path(tmp) / "atc-home"
             with (
                 mock.patch.dict(os.environ, {"ATC_HOME": str(home)}, clear=False),
-                mock.patch.object(cli, "systemd_user_dir", return_value=Path(tmp) / "systemd"),
+                mock.patch.object(services, "systemd_user_dir", return_value=Path(tmp) / "systemd"),
                 mock.patch.object(cli.shutil, "which", return_value=None),
             ):
-                self.assertEqual(cli.install_systemd(args), 0)
+                self.assertEqual(services.install_systemd(args), 0)
 
             proxy_file = home / "service-proxy.env"
-            self.assertEqual(cli.parse_proxy_environment_file(proxy_file), {
+            self.assertEqual(tower_environment.parse_proxy_environment_file(proxy_file), {
                 "HTTP_PROXY": "http://proxy.example:8080",
                 "no_proxy": "localhost,127.0.0.1",
             })
@@ -2023,17 +2027,17 @@ class CliTests(unittest.TestCase):
             )
             with (
                 mock.patch.dict(os.environ, {"ATC_HOME": str(Path(tmp) / "atc-home")}, clear=False),
-                mock.patch.object(cli, "systemd_user_dir", return_value=Path(tmp) / "systemd"),
+                mock.patch.object(services, "systemd_user_dir", return_value=Path(tmp) / "systemd"),
                 mock.patch.object(cli.shutil, "which", side_effect=lambda command: "/usr/bin/systemctl" if command == "systemctl" else None),
-                mock.patch.object(cli, "run_systemctl", return_value=0) as run_systemctl,
+                mock.patch.object(services, "run_systemctl", return_value=0) as run_systemctl,
             ):
-                self.assertEqual(cli.install_systemd(args), 0)
+                self.assertEqual(services.install_systemd(args), 0)
 
             self.assertEqual(run_systemctl.call_args_list, [mock.call(["daemon-reload"]), mock.call(["enable", "agent-atc.service"])])
 
     def test_install_systemd_reloads_supported_daemon_while_delivery_is_running(self) -> None:
         with tempfile.TemporaryDirectory() as tmp, mock.patch.object(
-            cli, "daemon_process_identity", return_value={"start_ticks": 123, "boot_id": "fixture-boot"}
+            tower, "daemon_process_identity", return_value={"start_ticks": 123, "boot_id": "fixture-boot"}
         ):
             root = Path(tmp) / "queue"
             self._write_request(root, "inflight", tmp)
@@ -2042,8 +2046,8 @@ class CliTests(unittest.TestCase):
             runtime = home / "daemon-runtime.json"
             runtime.parent.mkdir(parents=True)
             runtime.write_text(
-                json.dumps({"pid": os.getpid(), "reload_protocol": cli.RELOAD_PROTOCOL_VERSION,
-                            "process_identity": cli.daemon_process_identity(os.getpid()),
+                json.dumps({"pid": os.getpid(), "reload_protocol": tower.RELOAD_PROTOCOL_VERSION,
+                            "process_identity": tower.daemon_process_identity(os.getpid()),
                             "queue_dir": str(root.resolve())}) + "\n",
                 encoding="utf-8",
             )
@@ -2068,11 +2072,11 @@ class CliTests(unittest.TestCase):
             )
             with (
                 mock.patch.dict(os.environ, {"ATC_HOME": str(home)}, clear=False),
-                mock.patch.object(cli, "systemd_user_dir", return_value=Path(tmp) / "systemd"),
+                mock.patch.object(services, "systemd_user_dir", return_value=Path(tmp) / "systemd"),
                 mock.patch.object(cli.shutil, "which", side_effect=lambda command: "/usr/bin/systemctl" if command == "systemctl" else None),
-                mock.patch.object(cli, "run_systemctl", return_value=0) as run_systemctl,
+                mock.patch.object(services, "run_systemctl", return_value=0) as run_systemctl,
             ):
-                self.assertEqual(cli.install_systemd(args), 0)
+                self.assertEqual(services.install_systemd(args), 0)
 
             self.assertEqual(
                 run_systemctl.call_args_list,
@@ -2102,9 +2106,9 @@ class CliTests(unittest.TestCase):
                 path="/bin",
             )
             with mock.patch.dict(os.environ, {"ATC_HOME": str(home)}, clear=False):
-                text = cli.supervisor_config_text(args)
+                text = services.supervisor_config_text(args)
 
-            self.assertIn(f"{cli.PROXY_ENV_FILE_ENV}=", text)
+            self.assertIn(f"{tower_environment.PROXY_ENV_FILE_ENV}=", text)
             self.assertNotIn("secret@proxy.example", text)
 
     def test_proxy_parser_rejects_values_unsafe_for_service_environment(self) -> None:
@@ -2113,7 +2117,7 @@ class CliTests(unittest.TestCase):
             source.write_text("HTTPS_PROXY=https://user:bad password@proxy.example\n", encoding="utf-8")
 
             with self.assertRaisesRegex(ValueError, "unsafe for a systemd environment file"):
-                cli.parse_proxy_environment_file(source)
+                tower_environment.parse_proxy_environment_file(source)
 
     def test_clear_proxy_removes_persisted_proxy_file(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -2124,7 +2128,7 @@ class CliTests(unittest.TestCase):
             args = argparse.Namespace(proxy_env_file=None, inherit_proxy=False, clear_proxy=True)
 
             with mock.patch.dict(os.environ, {"ATC_HOME": str(home)}, clear=False):
-                self.assertIsNone(cli.configure_proxy_environment(args))
+                self.assertIsNone(tower_environment.configure_proxy_environment(args))
 
             self.assertFalse(proxy.exists())
 
@@ -2156,7 +2160,7 @@ class CliTests(unittest.TestCase):
                 mock.patch.object(cli.signal, "signal", side_effect=signal_immediately),
                 mock.patch.object(cli.os, "execv") as execv,
             ):
-                self.assertEqual(cli.daemon(args), 0)
+                self.assertEqual(tower.daemon(args), 0)
 
             execv.assert_not_called()
 
@@ -2173,7 +2177,7 @@ class CliTests(unittest.TestCase):
                 once=False,
                 max_items=None,
             )
-            expected = cli.daemon_reexec_command(args)
+            expected = tower.daemon_reexec_command(args)
 
             def signal_immediately(signum: int, handler: object) -> object:
                 if signum == signal.SIGHUP and callable(handler):
@@ -2186,7 +2190,7 @@ class CliTests(unittest.TestCase):
                 mock.patch.object(cli.os, "execv", side_effect=RuntimeError("reexec")) as execv,
             ):
                 with self.assertRaisesRegex(RuntimeError, "reexec"):
-                    cli.daemon(args)
+                    tower.daemon(args)
 
             execv.assert_called_once_with(sys.executable, expected)
 
@@ -2210,12 +2214,12 @@ class CliTests(unittest.TestCase):
             )
 
             with (
-                mock.patch.object(cli, "systemd_user_dir", return_value=Path(tmp)),
+                mock.patch.object(services, "systemd_user_dir", return_value=Path(tmp)),
                 mock.patch.object(cli.shutil, "which", side_effect=lambda command: "/usr/bin/supervisorctl" if command == "supervisorctl" else None),
-                mock.patch.object(cli, "running_in_container", return_value=True),
-                mock.patch.object(cli, "install_supervisor", return_value=0) as install_supervisor,
+                mock.patch.object(services, "running_in_container", return_value=True),
+                mock.patch.object(services, "install_supervisor", return_value=0) as install_supervisor,
             ):
-                self.assertEqual(cli.install_systemd(args), 0)
+                self.assertEqual(services.install_systemd(args), 0)
 
             self.assertTrue((Path(tmp) / "agent-atc.service").exists())
             install_supervisor.assert_called_once()
@@ -2240,12 +2244,12 @@ class CliTests(unittest.TestCase):
             )
 
             with (
-                mock.patch.object(cli, "systemd_user_dir", return_value=Path(tmp)),
+                mock.patch.object(services, "systemd_user_dir", return_value=Path(tmp)),
                 mock.patch.object(cli.shutil, "which", return_value=None),
-                mock.patch.object(cli, "running_in_container", return_value=True),
-                mock.patch.object(cli, "start_standalone_daemon", return_value=0) as start_standalone,
+                mock.patch.object(services, "running_in_container", return_value=True),
+                mock.patch.object(services, "start_standalone_daemon", return_value=0) as start_standalone,
             ):
-                self.assertEqual(cli.install_systemd(args), 0)
+                self.assertEqual(services.install_systemd(args), 0)
 
             self.assertTrue((Path(tmp) / "agent-atc.service").exists())
             start_standalone.assert_called_once()
@@ -2270,12 +2274,12 @@ class CliTests(unittest.TestCase):
             )
 
             with (
-                mock.patch.object(cli, "systemd_user_dir", return_value=Path(tmp)),
+                mock.patch.object(services, "systemd_user_dir", return_value=Path(tmp)),
                 mock.patch.object(cli.shutil, "which", side_effect=lambda command: "/usr/bin/systemctl" if command == "systemctl" else None),
-                mock.patch.object(cli, "run_systemctl", return_value=1),
-                mock.patch.object(cli, "start_standalone_daemon", return_value=0) as start_standalone,
+                mock.patch.object(services, "run_systemctl", return_value=1),
+                mock.patch.object(services, "start_standalone_daemon", return_value=0) as start_standalone,
             ):
-                self.assertEqual(cli.install_systemd(args), 0)
+                self.assertEqual(services.install_systemd(args), 0)
 
             start_standalone.assert_called_once()
 
@@ -2292,7 +2296,7 @@ class CliTests(unittest.TestCase):
             path="/bin",
         )
 
-        text = cli.supervisor_config_text(args)
+        text = services.supervisor_config_text(args)
 
         self.assertIn("[program:agent-atc]", text)
         self.assertIn("autostart=true", text)
@@ -2377,13 +2381,13 @@ class CliTests(unittest.TestCase):
             rc_file.write_text("export EXISTING=1\n", encoding="utf-8")
             args = argparse.Namespace(rc_file=str(rc_file), command="/opt/bin/agent-atc")
 
-            self.assertEqual(cli.install_shell_hook(args), 0)
-            self.assertEqual(cli.install_shell_hook(args), 0)
+            self.assertEqual(skill_install.install_shell_hook(args), 0)
+            self.assertEqual(skill_install.install_shell_hook(args), 0)
 
             rendered = rc_file.read_text(encoding="utf-8")
             self.assertIn("export EXISTING=1", rendered)
-            self.assertEqual(rendered.count(cli.SHELL_HOOK_BEGIN), 1)
-            self.assertEqual(rendered.count(cli.SHELL_HOOK_END), 1)
+            self.assertEqual(rendered.count(skill_install.SHELL_HOOK_BEGIN), 1)
+            self.assertEqual(rendered.count(skill_install.SHELL_HOOK_END), 1)
             self.assertIn("timeout 2s /opt/bin/agent-atc status", rendered)
 
     def test_completed_goal_is_terminal_and_suppresses_reminders(self) -> None:

@@ -22,19 +22,21 @@ def agent_directory() -> Path:
 
 def service_text(args: argparse.Namespace) -> str:
     from .. import cli
+    from ..tower import environment as tower_environment
+    from ..tower import main as tower
     from ..harness.codex import app_server
     from ..store import records as queue_store
     from ..store import layout
 
     label = macos.validate_label(args.name)
-    command = cli.daemon_command(args)
+    command = tower.daemon_command(args)
     command[0] = str(Path(command[0]).expanduser().absolute())
     # Pin even the default queue: launchd does not inherit the submitting shell.
     if "--queue-dir" in command:
         command[command.index("--queue-dir") + 1] = str(layout.queue_dir(args).resolve())
     else:
         command.extend(["--queue-dir", str(layout.queue_dir(args).resolve())])
-    environment = cli.daemon_environment(args, include_proxy_values=False)
+    environment = tower_environment.daemon_environment(args, include_proxy_values=False)
     environment.update(CODEX_HOME=str(layout.codex_home().resolve()),
                        CLAUDE_CONFIG_DIR=str(layout.claude_home().resolve()))
     for name in (layout.TARGET_LOCK_DIR_ENV, app_server.APP_SERVER_SOCKET_ENV, app_server.ALLOW_APP_SERVER_SOCKET_OVERRIDE_ENV):
@@ -51,6 +53,8 @@ def service_text(args: argparse.Namespace) -> str:
 
 def install(args: argparse.Namespace) -> int:
     from .. import cli
+    from ..tower import environment as tower_environment
+    from ..tower import main as tower
     from ..harness.codex import app_server
     from ..store import records as queue_store
     from ..store import layout
@@ -66,7 +70,7 @@ def install(args: argparse.Namespace) -> int:
         if target.exists() and not args.force:
             print(f"LaunchAgent already exists at {target}. Re-run with --force to overwrite.", file=sys.stderr)
             return 1
-        cli.configure_proxy_environment(args)
+        tower_environment.configure_proxy_environment(args)
         state_dir = layout.daemon_state_dir()
         state_dir.mkdir(parents=True, exist_ok=True)
         os.chmod(state_dir, 0o700)
@@ -84,7 +88,7 @@ def install(args: argparse.Namespace) -> int:
 
         state, pid, registered = macos.job_status(args.name)
         if state == OwnerState.ALIVE:
-            if pid is not None and cli.send_standalone_reload(pid, expected_queue=layout.queue_dir(args)):
+            if pid is not None and tower.send_standalone_reload(pid, expected_queue=layout.queue_dir(args)):
                 print("Requested coordinator reload after callback deliveries drain. LaunchAgent settings apply at next load.")
                 return 0
             print("atc: running LaunchAgent could not be verified for safe reload; it was left untouched", file=sys.stderr)
@@ -96,9 +100,9 @@ def install(args: argparse.Namespace) -> int:
         queue = layout.queue_dir(args)
         admission = queue_store.acquire_owner_lock(queue, "daemon-singleton", blocking=False)
         if admission is None:
-            runtime = cli.read_daemon_runtime()
+            runtime = tower.read_daemon_runtime()
             pid = runtime.get("pid") if runtime else None
-            if type(pid) is int and cli.send_standalone_reload(pid, expected_queue=queue):
+            if type(pid) is int and tower.send_standalone_reload(pid, expected_queue=queue):
                 print("Reloading the existing coordinator. LaunchAgent activation is deferred until that coordinator exits.")
                 return 0
             print("atc: another coordinator owns the queue; LaunchAgent activation was deferred", file=sys.stderr)

@@ -13,6 +13,8 @@ import unittest
 from unittest import mock
 
 from agent_atc import cli
+from agent_atc.tower import environment as tower_environment
+from agent_atc.tower import main as tower
 from agent_atc.engine import tasks as managed_tasks
 from agent_atc.engine import delivery as delivery_engine
 from agent_atc.store import records as queue_store
@@ -42,14 +44,14 @@ class WindowsServiceTests(unittest.TestCase):
         self.addCleanup(self.stack.close)
         self.stack.enter_context(mock.patch.object(windows_service, "config_path", return_value=self.target))
         self.stack.enter_context(mock.patch.object(windows_service, "configuration", return_value=self.config))
-        self.stack.enter_context(mock.patch.object(cli, "configure_proxy_environment"))
+        self.stack.enter_context(mock.patch.object(tower_environment, "configure_proxy_environment"))
         self.stack.enter_context(contextlib.redirect_stdout(io.StringIO()))
         self.errors = self.stack.enter_context(contextlib.redirect_stderr(io.StringIO()))
 
     def runtime(self, root=None):
         return {
             "pid": 123456, "queue_dir": str((root or self.root).resolve()),
-            "reload_protocol": cli.RELOAD_PROTOCOL_VERSION,
+            "reload_protocol": tower.RELOAD_PROTOCOL_VERSION,
             "process_identity": {"boot_id": "boot", "creation_time": 100, "sid": "user"},
         }
 
@@ -57,8 +59,8 @@ class WindowsServiceTests(unittest.TestCase):
         old_root = self.directory / "old-queue"
         runtime = self.runtime(old_root)
         queue_store.write_request(self.target, dict(self.config, queue_dir=str(old_root)))
-        with mock.patch.object(cli, "read_daemon_runtime", return_value=runtime), mock.patch.object(
-            cli, "daemon_process_identity", return_value=dict(runtime["process_identity"], creation_time=200)
+        with mock.patch.object(tower, "read_daemon_runtime", return_value=runtime), mock.patch.object(
+            tower, "daemon_process_identity", return_value=dict(runtime["process_identity"], creation_time=200)
         ), mock.patch.object(windows, "scheduler_call", return_value={"registered": True}) as control:
             self.assertEqual(windows_service.install(self.args), 0, self.errors.getvalue())
         self.assertEqual(json.loads(self.target.read_text(encoding="utf-8"))["queue_dir"], str(self.root))
@@ -66,8 +68,8 @@ class WindowsServiceTests(unittest.TestCase):
 
     def test_verified_other_queue_coordinator_blocks_profile_reuse(self):
         runtime = self.runtime(self.directory / "other-queue")
-        with mock.patch.object(cli, "read_daemon_runtime", return_value=runtime), mock.patch.object(
-            cli, "daemon_process_identity", return_value=runtime["process_identity"]
+        with mock.patch.object(tower, "read_daemon_runtime", return_value=runtime), mock.patch.object(
+            tower, "daemon_process_identity", return_value=runtime["process_identity"]
         ), mock.patch.object(windows, "scheduler_call") as control:
             self.assertEqual(windows_service.install(self.args), 2)
         control.assert_not_called()
@@ -78,7 +80,7 @@ class WindowsServiceTests(unittest.TestCase):
         old = dict(self.config, queue_dir=str(self.directory / "old-queue"))
         queue_store.write_request(self.target, old)
         with mock.patch.object(windows_io, "probe_existing_lock", return_value=True), mock.patch.object(
-            cli, "read_daemon_runtime", return_value=None
+            tower, "read_daemon_runtime", return_value=None
         ), mock.patch.object(windows, "scheduler_call") as control:
             self.assertEqual(windows_service.install(self.args), 2)
         control.assert_not_called()
@@ -87,9 +89,9 @@ class WindowsServiceTests(unittest.TestCase):
     def test_reload_also_ensures_supervisor_after_an_orphan_daemon(self):
         runtime = self.runtime()
         queue_store.write_request(self.target, self.config)
-        with mock.patch.object(cli, "read_daemon_runtime", return_value=runtime), mock.patch.object(
+        with mock.patch.object(tower, "read_daemon_runtime", return_value=runtime), mock.patch.object(
             queue_store, "acquire_owner_lock", return_value=None
-        ), mock.patch.object(cli, "send_standalone_reload", return_value=True) as reload, mock.patch.object(
+        ), mock.patch.object(tower, "send_standalone_reload", return_value=True) as reload, mock.patch.object(
             windows, "scheduler_call", return_value={"registered": True}
         ) as control, mock.patch.object(os, "kill") as signal:
             self.assertEqual(windows_service.install(self.args), 0, self.errors.getvalue())
@@ -99,8 +101,8 @@ class WindowsServiceTests(unittest.TestCase):
 
     def test_uninstall_ignores_stale_runtime_when_queue_has_no_owner(self):
         queue_store.write_request(self.target, self.config)
-        with mock.patch.object(cli, "read_daemon_runtime", return_value=self.runtime()), mock.patch.object(
-            cli, "daemon_process_identity", return_value=None
+        with mock.patch.object(tower, "read_daemon_runtime", return_value=self.runtime()), mock.patch.object(
+            tower, "daemon_process_identity", return_value=None
         ), mock.patch.object(windows, "scheduler_call", return_value={}) as control:
             self.assertEqual(windows_service.uninstall(self.args), 0, self.errors.getvalue())
         control.assert_called_once_with("delete", {"owner": self.config["owner"]})
@@ -110,8 +112,8 @@ class WindowsServiceTests(unittest.TestCase):
     def test_uninstall_refuses_to_modify_unverified_live_coordinator(self):
         queue_store.write_request(self.target, self.config)
         runtime = self.runtime()
-        with mock.patch.object(cli, "read_daemon_runtime", return_value=runtime), mock.patch.object(
-            cli, "daemon_process_identity", return_value=dict(runtime["process_identity"], creation_time=200)
+        with mock.patch.object(tower, "read_daemon_runtime", return_value=runtime), mock.patch.object(
+            tower, "daemon_process_identity", return_value=dict(runtime["process_identity"], creation_time=200)
         ), mock.patch.object(windows_io, "probe_existing_lock", return_value=True), mock.patch.object(
             windows, "scheduler_call"
         ) as control:
@@ -123,8 +125,8 @@ class WindowsServiceTests(unittest.TestCase):
     def test_uninstall_live_owner_writes_identity_bound_stop_without_killing(self):
         queue_store.write_request(self.target, self.config)
         runtime = self.runtime()
-        with mock.patch.object(cli, "read_daemon_runtime", return_value=runtime), mock.patch.object(
-            cli, "daemon_process_identity", return_value=runtime["process_identity"]
+        with mock.patch.object(tower, "read_daemon_runtime", return_value=runtime), mock.patch.object(
+            tower, "daemon_process_identity", return_value=runtime["process_identity"]
         ), mock.patch.object(windows_io, "probe_existing_lock", return_value=True), mock.patch.object(
             windows, "scheduler_call", return_value={}
         ) as control, mock.patch.object(os, "kill") as signal:
@@ -166,27 +168,27 @@ class WindowsServiceTests(unittest.TestCase):
             # Popen bookkeeping and the callback is no longer in running/.
             with mock.patch.dict(delivery_engine._BACKGROUND_RESUMES, {}, clear=True):
                 self.assertTrue(queue_store.delivery_lock_is_held(self.root, request_id))
-                self.assertTrue(cli.daemon_has_live_delivery_workers(self.root))
+                self.assertTrue(tower.daemon_has_live_delivery_workers(self.root))
         finally:
             queue_store.release_owner_lock(lock, remove=False)
         with mock.patch.dict(delivery_engine._BACKGROUND_RESUMES, {}, clear=True):
-            self.assertFalse(cli.daemon_has_live_delivery_workers(self.root))
+            self.assertFalse(tower.daemon_has_live_delivery_workers(self.root))
 
     def test_draining_never_launches_new_tasks_or_deliveries(self):
         for operation, expected in (("daemon-stop.json", 0), ("daemon-reload.json", 75)):
-            with self.subTest(operation=operation), mock.patch.object(cli, "load_service_proxy_environment"), mock.patch.object(
-                cli, "write_daemon_runtime"
-            ), mock.patch.object(cli, "clear_daemon_runtime"), mock.patch.object(
-                cli, "consume_daemon_reload_request", side_effect=lambda root, filename="daemon-reload.json": filename == operation
+            with self.subTest(operation=operation), mock.patch.object(tower_environment, "load_service_proxy_environment"), mock.patch.object(
+                tower, "write_daemon_runtime"
+            ), mock.patch.object(tower, "clear_daemon_runtime"), mock.patch.object(
+                tower, "consume_daemon_reload_request", side_effect=lambda root, filename="daemon-reload.json": filename == operation
             ), mock.patch.object(delivery_engine, "reap_background_resumes"), mock.patch.object(
-                cli, "daemon_has_live_delivery_workers", side_effect=[True, False]
+                tower, "daemon_has_live_delivery_workers", side_effect=[True, False]
             ) as alive, mock.patch.object(delivery_engine, "recover_running"), mock.patch.object(
                 managed_tasks, "recover_managed_tasks"
             ) as tasks, mock.patch.object(delivery_engine, "process_one") as deliveries, mock.patch.object(
                 cli.time, "sleep"
             ) as sleep, mock.patch.object(cli.os, "execv") as execute:
                 args = argparse.Namespace(queue_dir=str(self.root), once=False, interval=0.01, max_items=None)
-                self.assertEqual(cli.daemon(args), expected)
+                self.assertEqual(tower.daemon(args), expected)
             self.assertEqual(alive.call_count, 2)
             tasks.assert_not_called()
             deliveries.assert_not_called()

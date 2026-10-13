@@ -135,6 +135,9 @@ def confirmed_owner_dead(owner: dict) -> bool:
     PID namespaces, and permission/probe failures are never proof of death.
     """
     from ... import cli
+    from ...install import services
+    from ...install import skills as skill_install
+    from ...tower import main as tower
     from ...engine import dispatch
     from ...engine import delivery as delivery_engine
     from ..codex import app_server
@@ -142,7 +145,7 @@ def confirmed_owner_dead(owner: dict) -> bool:
     from ...system import commands
     from ...store import layout
     identity = owner.get("owner_identity")
-    current = cli.daemon_process_identity(os.getpid())
+    current = tower.daemon_process_identity(os.getpid())
     if owner.get("managed") is not True or not isinstance(identity, dict) or not current:
         return False
     fields = ("boot_id", "machine_id", "pid_namespace") if sys.platform.startswith("linux") else (
@@ -181,6 +184,9 @@ def confirmed_owner_dead(owner: dict) -> bool:
 
 def valid_live_lease(owner: dict) -> bool:
     from ... import cli
+    from ...install import services
+    from ...install import skills as skill_install
+    from ...tower import main as tower
     from ...engine import dispatch
     from ...engine import delivery as delivery_engine
     from ..codex import app_server
@@ -189,7 +195,7 @@ def valid_live_lease(owner: dict) -> bool:
     from ...store import layout
     pid = owner.get("lease_pid")
     return (type(pid) is int and pid > 0 and isinstance(owner.get("lease_identity"), dict)
-            and cli.daemon_process_identity(pid) == owner["lease_identity"])
+            and tower.daemon_process_identity(pid) == owner["lease_identity"])
 
 
 def require_delivery_support(request: dict, owner: dict) -> None:
@@ -202,6 +208,9 @@ def require_delivery_support(request: dict, owner: dict) -> None:
 
 def inspect_route(request: dict) -> dict:
     from ... import cli
+    from ...install import services
+    from ...install import skills as skill_install
+    from ...tower import main as tower
     from ...engine import dispatch
     from ...engine import delivery as delivery_engine
     from ..codex import app_server
@@ -212,7 +221,7 @@ def inspect_route(request: dict) -> dict:
               "pi_delivery": request.get("pi_delivery", "follow-up")}
     try:
         _, owner = owner_record(request)
-        if cli.pid_is_running(owner["owner_pid"]):
+        if services.pid_is_running(owner["owner_pid"]):
             if owner.get("managed") is True and not valid_live_lease(owner):
                 raise ValueError("The Pi launcher exited while its Pi process remains alive; manual recovery is required")
             if owner.get("state") == "active":
@@ -262,6 +271,9 @@ class PiDelivery:
                     if owner.get("owner_nonce") == self.nonce and owner.get("state") == "reserved":
                         storage.write_request(self.directory / "owner.json", self.previous_owner)
                         from ... import cli
+                        from ...install import services
+                        from ...install import skills as skill_install
+                        from ...tower import main as tower
                         from ...engine import dispatch
                         from ...engine import delivery as delivery_engine
                         from ..codex import app_server
@@ -314,6 +326,9 @@ def publication_outcome(root: Path, request: dict, timeout: float, now: float) -
     outcome unknown, which is never replayed automatically.
     """
     from ... import cli
+    from ...install import services
+    from ...install import skills as skill_install
+    from ...tower import main as tower
     from ...engine import dispatch
     from ...engine import delivery as delivery_engine
     from ..codex import app_server
@@ -332,7 +347,7 @@ def publication_outcome(root: Path, request: dict, timeout: float, now: float) -
         return "the live Pi mailbox or its owner can no longer be verified"
     if envelope.get("owner_nonce") != owner.get("owner_nonce"):
         return "the Pi session was reopened by another process before ACK"
-    if owner.get("state") != "active" or not cli.pid_is_running(owner["owner_pid"]):
+    if owner.get("state") != "active" or not services.pid_is_running(owner["owner_pid"]):
         return "the live Pi session exited before ACK"
     return None
 
@@ -340,6 +355,9 @@ def publication_outcome(root: Path, request: dict, timeout: float, now: float) -
 def reconcile_publications(root: Path, timeout: float) -> None:
     """Daemon hook: settle Pi callbacks whose live owner can no longer ACK them."""
     from ... import cli
+    from ...install import services
+    from ...install import skills as skill_install
+    from ...tower import main as tower
     from ...engine import dispatch
     from ...engine import delivery as delivery_engine
     from ..codex import app_server
@@ -391,6 +409,9 @@ def extension_path() -> Path:
 
 def _reservation(directory: Path, session: str, profile: str) -> dict:
     from ... import cli
+    from ...install import services
+    from ...install import skills as skill_install
+    from ...tower import main as tower
     from ...engine import dispatch
     from ...engine import delivery as delivery_engine
     from ..codex import app_server
@@ -402,12 +423,15 @@ def _reservation(directory: Path, session: str, profile: str) -> dict:
             "channel_dir": str(directory), "profile_dir": profile, "managed": True,
             "state": "reserved", "owner_nonce": secrets.token_hex(24),
             "owner_pid": os.getpid(), "lease_pid": os.getpid(),
-            "lease_identity": cli.daemon_process_identity(os.getpid()),
+            "lease_identity": tower.daemon_process_identity(os.getpid()),
             "recorded_at": time.time()}
 
 
 def prepare_delivery(payload: dict) -> PiDelivery:
     from ... import cli
+    from ...install import services
+    from ...install import skills as skill_install
+    from ...tower import main as tower
     from ...engine import dispatch
     from ...engine import delivery as delivery_engine
     from ..codex import app_server
@@ -423,7 +447,7 @@ def prepare_delivery(payload: dict) -> PiDelivery:
         if not _SAFE_ID.fullmatch(request_id):
             raise ValueError("Invalid Pi callback ID")
         key = hashlib.sha256((str(queue) + "\0" + request_id).encode("utf-8")).hexdigest()
-        if cli.pid_is_running(owner["owner_pid"]):
+        if services.pid_is_running(owner["owner_pid"]):
             if owner.get("managed") is True and not valid_live_lease(owner):
                 raise ValueError("The Pi owner remains alive after its managed launcher exited")
             if owner.get("state") != "active":
@@ -502,6 +526,9 @@ def install_extension(args: argparse.Namespace) -> int:
     ensure_private_directory(profile / "agent-atc" / "channels")
     print(f"Installed Pi callback extension: {target}")
     from ... import cli
+    from ...install import services
+    from ...install import skills as skill_install
+    from ...tower import main as tower
     from ...engine import dispatch
     from ...engine import delivery as delivery_engine
     from ..codex import app_server
@@ -509,7 +536,7 @@ def install_extension(args: argparse.Namespace) -> int:
     from ...system import commands
     from ...store import layout
     skill = profile / "skills" / "agent-atc"
-    if cli.install_skill_tree(skill, include_codex_plugin=False, force=bool(getattr(args, "force", False)),
+    if skill_install.install_skill_tree(skill, include_codex_plugin=False, force=bool(getattr(args, "force", False)),
                               keep_existing=not getattr(args, "force", False), focused="pi_skill") != 0:
         raise ValueError(f"Could not install the Pi skill at {skill}")
     print("Existing Pi processes need /reload or a restart. Ordinary Pi receives online callbacks; use atc pi for managed offline recovery.")
@@ -528,6 +555,9 @@ def _fresh_session(profile: Path, cwd: Path) -> str:
 
 def _verify_owner_identity(directory: Path, nonce: str) -> bool:
     from ... import cli
+    from ...install import services
+    from ...install import skills as skill_install
+    from ...tower import main as tower
     from ...engine import dispatch
     from ...engine import delivery as delivery_engine
     from ..codex import app_server
@@ -539,10 +569,10 @@ def _verify_owner_identity(directory: Path, nonce: str) -> bool:
         if owner.get("owner_nonce") != nonce or owner.get("state") not in ("active", "closed"):
             return False
         pid = owner.get("owner_pid")
-        if type(pid) is not int or pid <= 0 or not cli.pid_is_running(pid):
+        if type(pid) is not int or pid <= 0 or not services.pid_is_running(pid):
             return False
         if owner.get("owner_identity") is None:
-            identity = cli.daemon_process_identity(pid)
+            identity = tower.daemon_process_identity(pid)
             if identity is None:
                 return False
             owner["owner_identity"] = identity
@@ -561,13 +591,16 @@ def record_spawn(directory: Path, nonce: str, process) -> None:
     verifies the actual Node owner instead, and absence of evidence blocks recovery.
     """
     from ... import cli
+    from ...install import services
+    from ...install import skills as skill_install
+    from ...tower import main as tower
     from ...engine import dispatch
     from ...engine import delivery as delivery_engine
     from ..codex import app_server
     from ...store import records as queue_store
     from ...system import commands
     from ...store import layout
-    identity = cli.daemon_process_identity(process.pid)
+    identity = tower.daemon_process_identity(process.pid)
     if identity is not None:
         storage.write_request(directory / f"spawn-{nonce}.json", {
             "version": 1, "owner_nonce": nonce, "owner_pid": process.pid, "owner_identity": identity})
@@ -575,6 +608,9 @@ def record_spawn(directory: Path, nonce: str, process) -> None:
 
 def managed_pi(args: argparse.Namespace) -> int:
     from ... import cli
+    from ...install import services
+    from ...install import skills as skill_install
+    from ...tower import main as tower
     from ...engine import dispatch
     from ...engine import delivery as delivery_engine
     from ..codex import app_server
@@ -617,7 +653,7 @@ def managed_pi(args: argparse.Namespace) -> int:
         except FileNotFoundError:
             existing = None
         if existing and (type(existing.get("owner_pid")) is not int or existing["owner_pid"] <= 0
-                         or cli.pid_is_running(existing["owner_pid"])):
+                         or services.pid_is_running(existing["owner_pid"])):
             raise ValueError("The previous Pi process is still alive; reopen it instead of starting another writer")
         if existing and existing.get("managed") is True and not confirmed_owner_dead(existing):
             raise ValueError("Cannot confirm the previous managed Pi owner exited in this host/process scope; inspect ownership manually")

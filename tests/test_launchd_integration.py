@@ -20,6 +20,8 @@ import unittest
 from unittest import mock
 
 from agent_atc import cli
+from agent_atc.install import services
+from agent_atc.tower import main as tower
 from agent_atc.engine import dispatch
 from agent_atc.engine import tasks as managed_tasks
 from agent_atc.harness.codex import app_server
@@ -86,6 +88,8 @@ class RealLaunchdTests(unittest.TestCase):
                 from pathlib import Path
                 sys.path.insert(0, {source!r})
                 from agent_atc import cli
+                from agent_atc.install import services
+                from agent_atc.tower import main as tower
                 from agent_atc.engine import dispatch
                 from agent_atc.engine import tasks as managed_tasks
                 from agent_atc.harness.codex import app_server
@@ -138,12 +142,12 @@ class RealLaunchdTests(unittest.TestCase):
                     "--interval", "0.05", "--force", "--enable", "--now"]
             with mock.patch.dict(os.environ, env), mock.patch.object(
                 launchd_service, "agent_directory", return_value=directory / "LaunchAgents"
-            ), mock.patch.object(cli, "report_claude_agent_readiness"), contextlib.redirect_stdout(io.StringIO()):
+            ), mock.patch.object(services, "report_claude_agent_readiness"), contextlib.redirect_stdout(io.StringIO()):
                 try:
                     with mock.patch.object(sys, "argv", argv):
                         self.assertEqual(cli.main(), 0)
                     self.wait_until(lambda: diagnostics.coordinator_issue(queue) is None, "coordinator not ready")
-                    before = cli.read_daemon_runtime()
+                    before = tower.read_daemon_runtime()
                     args = argparse.Namespace(mode="doctor", operation="done", agent="codex", backend="auto",
                                               session="fixture-original", last=False, queue_dir=str(queue))
                     self.assertEqual(diagnostics.inspect(args)["status"], "ready")
@@ -151,11 +155,11 @@ class RealLaunchdTests(unittest.TestCase):
                         self.assertEqual(cli.main(), 0)
 
                     def reloaded():
-                        after = cli.read_daemon_runtime()
+                        after = tower.read_daemon_runtime()
                         return after is not None and after["started_at"] > before["started_at"]
 
                     self.wait_until(reloaded, "coordinator did not reload")
-                    self.assertEqual(cli.read_daemon_runtime()["pid"], before["pid"])
+                    self.assertEqual(tower.read_daemon_runtime()["pid"], before["pid"])
                     self.assertEqual(diagnostics.coordinator_issue(queue), None)
                 finally:
                     self.remove_job(name)

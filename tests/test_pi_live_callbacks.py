@@ -11,6 +11,7 @@ import time
 import unittest
 
 from agent_atc import callback_transport, cli
+from agent_atc.tower import main as tower
 from agent_atc.engine import dispatch
 from agent_atc.engine import tasks as managed_tasks
 from agent_atc.engine import delivery as delivery_engine
@@ -51,7 +52,7 @@ def build_bound(tmp_path):
 
 def dead_managed(owner, directory):
     owner.update(owner_pid=99999999, managed=True, state='closed',
-                 owner_identity=cli.daemon_process_identity(os.getpid()))
+                 owner_identity=tower.daemon_process_identity(os.getpid()))
     queue_store.write_request(directory / 'owner.json', owner)
 
 
@@ -266,11 +267,11 @@ class PiLiveCallbackTests(unittest.TestCase):
         owner['owner_pid'] = 99999999
         owner['owner_identity']['machine_id'] = 'another-host'
         assert not bridge.confirmed_owner_dead(owner)
-        owner['owner_identity'] = cli.daemon_process_identity(os.getpid())
+        owner['owner_identity'] = tower.daemon_process_identity(os.getpid())
         if os.name != 'nt':
             with mock.patch.object(os, 'kill', side_effect=PermissionError('unknown')):
                 assert not bridge.confirmed_owner_dead(owner)
-        with mock.patch.object(cli, 'daemon_process_identity', return_value=None):
+        with mock.patch.object(tower, 'daemon_process_identity', return_value=None):
             assert not bridge.confirmed_owner_dead(owner)
         owner['owner_identity'] = {}
         assert not bridge.confirmed_owner_dead(owner)
@@ -301,7 +302,7 @@ class PiLiveCallbackTests(unittest.TestCase):
         owner['profile_dir'] = '/another/profile'; queue_store.write_request(directory / 'owner.json', owner)
         with self.assertRaises(app_server.CallbackTransportBlocked): bridge.prepare_delivery(payload)
         owner['profile_dir'] = request['pi_profile_dir']
-        owner.update(managed=True, lease_pid=99999999, lease_identity=cli.daemon_process_identity(os.getpid()))
+        owner.update(managed=True, lease_pid=99999999, lease_identity=tower.daemon_process_identity(os.getpid()))
         queue_store.write_request(directory / 'owner.json', owner)
         assert bridge.inspect_route(request)['status'] == 'blocked'
 

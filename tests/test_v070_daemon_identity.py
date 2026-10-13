@@ -16,6 +16,9 @@ from pathlib import Path
 from unittest import mock
 
 from agent_atc import cli
+from agent_atc.install import services
+from agent_atc.tower import environment as tower_environment
+from agent_atc.tower import main as tower
 from agent_atc.store import records as queue_store
 from agent_atc.store import layout
 
@@ -62,7 +65,7 @@ class StandaloneDaemonIdentityTests(unittest.TestCase):
     def seed_runtime(self, *, identity=IDENTITY, queue=None):
         pid = 81234
         (self.state / "daemon.pid").write_text(str(pid))
-        record = {"pid": pid, "reload_protocol": cli.RELOAD_PROTOCOL_VERSION,
+        record = {"pid": pid, "reload_protocol": tower.RELOAD_PROTOCOL_VERSION,
                   "queue_dir": str(queue or self.queue)}
         if identity is not None:
             record["process_identity"] = dict(identity)
@@ -77,16 +80,16 @@ class StandaloneDaemonIdentityTests(unittest.TestCase):
     def start_with_spies(self, *, identity=IDENTITY, callbacks=False):
         process = mock.Mock(pid=91234)
         process.poll.return_value = None
-        with mock.patch.object(cli, "daemon_process_identity", return_value=identity), mock.patch.object(
-            cli, "has_running_callbacks", return_value=callbacks
-        ), mock.patch.object(cli, "daemon_environment", return_value={}), mock.patch.object(
-            cli, "daemon_command", return_value=[sys.executable, "-c", "pass"]
+        with mock.patch.object(tower, "daemon_process_identity", return_value=identity), mock.patch.object(
+            services, "has_running_callbacks", return_value=callbacks
+        ), mock.patch.object(tower_environment, "daemon_environment", return_value={}), mock.patch.object(
+            tower, "daemon_command", return_value=[sys.executable, "-c", "pass"]
         ), mock.patch.object(cli.subprocess, "Popen", return_value=process) as popen, mock.patch.object(
             cli.linux_platform, "signal_if_identity_matches", return_value=True
         ) as reload, mock.patch.object(cli.os, "kill") as kill, mock.patch.object(
             cli.time, "sleep"
         ), contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
-            status = cli.start_standalone_daemon(self.args)
+            status = services.start_standalone_daemon(self.args)
         self.assertEqual(status, 0)
         self.assertFalse(any(call.args[1] != 0 for call in kill.call_args_list))
         return popen, reload, process
@@ -139,12 +142,12 @@ class StandaloneDaemonIdentityTests(unittest.TestCase):
         for identity in (None, dict(IDENTITY, start_ticks=50001),
                          dict(IDENTITY, boot_id="previous-boot"),
                          dict(IDENTITY, pid_namespace="pid:[previous-container]")):
-            with self.subTest(identity=identity), mock.patch.object(cli, "daemon_process_identity", return_value=identity):
-                self.assertFalse(cli.daemon_supports_hot_reload(pid, expected_queue=self.queue))
-        with mock.patch.object(cli, "daemon_process_identity", return_value=IDENTITY):
-            self.assertTrue(cli.daemon_supports_hot_reload(pid, expected_queue=self.queue))
-            self.assertFalse(cli.daemon_supports_hot_reload(pid + 1, expected_queue=self.queue))
-            self.assertFalse(cli.daemon_supports_hot_reload(pid, expected_queue=self.directory / "another"))
+            with self.subTest(identity=identity), mock.patch.object(tower, "daemon_process_identity", return_value=identity):
+                self.assertFalse(tower.daemon_supports_hot_reload(pid, expected_queue=self.queue))
+        with mock.patch.object(tower, "daemon_process_identity", return_value=IDENTITY):
+            self.assertTrue(tower.daemon_supports_hot_reload(pid, expected_queue=self.queue))
+            self.assertFalse(tower.daemon_supports_hot_reload(pid + 1, expected_queue=self.queue))
+            self.assertFalse(tower.daemon_supports_hot_reload(pid, expected_queue=self.directory / "another"))
 
     def test_pinned_process_identity_is_rechecked_before_pidfd_signal_and_fd_is_closed(self):
         linux = cli.linux_platform

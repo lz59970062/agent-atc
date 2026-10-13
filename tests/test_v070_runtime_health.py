@@ -10,6 +10,7 @@ from pathlib import Path
 from unittest import mock
 
 from agent_atc import cli
+from agent_atc.install import services
 from agent_atc.engine import dispatch
 from agent_atc.engine import tasks as managed_tasks
 from agent_atc.engine import delivery as delivery_engine
@@ -329,7 +330,7 @@ class EnvironmentHealthTests(unittest.TestCase):
         for platform, expected_os, supported in (("linux", "linux", True), ("darwin", "macos", True),
                                                  ("win32", "windows", True), ("freebsd14", "other", False)):
             with self.subTest(platform=platform), mock.patch.object(diagnostics.sys, "platform", platform), mock.patch.object(
-                cli, "running_in_container", return_value=True
+                services, "running_in_container", return_value=True
             ) as container:
                 report = diagnostics.environment_profile()
             self.assertEqual(report, {"os": expected_os, "container": platform == "linux", "supported": supported})
@@ -344,7 +345,7 @@ class EnvironmentHealthTests(unittest.TestCase):
                 probes = [stack.enter_context(mock.patch.object(module, name)) for module, name in (
                     (diagnostics, "queue_writable"), (diagnostics, "coordinator_issue"),
                     (diagnostics, "runtime_issues"), (diagnostics, "delivery_issues"),
-                    (managed_tasks, "select_execution_backend"), (cli, "running_in_container"),
+                    (managed_tasks, "select_execution_backend"), (services, "running_in_container"),
                     (host, "current_machine_id"), (host, "current_boot_id"), (diagnostics.shutil, "which"),
                 )]
                 report = diagnostics.inspect(args)

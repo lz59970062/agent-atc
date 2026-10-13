@@ -20,6 +20,8 @@ import unittest
 from unittest import mock
 
 from agent_atc import cli
+from agent_atc.install import services
+from agent_atc.tower import main as tower
 from agent_atc.engine import tasks as managed_tasks
 from agent_atc.store import layout
 from agent_atc.install import diagnostics, windows_service
@@ -128,24 +130,24 @@ class WindowsIntegrationTests(unittest.TestCase):
                      "--callback-only", "--service", "windows-task", "--keep-skill",
                      "--force", "--now", "--interval", "0.1", "--codex-bin", sys.executable]
         with mock.patch.object(sys, "argv", ["atc", *arguments]), \
-                mock.patch.object(cli, "report_claude_agent_readiness"), \
+                mock.patch.object(services, "report_claude_agent_readiness"), \
                 contextlib.redirect_stdout(io.StringIO()):
             self.assertEqual(cli.main(), 0)
         self.wait_until(lambda: diagnostics.coordinator_issue(self.root) is None,
                         "installed coordinator did not acquire its queue")
-        before = cli.read_daemon_runtime()
+        before = tower.read_daemon_runtime()
         self.assertIsNotNone(process_identity(before["pid"]))
         with mock.patch.object(sys, "argv", ["atc", *arguments]), \
-                mock.patch.object(cli, "report_claude_agent_readiness"), \
+                mock.patch.object(services, "report_claude_agent_readiness"), \
                 contextlib.redirect_stdout(io.StringIO()):
             self.assertEqual(cli.main(), 0)
-        self.wait_until(lambda: bool((after := cli.read_daemon_runtime()) and after["pid"] != before["pid"]),
+        self.wait_until(lambda: bool((after := tower.read_daemon_runtime()) and after["pid"] != before["pid"]),
                         "Windows coordinator was not replaced after reload")
         self.assertIsNone(diagnostics.coordinator_issue(self.root))
-        after = cli.read_daemon_runtime()
+        after = tower.read_daemon_runtime()
         self.assertNotEqual(after["process_identity"], before["process_identity"])
         self.assertEqual(windows_service.uninstall(argparse.Namespace(name=name)), 0)
-        self.wait_until(lambda: cli.read_daemon_runtime() is None,
+        self.wait_until(lambda: tower.read_daemon_runtime() is None,
                         "removed coordinator did not drain and stop")
         self.wait_until(lambda: not windows_io.probe_existing_lock(
             windows_service.config_path(name).with_suffix(".supervisor.lock")),

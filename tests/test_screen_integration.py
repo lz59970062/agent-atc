@@ -20,6 +20,8 @@ from pathlib import Path
 from unittest import mock
 
 from agent_atc import cli
+from agent_atc.install import services
+from agent_atc.tower import main as tower
 from agent_atc.engine import dispatch
 from agent_atc.engine import tasks as managed_tasks
 from agent_atc.store import records as queue_store
@@ -67,7 +69,7 @@ class RealStandaloneScreenTests(unittest.TestCase):
                     (state / "daemon.pid").write_text(str(sleeper.pid))
                     runtime = layout.daemon_runtime_path()
                     runtime.write_text(json.dumps({
-                        "pid": sleeper.pid, "reload_protocol": cli.RELOAD_PROTOCOL_VERSION,
+                        "pid": sleeper.pid, "reload_protocol": tower.RELOAD_PROTOCOL_VERSION,
                         "queue_dir": str(root), "process_identity": {
                             "boot_id": "prior-container-boot", "machine_id": "prior-machine",
                             "pid_namespace": "pid:[1]", "start_ticks": 1,
@@ -80,7 +82,7 @@ class RealStandaloneScreenTests(unittest.TestCase):
                         path=os.environ.get("PATH", ""),
                     )
                     with mock.patch.object(cli.subprocess, "Popen", side_effect=capture_owned_daemon):
-                        self.assertEqual(cli.start_standalone_daemon(args), 0)
+                        self.assertEqual(services.start_standalone_daemon(args), 0)
                     self.assertIsNone(sleeper.poll(), "stale PID must never receive a reload signal")
                     self.assertEqual(len(launched), 1)
                     daemon = launched[0]
@@ -94,7 +96,7 @@ class RealStandaloneScreenTests(unittest.TestCase):
                     self.assertIsNone(daemon.poll())
                     self.assertIsNone(sleeper.poll())
                     self.assertEqual(int((state / "daemon.pid").read_text()), daemon.pid)
-                    self.assertTrue(cli.daemon_supports_hot_reload(daemon.pid, expected_queue=root))
+                    self.assertTrue(tower.daemon_supports_hot_reload(daemon.pid, expected_queue=root))
                     lock = queue_store.acquire_owner_lock(root, "daemon-singleton", blocking=False)
                     if lock is not None:
                         queue_store.release_owner_lock(lock, remove=False)
@@ -170,6 +172,8 @@ class RealStandaloneScreenTests(unittest.TestCase):
                 from pathlib import Path
                 sys.path.insert(0, {source!r})
                 from agent_atc import cli
+                from agent_atc.install import services
+                from agent_atc.tower import main as tower
                 from agent_atc.engine import dispatch
                 from agent_atc.engine import tasks as managed_tasks
                 from agent_atc.store import records as queue_store

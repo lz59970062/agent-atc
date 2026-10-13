@@ -11,6 +11,9 @@ from pathlib import Path
 from unittest import mock
 
 from agent_atc import cli
+from agent_atc.install import services
+from agent_atc.install import skills as skill_install
+from agent_atc.tower import environment as tower_environment
 from agent_atc.engine import tasks as managed_tasks
 from agent_atc.engine import reminders as reminder_policy
 from agent_atc.store import layout
@@ -45,16 +48,16 @@ class DaemonServiceSelectionTests(unittest.TestCase):
                 managed_tasks, "select_execution_backend", return_value="screen", side_effect=backend_error
             ))
             stack.enter_context(mock.patch.object(SystemdUserBackend, "available", return_value=manager_available))
-            stack.enter_context(mock.patch.object(cli, "running_in_container", return_value=True))
+            stack.enter_context(mock.patch.object(services, "running_in_container", return_value=True))
             stack.enter_context(mock.patch.object(cli.shutil, "which", side_effect=lambda name: "/usr/bin/" + name))
-            stack.enter_context(mock.patch.object(cli, "systemd_user_dir", return_value=self.directory / "systemd"))
-            for owner, name in ((cli, "install_skill"), (cli, "install_systemd"), (cli, "install_supervisor"),
-                                (cli, "start_standalone_daemon"), (cli, "configure_proxy_environment"),
-                                (reminder_policy, "ensure_callback_hook_file"), (cli, "report_claude_agent_readiness")):
+            stack.enter_context(mock.patch.object(services, "systemd_user_dir", return_value=self.directory / "systemd"))
+            for owner, name in ((skill_install, "install_skill"), (services, "install_systemd"), (services, "install_supervisor"),
+                                (services, "start_standalone_daemon"), (tower_environment, "configure_proxy_environment"),
+                                (reminder_policy, "ensure_callback_hook_file"), (services, "report_claude_agent_readiness")):
                 spies[name] = stack.enter_context(mock.patch.object(owner, name, return_value=0))
-            spies["run_systemctl"] = stack.enter_context(mock.patch.object(cli, "run_systemctl"))
+            spies["run_systemctl"] = stack.enter_context(mock.patch.object(services, "run_systemctl"))
             with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
-                status = cli.setup(args)
+                status = services.setup(args)
         self.assertEqual(status, 0)
         self.assertFalse((self.directory / "systemd").exists())
         return spies
@@ -102,17 +105,17 @@ class DaemonServiceSelectionTests(unittest.TestCase):
         for service in ("auto", "systemd", "supervisor", "standalone"):
             with self.subTest(service=service), mock.patch.object(
                 sys, "argv", ["atc", "setup", "--service", service]
-            ), mock.patch.object(cli, "setup", return_value=0) as setup:
+            ), mock.patch.object(services, "setup", return_value=0) as setup:
                 self.assertEqual(cli.main(), 0)
                 self.assertEqual(setup.call_args.args[0].service, service)
 
     def test_selector_rejects_unknown_service_instead_of_installing_default(self) -> None:
         with self.assertRaises(ValueError):
-            cli.select_daemon_service(self.arguments("unknown-future-service"))
+            services.select_daemon_service(self.arguments("unknown-future-service"))
 
     def test_keep_skill_cli_option_is_forwarded_to_skill_installer(self) -> None:
         with mock.patch.object(sys, "argv", ["atc", "setup", "--keep-skill", "--force"]), mock.patch.object(
-            cli, "setup", return_value=0
+            services, "setup", return_value=0
         ) as setup:
             self.assertEqual(cli.main(), 0)
         self.assertTrue(setup.call_args.args[0].keep_skill)
@@ -126,7 +129,7 @@ class DaemonServiceSelectionTests(unittest.TestCase):
 
     def test_callback_only_setup_can_start_standalone_without_any_task_backend(self) -> None:
         with mock.patch.object(sys, "argv", ["atc", "setup", "--callback-only"]), mock.patch.object(
-            cli, "setup", return_value=0
+            services, "setup", return_value=0
         ) as setup:
             self.assertEqual(cli.main(), 0)
         self.assertTrue(setup.call_args.args[0].callback_only)
@@ -140,9 +143,9 @@ class DaemonServiceSelectionTests(unittest.TestCase):
     def test_ordinary_setup_still_refuses_missing_task_backend_before_installation(self) -> None:
         args = self.arguments("standalone")
         with mock.patch.object(managed_tasks, "select_execution_backend", side_effect=ValueError("no task backend")), mock.patch.object(
-            cli, "install_skill"
-        ) as install, mock.patch.object(cli, "start_standalone_daemon") as start, contextlib.redirect_stderr(io.StringIO()):
-            self.assertEqual(cli.setup(args), 2)
+            skill_install, "install_skill"
+        ) as install, mock.patch.object(services, "start_standalone_daemon") as start, contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(services.setup(args), 2)
         install.assert_not_called()
         start.assert_not_called()
 
@@ -150,20 +153,20 @@ class DaemonServiceSelectionTests(unittest.TestCase):
         args = self.arguments("auto")
         with mock.patch.object(managed_tasks, "select_execution_backend", return_value="screen"), mock.patch.object(
             SystemdUserBackend, "available", return_value=True
-        ), mock.patch.object(cli, "running_in_container", return_value=True), mock.patch.object(
+        ), mock.patch.object(services, "running_in_container", return_value=True), mock.patch.object(
             cli.shutil, "which", side_effect=lambda name: "/usr/bin/" + name
-        ), mock.patch.object(cli, "systemd_user_dir", return_value=self.directory / "systemd"), mock.patch.object(
+        ), mock.patch.object(services, "systemd_user_dir", return_value=self.directory / "systemd"), mock.patch.object(
             layout, "daemon_state_dir", return_value=self.directory / "state"
-        ), mock.patch.object(cli, "install_skill", return_value=0), mock.patch.object(
+        ), mock.patch.object(skill_install, "install_skill", return_value=0), mock.patch.object(
             reminder_policy, "ensure_callback_hook_file"
-        ), mock.patch.object(cli, "report_claude_agent_readiness"), mock.patch.object(
-            cli, "configure_proxy_environment"
-        ), mock.patch.object(cli, "systemd_service_text", return_value="[Service]\nExecStart=/fixture/atc daemon\n"), mock.patch.object(
-            cli, "run_systemctl", return_value=1
-        ) as systemctl, mock.patch.object(cli, "start_standalone_daemon", return_value=0) as standalone, mock.patch.object(
-            cli, "install_supervisor", return_value=0
+        ), mock.patch.object(services, "report_claude_agent_readiness"), mock.patch.object(
+            tower_environment, "configure_proxy_environment"
+        ), mock.patch.object(services, "systemd_service_text", return_value="[Service]\nExecStart=/fixture/atc daemon\n"), mock.patch.object(
+            services, "run_systemctl", return_value=1
+        ) as systemctl, mock.patch.object(services, "start_standalone_daemon", return_value=0) as standalone, mock.patch.object(
+            services, "install_supervisor", return_value=0
         ) as supervisor, contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
-            self.assertEqual(cli.setup(args), 0)
+            self.assertEqual(services.setup(args), 0)
         systemctl.assert_called_once_with(["daemon-reload"])
         standalone.assert_called_once()
         supervisor.assert_not_called()

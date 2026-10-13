@@ -15,6 +15,8 @@ import unittest
 from unittest import mock
 
 from agent_atc import cli
+from agent_atc.tower import environment as tower_environment
+from agent_atc.tower import main as tower
 from agent_atc.engine import delivery as delivery_engine
 from agent_atc.harness.codex import app_server
 from agent_atc.store import layout
@@ -79,9 +81,9 @@ class BridgeClientTests(unittest.TestCase):
                 mock.patch.object(layout, "codex_home", return_value=self.profile):
             self.assertIsInstance(app_server.desktop_app_server_socket(request), BridgeEndpoint)
             with mock.patch.object(layout, "queue_dir", return_value=self.directory / "queue"), \
-                    mock.patch.object(cli, "daemon_command", return_value=["python.exe", "daemon"]), \
+                    mock.patch.object(tower, "daemon_command", return_value=["python.exe", "daemon"]), \
                     mock.patch.object(layout, "claude_home", return_value=self.directory / "claude"), \
-                    mock.patch.object(cli, "daemon_environment", return_value={}):
+                    mock.patch.object(tower_environment, "daemon_environment", return_value={}):
                 from argparse import Namespace
                 config = windows_service.configuration(Namespace(name="test", restart_sec=2))
             self.assertEqual(config["environment"][app_server.APP_SERVER_BRIDGE_FILE_ENV], str(self.metadata))

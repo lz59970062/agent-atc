@@ -10,6 +10,7 @@ import unittest
 from unittest import mock
 
 from agent_atc import cli, template_registration as registration
+from agent_atc.install import skills as skill_install
 
 
 class TemplateRegistrationNamespaceTests(unittest.TestCase):
@@ -100,7 +101,7 @@ class TemplateRegistrationNamespaceTests(unittest.TestCase):
         inner = old[old.index(registration.INDEX_BEGIN) + len(registration.INDEX_BEGIN):
                     old.index(registration.INDEX_END)]
         with contextlib.redirect_stdout(io.StringIO()):
-            status = cli.install_skill_tree(self.workflow.parent, include_codex_plugin=False, force=True)
+            status = skill_install.install_skill_tree(self.workflow.parent, include_codex_plugin=False, force=True)
         self.assertEqual(status, 0)
         installed = self.workflow.read_text(encoding="utf-8")
         self.assertNotIn("User workflow instructions.", installed)

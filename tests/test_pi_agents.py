@@ -21,6 +21,7 @@ import unittest
 from unittest import mock
 
 from agent_atc import cli
+from agent_atc.tower import main as tower
 from agent_atc.engine import dispatch
 from agent_atc.engine import tasks as managed_tasks
 from agent_atc.engine import delivery as delivery_engine
@@ -492,7 +493,7 @@ class PiAgentContractTests(unittest.TestCase):
         owner = {"version": 1, "session_file": str(session), "session_id": "1",
                  "channel_dir": str(channel), "profile_dir": request["pi_profile_dir"],
                  "owner_nonce": "fixture", "owner_pid": 99999999, "managed": True,
-                 "state": "closed", "owner_identity": cli.daemon_process_identity(os.getpid())}
+                 "state": "closed", "owner_identity": tower.daemon_process_identity(os.getpid())}
         queue_store.write_request(channel / "owner.json", owner)
         environment = {
             "ATC_PI_BIN": str(fake_pi),

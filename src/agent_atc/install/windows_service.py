@@ -30,6 +30,8 @@ def service_owner(name: str, profile: Path) -> str:
 
 def config_path(name: str) -> Path:
     from .. import cli
+    from ..tower import environment as tower_environment
+    from ..tower import main as tower
     from ..harness.codex import app_server
     from ..store import records as queue_store
     from ..store import layout
@@ -39,16 +41,18 @@ def config_path(name: str) -> Path:
 
 def configuration(args: argparse.Namespace) -> dict[str, object]:
     from .. import cli
+    from ..tower import environment as tower_environment
+    from ..tower import main as tower
     from ..harness.codex import app_server
     from ..store import records as queue_store
     from ..store import layout
     root = layout.queue_dir(args).resolve()
-    command = cli.daemon_command(args)
+    command = tower.daemon_command(args)
     if "--queue-dir" in command:
         command[command.index("--queue-dir") + 1] = str(root)
     else:
         command.extend(["--queue-dir", str(root)])
-    environment = cli.daemon_environment(args, include_proxy_values=False)
+    environment = tower_environment.daemon_environment(args, include_proxy_values=False)
     environment.update(CODEX_HOME=str(layout.codex_home().resolve()),
                        CLAUDE_CONFIG_DIR=str(layout.claude_home().resolve()),
                        PYTHONIOENCODING="utf-8")
@@ -67,6 +71,8 @@ def configuration(args: argparse.Namespace) -> dict[str, object]:
 
 def install(args: argparse.Namespace) -> int:
     from .. import cli
+    from ..tower import environment as tower_environment
+    from ..tower import main as tower
     from ..harness.codex import app_server
     from ..store import records as queue_store
     from ..store import layout
@@ -90,13 +96,13 @@ def install(args: argparse.Namespace) -> int:
             if (previous.get("queue_dir") != config["queue_dir"]
                     and windows_io.probe_existing_lock(target.with_suffix(".supervisor.lock"))):
                 raise ValueError("stop and drain this coordinator before changing its queue")
-        runtime = cli.read_daemon_runtime()
+        runtime = tower.read_daemon_runtime()
         if (runtime and runtime.get("queue_dir") != config["queue_dir"]
-                and cli.daemon_supports_hot_reload(runtime.get("pid"))):
+                and tower.daemon_supports_hot_reload(runtime.get("pid"))):
             raise ValueError("this Agent profile already has another queue coordinator; use a separate profile")
         state = windows.scheduler_call("status", {"owner": config["owner"]})
         # Pin the queue/profile and write configuration before registration.
-        cli.configure_proxy_environment(args)
+        tower_environment.configure_proxy_environment(args)
         windows_io.ensure_private_directory(target.parent)
         queue_store.write_request(target, config)
         windows.scheduler_call("register", {"owner": config["owner"], "configuration": definition,
@@ -107,9 +113,9 @@ def install(args: argparse.Namespace) -> int:
         root = Path(str(config["queue_dir"]))
         admission = queue_store.acquire_owner_lock(root, "daemon-singleton", blocking=False)
         if admission is None:
-            runtime = cli.read_daemon_runtime()
+            runtime = tower.read_daemon_runtime()
             pid = runtime.get("pid") if runtime else None
-            if type(pid) is int and cli.send_standalone_reload(pid, expected_queue=root):
+            if type(pid) is int and tower.send_standalone_reload(pid, expected_queue=root):
                 # IgnoreNew preserves a live supervisor. If only its daemon
                 # survived, a replacement supervisor waits for that daemon's
                 # identity-verified drain instead of losing the restart.
@@ -171,6 +177,8 @@ def run_coordinator(path: Path) -> int:
 def uninstall(args: argparse.Namespace) -> int:
     """Remove login registration, allowing live callback owners to drain."""
     from .. import cli
+    from ..tower import environment as tower_environment
+    from ..tower import main as tower
     from ..harness.codex import app_server
     from ..store import records as queue_store
     from ..store import layout
@@ -178,9 +186,9 @@ def uninstall(args: argparse.Namespace) -> int:
         path = config_path(args.name)
         config = json.loads(path.read_text(encoding="utf-8"))
         root = Path(str(config["queue_dir"]))
-        runtime = cli.read_daemon_runtime()
+        runtime = tower.read_daemon_runtime()
         active = windows_io.probe_existing_lock(layout.owner_lock_path(root, "daemon-singleton"))
-        if active and (not runtime or not cli.daemon_supports_hot_reload(runtime.get("pid"), expected_queue=root)):
+        if active and (not runtime or not tower.daemon_supports_hot_reload(runtime.get("pid"), expected_queue=root)):
             raise ValueError("coordinator identity is unverified; inspect before removal")
         config["run"] = False
         queue_store.write_request(path, config)

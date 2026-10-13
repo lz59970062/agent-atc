@@ -78,6 +78,8 @@ def queue_writable(root: Path) -> bool:
 def coordinator_issue(root: Path) -> dict[str, str] | None:
     """Observe the existing singleton inode without creating a new lock file."""
     from .. import cli
+    from . import services
+    from ..tower import main as tower
     from ..engine import dispatch
     from ..engine import tasks as managed_tasks
     from ..engine import delivery as delivery_engine
@@ -106,8 +108,8 @@ def coordinator_issue(root: Path) -> dict[str, str] | None:
     except OSError:
         return {"code": "daemon_unverified", "action": "Inspect queue lock access and the existing coordinator; do not start a duplicate."}
 
-    runtime = cli.read_daemon_runtime()
-    if (runtime is None or not cli.daemon_supports_hot_reload(runtime.get("pid"), expected_queue=root)
+    runtime = tower.read_daemon_runtime()
+    if (runtime is None or not tower.daemon_supports_hot_reload(runtime.get("pid"), expected_queue=root)
             or runtime.get("queue_dir") != str(root.resolve())):
         return {"code": "daemon_unverified", "action": "Inspect the lock-owning coordinator and its queue/runtime identity; leave unrelated processes untouched."}
     if runtime.get("version") != __version__:
@@ -118,6 +120,8 @@ def coordinator_issue(root: Path) -> dict[str, str] | None:
 def environment_profile() -> dict[str, object]:
     """Describe this runtime; supported backends determine useful checks."""
     from .. import cli
+    from . import services
+    from ..tower import main as tower
     from ..engine import dispatch
     from ..engine import tasks as managed_tasks
     from ..engine import delivery as delivery_engine
@@ -126,7 +130,7 @@ def environment_profile() -> dict[str, object]:
     from ..store import layout
 
     operating_system = {"linux": "linux", "darwin": "macos", "win32": "windows"}.get(sys.platform, "other")
-    return {"os": operating_system, "container": cli.running_in_container() if sys.platform == "linux" else False,
+    return {"os": operating_system, "container": services.running_in_container() if sys.platform == "linux" else False,
             "supported": sys.platform in ("linux", "darwin", "win32")}
 
 
@@ -139,6 +143,8 @@ def runtime_issues(root: Path) -> list[dict[str, object]]:
     a manager outage does not flood the calling Agent with one block per task.
     """
     from .. import cli
+    from . import services
+    from ..tower import main as tower
     from ..engine import dispatch
     from ..engine import tasks as managed_tasks
     from ..engine import delivery as delivery_engine
@@ -281,6 +287,8 @@ def _work(args: argparse.Namespace) -> dict[str, object]:
 def inspect(args: argparse.Namespace) -> dict[str, object]:
     """Check supported environment, configuration and observed lifecycle state."""
     from .. import cli
+    from . import services
+    from ..tower import main as tower
     from ..engine import dispatch
     from ..engine import tasks as managed_tasks
     from ..engine import delivery as delivery_engine
@@ -499,6 +507,8 @@ def delivery_issues(root: Path) -> list[dict[str, object]]:
     each group. Commands, prompts and recorded exception text are never emitted.
     """
     from .. import cli
+    from . import services
+    from ..tower import main as tower
     from ..engine import dispatch
     from ..engine import tasks as managed_tasks
     from ..engine import delivery as delivery_engine

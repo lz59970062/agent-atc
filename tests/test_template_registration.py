@@ -15,6 +15,7 @@ from unittest import mock
 import yaml
 
 from agent_atc import cli
+from agent_atc.install import skills as skill_install
 from agent_atc.store import files as storage
 from agent_atc.templates import load_template, user_template_dir
 
@@ -447,7 +448,7 @@ class TemplateRegistrationTests(unittest.TestCase):
         before = self.snapshot()
         for target in ("codex", "claude"):
             with contextlib.redirect_stdout(io.StringIO()):
-                status = cli.install_skill_tree(self.base_skill(target),
+                status = skill_install.install_skill_tree(self.base_skill(target),
                                                 include_codex_plugin=target == "codex",
                                                 force=True, keep_existing=True)
             self.assertEqual(status, 0)

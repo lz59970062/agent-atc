@@ -13,6 +13,9 @@ from pathlib import Path
 from unittest import mock
 
 from agent_atc import cli
+from agent_atc.install import services
+from agent_atc.install import skills as skill_install
+from agent_atc.tower import main as tower
 from agent_atc.engine import tasks as managed_tasks
 from agent_atc.engine import worker as task_worker
 from agent_atc.engine import delivery as delivery_engine
@@ -289,7 +292,7 @@ class HealthReportTests(unittest.TestCase):
     def test_missing_skill_and_unwritable_queue_are_actionable_without_repair_side_effects(self):
         (self.codex_home / "skills" / "agent-atc" / "SKILL.md").unlink()
         with mock.patch.object(diagnostics, "queue_writable", return_value=False), mock.patch.object(
-            cli, "setup"
+            services, "setup"
         ) as repair, mock.patch.object(cli.subprocess, "Popen") as launch:
             report = diagnostics.inspect(self.arguments())
         self.assertTrue({"skill_missing", "queue_unwritable"}.issubset(self.issue_codes(report)))
@@ -320,7 +323,7 @@ class SkillRepairPreservationTests(unittest.TestCase):
             (target / "local-notes.txt").write_text("Private local customization", encoding="utf-8")
             original = {path.relative_to(target): path.read_bytes() for path in target.rglob("*") if path.is_file()}
             with contextlib.redirect_stdout(io.StringIO()):
-                self.assertEqual(cli.install_skill_tree(target, include_codex_plugin=True, force=True, keep_existing=True), 0)
+                self.assertEqual(skill_install.install_skill_tree(target, include_codex_plugin=True, force=True, keep_existing=True), 0)
             resulting = {path.relative_to(target): path.read_bytes() for path in target.rglob("*") if path.is_file()}
             self.assertEqual(resulting, original)
 
@@ -328,7 +331,7 @@ class SkillRepairPreservationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             target = Path(temporary) / "missing" / "agent-atc"
             with contextlib.redirect_stdout(io.StringIO()):
-                self.assertEqual(cli.install_skill_tree(target, include_codex_plugin=True, force=True, keep_existing=True), 0)
+                self.assertEqual(skill_install.install_skill_tree(target, include_codex_plugin=True, force=True, keep_existing=True), 0)
             bundled = Path(cli.__file__).parent / "skill"
             self.assertEqual((target / "SKILL.md").read_bytes(), (bundled / "SKILL.md").read_bytes())
             self.assertTrue((target / "agents" / "openai.yaml").is_file())
@@ -370,7 +373,7 @@ class DiagnosticFilesystemTests(unittest.TestCase):
             self.assertFalse(root.exists())
             lock = queue_store.acquire_owner_lock(root, "daemon-singleton", blocking=True)
             queue_store.release_owner_lock(lock, remove=False)
-            with mock.patch.object(cli, "read_daemon_runtime") as runtime:
+            with mock.patch.object(tower, "read_daemon_runtime") as runtime:
                 self.assertEqual(diagnostics.coordinator_issue(root)["code"], "daemon_not_running")
             runtime.assert_not_called()
 
@@ -380,12 +383,12 @@ class DiagnosticFilesystemTests(unittest.TestCase):
             lock = queue_store.acquire_owner_lock(root, "daemon-singleton", blocking=True)
             try:
                 record = {"pid": 123, "queue_dir": str(root.resolve()), "version": "older-version"}
-                with mock.patch.object(cli, "read_daemon_runtime", return_value=record), mock.patch.object(
-                    cli, "daemon_supports_hot_reload", return_value=False
+                with mock.patch.object(tower, "read_daemon_runtime", return_value=record), mock.patch.object(
+                    tower, "daemon_supports_hot_reload", return_value=False
                 ):
                     self.assertEqual(diagnostics.coordinator_issue(root)["code"], "daemon_unverified")
-                with mock.patch.object(cli, "read_daemon_runtime", return_value=record), mock.patch.object(
-                    cli, "daemon_supports_hot_reload", return_value=True
+                with mock.patch.object(tower, "read_daemon_runtime", return_value=record), mock.patch.object(
+                    tower, "daemon_supports_hot_reload", return_value=True
                 ):
                     self.assertEqual(diagnostics.coordinator_issue(root)["code"], "daemon_version_mismatch")
                     record["version"] = cli.__version__

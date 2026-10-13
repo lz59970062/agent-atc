@@ -21,6 +21,7 @@ import unittest
 from unittest import mock
 
 from agent_atc import cli
+from agent_atc.install import services
 from agent_atc.engine import dispatch
 from agent_atc.engine import delivery as delivery_engine
 from agent_atc.harness.codex import app_server
@@ -129,7 +130,7 @@ class RpcPi:
                 # until Pi exits. Never terminate an unrelated session.
                 for file in (self.profile/'agent-atc/channels').glob('*/owner.json'):
                     owner = bridge.read_record(file)
-                    if owner.get('lease_pid') == self.process.pid and cli.pid_is_running(owner['owner_pid']):
+                    if owner.get('lease_pid') == self.process.pid and services.pid_is_running(owner['owner_pid']):
                         os.kill(owner['owner_pid'], signal.SIGTERM)
                 try: self.process.wait(timeout=5)
                 except subprocess.TimeoutExpired: self.process.terminate(); self.process.wait(timeout=5)
@@ -328,7 +329,7 @@ class NativePiCallbackTests(unittest.TestCase):
             plan=bridge.prepare_delivery(payload)
             assert delivery_engine.wait_for_remote_delivery(payload,plan,20)['returncode']==0
         finally: rpc.close()
-        assert not cli.pid_is_running(owner_pid)
+        assert not services.pid_is_running(owner_pid)
         request,payload=callback(runtime,session,'offline')
         assert bridge.inspect_route(request)['status']=='offline_candidate'
         root=Path(payload['queue_dir']); request=dispatch.prepare_request_for_queue(root,request,payload['prompt'])
@@ -393,7 +394,7 @@ class NativePiCallbackTests(unittest.TestCase):
             plan=bridge.prepare_delivery(payload)
             # Crash only our managed wrapper; leave the actual Pi alive deliberately.
             rpc.process.kill(); rpc.process.wait()
-            assert cli.pid_is_running(owner_pid)
+            assert services.pid_is_running(owner_pid)
             assert bridge.inspect_route(request)['status']=='blocked'
             provider.release.set()
             assert delivery_engine.wait_for_remote_delivery(payload,plan,0.5)['returncode']==125
@@ -403,7 +404,7 @@ class NativePiCallbackTests(unittest.TestCase):
             with self.assertRaises(app_server.CallbackTransportBlocked): bridge.prepare_delivery(payload)
         finally:
             provider.release.set()
-            if owner_pid and cli.pid_is_running(owner_pid): os.kill(owner_pid,signal.SIGTERM)
+            if owner_pid and services.pid_is_running(owner_pid): os.kill(owner_pid,signal.SIGTERM)
             rpc.close()
 
 
