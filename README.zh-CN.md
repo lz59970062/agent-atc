@@ -17,6 +17,23 @@
 - **Done**：`ltc done ...`。任务已经由 screen、tmux、Slurm 或其他调度器托管时，
   只报告结束并投递 callback。
 
+## 为什么要同时支持多个 Agent 框架
+
+订阅是使用前沿模型最划算的方式，但订阅和 Harness 是绑在一起的：Claude 的订阅让你在 Claude Code
+里用 Claude 模型，ChatGPT 的订阅让你在 Codex 里用 OpenAI 模型。这份额度一般不能拿到别的工具里用，
+这些 Harness 也都围绕自家模型设计。
+
+Pi 这类开源 Harness 正好相反，给它什么模型它就跑什么模型：任意厂商的 API key、自己 GPU 上的开源权重模型，
+或者专门处理杂活的便宜快速模型。
+
+真实的工作很少只适合一个模型。写作、编码、审查、长时间实验，各有做得最好或最省钱的模型，而且模型还在越来越专精。
+想让每件事都交给合适的模型，就得让几个 Harness 并行工作，有闭源的，也有开源的。可它们彼此并不知道对方存在：
+Codex 会话没法把任务交给 Claude Code 再把结果拿回来，Pi 里的 Agent 也没法向它们汇报。
+
+本项目要补的就是这块空白。在 Codex、Claude Code 或 Pi 的任一会话里，`ltc agent codex|claude|pi`
+都能把一个全新的子代理作为持久任务启动，结果回到发起任务的那个会话。一套横跨闭源与开源 Harness 的调度层，
+也是 Long Task Callback 演进为 **Agent Traffic Control** 的原因。
+
 正确的职责关系是：
 
 ```text

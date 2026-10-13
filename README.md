@@ -58,6 +58,27 @@ Session: <session-id> (only)
 ...plus the exact `ltc ack` command to run
 ```
 
+## Why more than one harness?
+
+Subscriptions are the cheapest way to use frontier models, and they come tied to a harness. A Claude
+plan gives you Claude models inside Claude Code; a ChatGPT plan gives you OpenAI models inside Codex.
+That quota generally can't be pointed at another tool, and each of these harnesses is built around its
+own vendor's models.
+
+Open harnesses such as Pi work the other way around. They run whatever model you give them: an API key
+from any provider, an open-weight model on your own GPU, or a cheap fast model for routine steps.
+
+Real work rarely fits one model. Writing, coding, reviewing and long experiments each have a model that
+does them best or most cheaply, and models keep getting more specialized. Using the right one for each
+job means running several harnesses side by side, some closed and some open. None of them knows the
+others exist: a Codex session can't hand a task to Claude Code and get the answer back, and a Pi agent
+can't report to either.
+
+This project fills that gap. From a Codex, Claude Code or Pi session, `ltc agent codex|claude|pi`
+starts a fresh agent in any of the three as a durable job, and the result comes back to the session that
+asked for it. A single dispatch layer across closed and open harnesses is also why Long Task Callback
+is growing into **Agent Traffic Control**.
+
 ## ✨ Highlights
 
 | | |
