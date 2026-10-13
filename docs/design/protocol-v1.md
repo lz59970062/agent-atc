@@ -184,7 +184,8 @@ ATC 需要的六项能力：
     "recovery_reason": null,
     "log": "attempt-1.log"
   },
-  "worker": {"harness": "claude", "model": "…", "profile": null, "session": "5b1e…"},
+  "worker": {"harness": "claude", "model": "…", "profile": null, "session": "5b1e…", "checkpoint": null},
+  "lineage": null,
   "text_result": "agent-result.md",
   "report": {
     "status": "completed",
@@ -212,6 +213,13 @@ ATC 需要的六项能力：
 这一项把现在的 `outcome: completed / unknown` 和任务状态 `interrupted / launch_failed / foreign_host` 合并成一套词。是否成功由读者结合 `exit_code` 判断，ATC 不替它下结论。
 
 **`worker.session`**：子代理自己的会话 ID。Claude Code、Pi 这类能预设 ID 的由 ATC 指定；Codex、Amp 这类从输出事件里读；拿不到就为 `null`。
+
+**`worker.checkpoint` 与 `lineage`（预留，v1 恒为 `null`）**：让做完一件事的专家带着积累的上下文去做下一件事。
+
+- 任务完成的那一刻，ATC 用 Harness 的分叉能力（`codex exec fork`、`claude --resume --fork-session`、`pi --fork`）复制出一个**检查点**会话，ID 写进 `worker.checkpoint`。检查点永远不直接拿来干活，因此始终停在"刚做完"的状态。必须在完成那一刻冻结，因为 Harness 分叉复制的是会话当前状态，事后回不到那个时间点。
+- 新任务用 `atc agent --from <根ID>` 从检查点分叉出新会话，多个分叉可以同时运行；`--continue <根ID>` 在原会话上原地继续，需要独占租约。
+- 新任务记录 `lineage: {"from": "<根ID>", "mode": "fork" | "continue"}`，`atc tree <根ID>` 展示上下文树。血缘写在字段里，不编进 ID，否则 ID 会随分叉层数无限变长。
+- 会话不能跨 Harness 分叉；跨 Harness 的交接只靠 `report` 和 `text_result`。
 
 **`report`**（子代理声称的，未经验证）：
 
@@ -301,7 +309,7 @@ ACK after inspection: atc ack 8e4f0c12-c1
 
 - 远程投递、跨机器、多用户鉴权
 - 任务运行中的进度推送
-- `--notify`、专家档案、汇合、`endpoint` 目标的具体语义（只预留字段）
+- `--notify`、专家 Agent、汇合、`endpoint` 目标、检查点与分叉的具体语义（只预留字段）
 - ACP 客户端适配器、新增 Harness（协议已为它们留好位置，实现放到 v0.8 之后）
 - 和 A2A 的实际桥接（只对齐状态取值）
 - CLI 和 daemon 之间的 socket 协议（第 5 步单独设计，届时增加 `atc.daemon/1`）
