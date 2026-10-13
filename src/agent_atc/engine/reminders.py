@@ -12,7 +12,6 @@ from ..core import envelope as callbacks
 from ..system import windows_io
 from ..store import layout
 from ..store import records as queue_store
-from .. import cli
 from . import dispatch
 
 

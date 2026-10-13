@@ -8,7 +8,7 @@ try:
     import fcntl
 except ImportError:  # pragma: no cover - the durable run lifecycle is POSIX-only
     fcntl = None
-from . import files as storage
+from ..system import files as storage
 from ..system import posix as posix_platform
 from ..system import windows_io
 from . import layout

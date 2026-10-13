@@ -48,7 +48,7 @@ coordinator before submitting new tasks.
 | `system/windows_process.py` | Runner-owned Jobs, shell-free executable resolution, explicit handle inheritance | Launch an uncontained workload or pass prompts through cmd.exe |
 | `install/windows_service.py` | Per-user scheduled coordinator supervisor and drain/replacement | Stop active business jobs during coordinator updates |
 | `system/posix.py` | OS-held file locks and directory syncing | Pretend these primitives work on Windows |
-| `store/files.py` | Atomic private JSON/text persistence | Store state in installation directories |
+| `system/files.py` | Atomic private JSON/text persistence | Store state in installation directories |
 | `harness/` | Agent metadata, session discovery, child/resume commands and capabilities | Launch tasks or change queue lifecycle |
 | `harness/pi/adapter.py` | Pi child command, stdout result capture, thinking levels, and print-mode resume of the bound session file | Open the interactive TUI or resume an ephemeral session |
 | `core/envelope.py` | Compact, transport-independent envelopes | Drop custom instructions without an explicit details-read requirement |

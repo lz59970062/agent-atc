@@ -21,7 +21,6 @@ def agent_directory() -> Path:
 
 
 def service_text(args: argparse.Namespace) -> str:
-    from .. import cli
     from ..tower import environment as tower_environment
     from ..tower import main as tower
     from ..harness.codex import app_server
@@ -52,7 +51,6 @@ def service_text(args: argparse.Namespace) -> str:
 
 
 def install(args: argparse.Namespace) -> int:
-    from .. import cli
     from ..tower import environment as tower_environment
     from ..tower import main as tower
     from ..harness.codex import app_server

@@ -177,7 +177,6 @@ class ChannelServer:
                  "the channel may not be registered, so the daemon takes over delivery")
 
     def poll(self) -> None:
-        from ... import cli
         from ...store import records as queue_store
         from ...store import layout
 
@@ -238,7 +237,6 @@ class ChannelServer:
 
 def serve(args: argparse.Namespace) -> int:
     """Hidden `atc _claude-channel`: started by Claude Code, never by hand."""
-    from ... import cli
     from ...store import records as queue_store
     from ...store import layout
 
@@ -251,7 +249,6 @@ def serve(args: argparse.Namespace) -> int:
 
 def mcp_config(root: Path, environment: Mapping[str, str]) -> str:
     """Server entry for --mcp-config; it must find the same locks as the daemon."""
-    from ... import cli
     from ...store import records as queue_store
     from ...store import layout
 
@@ -272,7 +269,6 @@ def launch_command(claude: str, root: Path, claude_args: list[str],
 
 def launch(args: argparse.Namespace) -> int:
     """`atc claude [claude args]`: interactive Claude Code with the ATC channel."""
-    from ... import cli
     from ...store import records as queue_store
     from ...store import layout
 

@@ -20,7 +20,7 @@ import threading
 import time
 import uuid
 
-from ...store import files as storage
+from ...system import files as storage
 from ...system import windows_io
 
 PROTOCOL = "live-v1"
@@ -134,7 +134,6 @@ def confirmed_owner_dead(owner: dict) -> bool:
     Any reused/live PID blocks recovery. Missing identities, different hosts or
     PID namespaces, and permission/probe failures are never proof of death.
     """
-    from ... import cli
     from ...install import services
     from ...install import skills as skill_install
     from ...tower import main as tower
@@ -183,7 +182,6 @@ def confirmed_owner_dead(owner: dict) -> bool:
 
 
 def valid_live_lease(owner: dict) -> bool:
-    from ... import cli
     from ...install import services
     from ...install import skills as skill_install
     from ...tower import main as tower
@@ -207,7 +205,6 @@ def require_delivery_support(request: dict, owner: dict) -> None:
 
 
 def inspect_route(request: dict) -> dict:
-    from ... import cli
     from ...install import services
     from ...install import skills as skill_install
     from ...tower import main as tower
@@ -270,7 +267,6 @@ class PiDelivery:
                     owner = read_record(self.directory / "owner.json")
                     if owner.get("owner_nonce") == self.nonce and owner.get("state") == "reserved":
                         storage.write_request(self.directory / "owner.json", self.previous_owner)
-                        from ... import cli
                         from ...install import services
                         from ...install import skills as skill_install
                         from ...tower import main as tower
@@ -325,7 +321,6 @@ def publication_outcome(root: Path, request: dict, timeout: float, now: float) -
     to: an exited, closed or replaced owner, or a missed deadline, leaves the
     outcome unknown, which is never replayed automatically.
     """
-    from ... import cli
     from ...install import services
     from ...install import skills as skill_install
     from ...tower import main as tower
@@ -354,7 +349,6 @@ def publication_outcome(root: Path, request: dict, timeout: float, now: float) -
 
 def reconcile_publications(root: Path, timeout: float) -> None:
     """Daemon hook: settle Pi callbacks whose live owner can no longer ACK them."""
-    from ... import cli
     from ...install import services
     from ...install import skills as skill_install
     from ...tower import main as tower
@@ -408,7 +402,6 @@ def extension_path() -> Path:
 
 
 def _reservation(directory: Path, session: str, profile: str) -> dict:
-    from ... import cli
     from ...install import services
     from ...install import skills as skill_install
     from ...tower import main as tower
@@ -428,7 +421,6 @@ def _reservation(directory: Path, session: str, profile: str) -> dict:
 
 
 def prepare_delivery(payload: dict) -> PiDelivery:
-    from ... import cli
     from ...install import services
     from ...install import skills as skill_install
     from ...tower import main as tower
@@ -525,7 +517,6 @@ def install_extension(args: argparse.Namespace) -> int:
     # Windows children inherit the protected ACL initialized by the installer.
     ensure_private_directory(profile / "agent-atc" / "channels")
     print(f"Installed Pi callback extension: {target}")
-    from ... import cli
     from ...install import services
     from ...install import skills as skill_install
     from ...tower import main as tower
@@ -554,7 +545,6 @@ def _fresh_session(profile: Path, cwd: Path) -> str:
 
 
 def _verify_owner_identity(directory: Path, nonce: str) -> bool:
-    from ... import cli
     from ...install import services
     from ...install import skills as skill_install
     from ...tower import main as tower
@@ -590,7 +580,6 @@ def record_spawn(directory: Path, nonce: str, process) -> None:
     Windows command shims may spawn Node under another PID; the monitor then
     verifies the actual Node owner instead, and absence of evidence blocks recovery.
     """
-    from ... import cli
     from ...install import services
     from ...install import skills as skill_install
     from ...tower import main as tower

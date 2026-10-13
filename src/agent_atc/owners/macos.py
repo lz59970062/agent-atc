@@ -192,7 +192,7 @@ class LaunchdBackend:
         return validate_label(f"atc.{queue_key}.{task_key}.a{attempt}")
 
     def launch(self, owner: str, argv: list[str], cwd: Path, log_path: Path) -> None:
-        from ..store import files as storage  # Avoid a storage/platform package import cycle.
+        from ..system import files as storage  # Avoid a storage/platform package import cycle.
 
         try:
             validate_label(owner)

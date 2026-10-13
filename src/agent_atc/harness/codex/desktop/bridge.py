@@ -31,7 +31,7 @@ from typing import Any
 from ....owners import windows
 from ....system import windows_io
 from ....system.windows_process import background_popen_kwargs, enter_worker_job, prepare_command, terminate_worker_children
-from ....store.files import write_private_text, write_request
+from ....system.files import write_private_text, write_request
 
 
 HEADER_LIMIT = 64 * 1024

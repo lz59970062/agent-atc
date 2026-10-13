@@ -11,6 +11,8 @@ import os
 from pathlib import Path
 import sys
 
+from .. import __version__
+
 MODES = ("auto", "cli", "desktop", "manual")
 ROUTE_FIELDS = ("callback_mode", "callback_origin", "callback_bridge_file",
                 "pi_callback_protocol", "pi_profile_dir", "pi_channel_root", "pi_delivery")
@@ -39,7 +41,6 @@ def bridge_file(profile: Path) -> Path:
 
 
 def selection(args: argparse.Namespace) -> dict[str, str]:
-    from .. import cli
     from . import dispatch
     from ..harness.codex import app_server
     from ..store import layout
@@ -66,7 +67,6 @@ def selection(args: argparse.Namespace) -> dict[str, str]:
 
 
 def inspect_route(request: dict[str, object], *, timeout: float = 2) -> dict[str, object]:
-    from .. import cli
     from . import dispatch
     from ..harness.codex import app_server
     from ..store import layout
@@ -90,7 +90,7 @@ def inspect_route(request: dict[str, object], *, timeout: float = 2) -> dict[str
             return dict(report, transport="cli_resume", reason="session_delivery_not_probed")
         connection = app_server.AppServerConnection(endpoint, timeout)
         connection.connect()
-        connection.request("initialize", {"clientInfo": {"name": "atc-capability-check", "version": cli.__version__},
+        connection.request("initialize", {"clientInfo": {"name": "atc-capability-check", "version": __version__},
                                           "capabilities": {"experimentalApi": True}})
         connection.notify("initialized", {})
         target = request.get("target")
@@ -120,7 +120,6 @@ def inspect_route(request: dict[str, object], *, timeout: float = 2) -> dict[str
 
 
 def preflight(args: argparse.Namespace) -> bool:
-    from .. import cli
     from . import dispatch
     from ..harness.codex import app_server
     from ..store import layout

@@ -24,7 +24,6 @@ from ..system import windows_process
 from ..store import layout
 from ..store import records as queue_store
 from ..system import shell
-from .. import cli
 from . import dispatch
 from . import reminders as reminder_policy
 from ..harness.codex import app_server

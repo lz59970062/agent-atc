@@ -17,7 +17,13 @@ import sys
 import tempfile
 import time
 
+try:
+    import fcntl
+except ImportError:  # pragma: no cover - Windows uses its own file locks
+    fcntl = None
+
 from .. import __version__
+from ..harness.pi import channel as pi_channel
 from ..engine import routes as callback_transport
 from ..harness.claude import session as claude_code
 from ..harness import get_agent, get_child_agent
@@ -78,7 +84,6 @@ def queue_writable(root: Path) -> bool:
 
 def coordinator_issue(root: Path) -> dict[str, str] | None:
     """Observe the existing singleton inode without creating a new lock file."""
-    from .. import cli
     from . import services
     from ..tower import main as tower
     from ..engine import dispatch
@@ -94,15 +99,15 @@ def coordinator_issue(root: Path) -> dict[str, str] | None:
             if not windows_io.probe_existing_lock(path):
                 return {"code": "daemon_not_running", "action": "Start one coordinator for this exact queue, then recheck."}
         else:
-            if cli.fcntl is None:
+            if fcntl is None:
                 raise OSError("platform lock support unavailable")
             with path.open("r", encoding="utf-8") as handle:
                 try:
-                    cli.fcntl.flock(handle.fileno(), cli.fcntl.LOCK_EX | cli.fcntl.LOCK_NB)
+                    fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
                 except BlockingIOError:
                     pass  # A coordinator may own the queue; verify its identity.
                 else:
-                    cli.fcntl.flock(handle.fileno(), cli.fcntl.LOCK_UN)
+                    fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
                     return {"code": "daemon_not_running", "action": "Start one coordinator for this exact queue, then recheck."}
     except FileNotFoundError:
         return {"code": "daemon_not_running", "action": "Start one coordinator for this exact queue, then recheck."}
@@ -120,7 +125,6 @@ def coordinator_issue(root: Path) -> dict[str, str] | None:
 
 def environment_profile() -> dict[str, object]:
     """Describe this runtime; supported backends determine useful checks."""
-    from .. import cli
     from . import services
     from ..tower import main as tower
     from ..engine import dispatch
@@ -143,7 +147,6 @@ def runtime_issues(root: Path) -> list[dict[str, object]]:
     to tolerate a worker finishing while its manager is queried. Group faults so
     a manager outage does not flood the calling Agent with one block per task.
     """
-    from .. import cli
     from . import services
     from ..tower import main as tower
     from ..engine import dispatch
@@ -287,7 +290,6 @@ def _work(args: argparse.Namespace) -> dict[str, object]:
 
 def inspect(args: argparse.Namespace) -> dict[str, object]:
     """Check supported environment, configuration and observed lifecycle state."""
-    from .. import cli
     from . import services
     from ..tower import main as tower
     from ..engine import dispatch
@@ -391,7 +393,7 @@ def inspect(args: argparse.Namespace) -> dict[str, object]:
                        "action": capability.get("action", "Configure the original session's shared Core; do not resubmit saved work.")})
 
     skill_home = {"codex": layout.codex_home, "claude": layout.claude_home,
-                  "pi": cli.pi_callback.profile_dir}.get(callback_agent or "", lambda: None)()
+                  "pi": pi_channel.profile_dir}.get(callback_agent or "", lambda: None)()
     if skill_home is not None and not (skill_home / "skills" / "agent-atc" / "SKILL.md").is_file():
         issues.append({"code": "skill_missing", "action": "Install the bundled ATC skill for the selected Agent so it can inspect, acknowledge and continue callbacks."})
 
@@ -507,7 +509,6 @@ def delivery_issues(root: Path) -> list[dict[str, object]]:
     Output is grouped by issue and Agent; only five example IDs are included in
     each group. Commands, prompts and recorded exception text are never emitted.
     """
-    from .. import cli
     from . import services
     from ..tower import main as tower
     from ..engine import dispatch

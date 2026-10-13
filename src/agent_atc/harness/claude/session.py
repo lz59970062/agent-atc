@@ -223,7 +223,6 @@ def _session_of(request: Mapping[str, object]) -> str | None:
 
 
 def live_watcher_dir(session: str) -> Path:
-    from ... import cli
     from ...engine import dispatch
     from ...engine import delivery as delivery_engine
     from ...engine import reminders as reminder_policy
@@ -240,7 +239,6 @@ def register_live_watcher(session: str, *, prefix: str = "") -> tuple[object, Pa
     The lock is taken under a staging name and renamed into place, so the
     daemon never observes an unlocked live file.
     """
-    from ... import cli
     from ...engine import dispatch
     from ...engine import delivery as delivery_engine
     from ...engine import reminders as reminder_policy
@@ -260,7 +258,6 @@ def register_live_watcher(session: str, *, prefix: str = "") -> tuple[object, Pa
 
 
 def release_live_watcher(lock: tuple[object, Path]) -> None:
-    from ... import cli
     from ...engine import dispatch
     from ...engine import delivery as delivery_engine
     from ...engine import reminders as reminder_policy
@@ -286,7 +283,6 @@ def channel_is_held(session: str) -> bool:
 
 
 def _held(session: str, prefix: str) -> bool:
-    from ... import cli
     from ...engine import dispatch
     from ...engine import delivery as delivery_engine
     from ...engine import reminders as reminder_policy
@@ -308,7 +304,6 @@ def _held(session: str, prefix: str) -> bool:
 
 def _claim(root: Path, path: Path) -> str | None:
     """Move one callback through running/ and return the prompt to print."""
-    from ... import cli
     from ...engine import dispatch
     from ...engine import delivery as delivery_engine
     from ...engine import reminders as reminder_policy
@@ -378,7 +373,6 @@ def wait(args: argparse.Namespace) -> int:
     A callback keeps being returned until it is ACKed. If the session closes,
     the OS releases the waiter's lock and the daemon delivers as usual.
     """
-    from ... import cli
     from ...engine import dispatch
     from ...engine import delivery as delivery_engine
     from ...engine import reminders as reminder_policy

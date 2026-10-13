@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Callable
 import uuid
 
-from ..system import posix, windows_io
+from . import posix, windows_io
 
 
 def write_private_text(

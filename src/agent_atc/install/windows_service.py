@@ -29,7 +29,6 @@ def service_owner(name: str, profile: Path) -> str:
 
 
 def config_path(name: str) -> Path:
-    from .. import cli
     from ..tower import environment as tower_environment
     from ..tower import main as tower
     from ..harness.codex import app_server
@@ -40,7 +39,6 @@ def config_path(name: str) -> Path:
 
 
 def configuration(args: argparse.Namespace) -> dict[str, object]:
-    from .. import cli
     from ..tower import environment as tower_environment
     from ..tower import main as tower
     from ..harness.codex import app_server
@@ -70,7 +68,6 @@ def configuration(args: argparse.Namespace) -> dict[str, object]:
 
 
 def install(args: argparse.Namespace) -> int:
-    from .. import cli
     from ..tower import environment as tower_environment
     from ..tower import main as tower
     from ..harness.codex import app_server
@@ -176,7 +173,6 @@ def run_coordinator(path: Path) -> int:
 
 def uninstall(args: argparse.Namespace) -> int:
     """Remove login registration, allowing live callback owners to drain."""
-    from .. import cli
     from ..tower import environment as tower_environment
     from ..tower import main as tower
     from ..harness.codex import app_server

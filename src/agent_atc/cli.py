@@ -37,7 +37,7 @@ from .engine import routes as callback_transport
 from .harness.claude import session as claude_code
 from .harness.pi import channel as pi_callback
 from .install import diagnostics
-from .store import files as storage
+from .system import files as storage
 from . import template_registration
 from .harness.codex.desktop.connection import BridgeEndpoint, UnixBridgeEndpoint, load_bridge_endpoint, load_unix_bridge_endpoint
 from .harness import AGENTS, AGENT_NAMES, CHILD_AGENT_NAMES, ChildOptions, get_agent, get_child_agent
