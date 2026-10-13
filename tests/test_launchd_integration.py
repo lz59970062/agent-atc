@@ -20,6 +20,7 @@ import unittest
 from unittest import mock
 
 from agent_atc import cli
+from agent_atc.store import layout
 from agent_atc.install import diagnostics, launchd_service
 from agent_atc.owners import LaunchdBackend, OwnerState, macos
 
@@ -70,7 +71,7 @@ class RealLaunchdTests(unittest.TestCase):
             # unrestricted coordinator must supply its own launch boot binding.
             with mock.patch.object(cli, "current_boot_id", return_value=None):
                 self.assertEqual(cli.run(args), 0)
-            task_path = next(cli.managed_tasks_root(root).glob("*/task.json"))
+            task_path = next(layout.managed_tasks_root(root).glob("*/task.json"))
             task = cli.load_managed_task(task_path)
             task_owner = backend.owner_name(task["id"], 1, root)
             coordinator_owner = backend.owner_name("test-coordinator", 1, root)
@@ -81,6 +82,7 @@ class RealLaunchdTests(unittest.TestCase):
                 from pathlib import Path
                 sys.path.insert(0, {source!r})
                 from agent_atc import cli
+                from agent_atc.store import layout
                 cli.recover_managed_tasks(Path(sys.argv[1]))
                 time.sleep(40)
                 """))
@@ -94,10 +96,10 @@ class RealLaunchdTests(unittest.TestCase):
                 self.assertEqual(executions.read_text().splitlines(), ["executed"])
                 self.assertEqual(diagnostics.runtime_issues(root), [])
                 release.touch()
-                callback_path = cli.request_path(root, "pending", task["id"])
+                callback_path = layout.request_path(root, "pending", task["id"])
                 self.wait_until(callback_path.exists, "task failed to publish callback")
                 self.wait_until(lambda: backend.probe(task_owner) == OwnerState.ABSENT, "task owner did not exit")
-                self.assertEqual(json.loads(cli.managed_result_path(root, task["id"]).read_text())["exit_code"], 7)
+                self.assertEqual(json.loads(layout.managed_result_path(root, task["id"]).read_text())["exit_code"], 7)
                 self.assertIn("finished after coordinator exit", Path(task["log_path"]).read_text())
                 cli.recover_managed_tasks(root)
                 cli.recover_managed_tasks(root)
@@ -121,7 +123,7 @@ class RealLaunchdTests(unittest.TestCase):
             fake.write_text("#!/bin/sh\nexit 97\n")
             fake.chmod(0o700)
             env = {"CODEX_HOME": str(home), "ATC_HOME": str(home / "atc-home"), "CLAUDE_CONFIG_DIR": str(directory / "claude"),
-                   cli.TARGET_LOCK_DIR_ENV: str(directory / "locks"), cli.DESKTOP_APP_SERVER_ENV: "0",
+                   layout.TARGET_LOCK_DIR_ENV: str(directory / "locks"), cli.DESKTOP_APP_SERVER_ENV: "0",
                    "ATC_CODEX_BIN": str(fake)}
             argv = ["atc", "setup", "--callback-only", "--name", name, "--queue-dir", str(queue),
                     "--service", "launchd", "--skill-target", "codex", "--codex-bin", str(fake),

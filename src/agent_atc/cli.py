@@ -64,6 +64,7 @@ from .owners import windows as windows_platform
 from .system import windows_io, windows_process
 from .owners.windows import WindowsBackend
 from .templates import TEMPLATES, REASONING_EFFORTS, load_template
+from .store import layout
 
 DEFAULT_RETRIES = 3
 DEFAULT_RETRY_DELAY = 30.0
@@ -83,20 +84,14 @@ AGENT_DISPLAY_NAMES = {name: get_agent(name).display_name for name in AGENT_NAME
 AGENT_THREAD_ID_ENVS = {name: get_agent(name).session_id_env for name in AGENT_NAMES}
 SHELL_HOOK_BEGIN = "# >>> agent-atc pending status >>>"
 SHELL_HOOK_END = "# <<< agent-atc pending status <<<"
-ACTIVE_STATE = "active"
-LOCKS_STATE = "locks"
 SCREEN_BIN_ENV = "ATC_SCREEN_BIN"
-TASKS_DIR_NAME = "tasks"
 AGENT_PROMPT_FILE_NAME = "agent-prompt.txt"
 AGENT_RESULT_FILE_NAME = "agent-result.txt"
 AGENT_SYSTEM_PROMPT_FILE_NAME = "agent-system-prompt.md"
 CHILD_AGENT_PARENT_ENV_NAMES = tuple(
     dict.fromkeys(env_name for name in CHILD_AGENT_NAMES for env_name in get_child_agent(name).parent_env_names)
 )
-ATC_HOME_ENV = "ATC_HOME"
-TARGET_LOCK_DIR_ENV = "ATC_TARGET_LOCK_DIR"
 PROXY_ENV_FILE_ENV = "ATC_PROXY_ENV_FILE"
-CALLBACK_HOOK_FILE_NAME = "callback-hook.md"
 CALLBACK_HOOK_SECTION = "[atc-user-hook]"
 CALLBACK_PROMPT_POLICY_FILE_NAME = "callback-prompts.yaml"
 DEFAULT_CALLBACK_PROMPT_POLICY = {"system_every": 4, "user_every": 3}
@@ -205,22 +200,6 @@ def claude_permission_mode(request: dict[str, object]) -> str:
     if isinstance(value, str) and value:
         return value
     return os.environ.get(CLAUDE_PERMISSION_MODE_ENV, DEFAULT_CLAUDE_PERMISSION_MODE)
-
-
-def queue_dir(args: argparse.Namespace | None = None) -> Path:
-    explicit = getattr(args, "queue_dir", None) if args is not None else None
-    path = explicit or os.environ.get("ATC_QUEUE_DIR")
-    if path:
-        return Path(path).expanduser()
-    return daemon_state_dir() / "queue"
-
-
-def ack_path(root: Path, request_id: str) -> Path:
-    return root / "acks" / f"{request_id}.json"
-
-
-def request_path(root: Path, state: str, request_id: str) -> Path:
-    return root / state / f"{request_id}.json"
 
 
 def codex_command() -> str:
@@ -389,9 +368,9 @@ def systemd_service_text(args: argparse.Namespace) -> str:
             f"Environment={systemd_quote(f'{PI_BIN_ENV}={pi_bin}')}",
             f"Environment={systemd_quote(f'{SCREEN_BIN_ENV}={screen_bin}')}",
             f"Environment={systemd_quote(f'{DESKTOP_APP_SERVER_ENV}=1')}",
-            f"Environment={systemd_quote(f'{PROXY_ENV_FILE_ENV}={service_proxy_env_path()}')}",
-            f"Environment={systemd_quote(f'{ATC_HOME_ENV}={daemon_state_dir().resolve()}')}",
-            f"EnvironmentFile=-{service_proxy_env_path()}",
+            f"Environment={systemd_quote(f'{PROXY_ENV_FILE_ENV}={layout.service_proxy_env_path()}')}",
+            f"Environment={systemd_quote(f'{layout.ATC_HOME_ENV}={layout.daemon_state_dir().resolve()}')}",
+            f"EnvironmentFile=-{layout.service_proxy_env_path()}",
             "",
             "[Install]",
             "WantedBy=default.target",
@@ -442,7 +421,7 @@ def supervisor_config_path(args: argparse.Namespace) -> Path:
 
 
 def supervisor_config_text(args: argparse.Namespace) -> str:
-    root = daemon_state_dir()
+    root = layout.daemon_state_dir()
     log_path = root / "supervisor.log"
     command = " ".join(shlex.quote(part) for part in daemon_command(args))
     environment = ",".join(
@@ -617,7 +596,7 @@ def prepare_request_for_queue(root: Path, request: dict[str, object], prompt: st
 
 def enqueue_existing_request(root: Path, request: dict[str, object], prompt: str) -> int:
     request_id = str(request["id"])
-    target = request_path(root, "pending", request_id)
+    target = layout.request_path(root, "pending", request_id)
     goal_lock: tuple[object, Path] | None = None
     try:
         ensure_daemon_dirs(root)
@@ -627,8 +606,8 @@ def enqueue_existing_request(root: Path, request: dict[str, object], prompt: str
         if not request.get("goal_reminder") and goal_id is not None:
             if not isinstance(goal_id, str):
                 raise ValueError("callback goal id must be a string")
-            goal_path(root, goal_id)
-            goal_lock = acquire_owner_lock(root, goal_lock_id(goal_id), blocking=True)
+            layout.goal_path(root, goal_id)
+            goal_lock = acquire_owner_lock(root, layout.goal_lock_id(goal_id), blocking=True)
             goal = load_goal(root, goal_id)
             if goal.get("state") != "active":
                 raise ValueError(f"goal {goal_id} is not active")
@@ -649,7 +628,7 @@ def enqueue_existing_request(root: Path, request: dict[str, object], prompt: str
 
 
 def enqueue_request(args: argparse.Namespace, prompt: str) -> int:
-    root = queue_dir(args)
+    root = layout.queue_dir(args)
     request = make_request(args, prompt)
     # A persistence error can occur after publication. Diagnostics must not tell
     # the caller to blindly submit a duplicate callback in that case.
@@ -710,7 +689,7 @@ def ensure_daemon_dirs(root: Path) -> None:
     if not root_existed:
         fsync_directory(root.parent)
     created = False
-    for name in (ACTIVE_STATE, LOCKS_STATE, "pending", "running", "done", "failed", "canceled", "acks", "goals"):
+    for name in (layout.ACTIVE_STATE, layout.LOCKS_STATE, "pending", "running", "done", "failed", "canceled", "acks", "goals"):
         path = root / name
         if path.exists():
             continue
@@ -720,14 +699,8 @@ def ensure_daemon_dirs(root: Path) -> None:
         fsync_directory(root)
 
 
-def goal_path(root: Path, goal_id: str) -> Path:
-    if not goal_id or any(character not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_" for character in goal_id):
-        raise ValueError("goal id must contain only letters, numbers, '-' or '_'")
-    return root / "goals" / f"{goal_id}.json"
-
-
 def load_goal(root: Path, goal_id: str) -> dict[str, object]:
-    path = goal_path(root, goal_id)
+    path = layout.goal_path(root, goal_id)
     data = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(data, dict) or data.get("id") != goal_id:
         raise ValueError(f"invalid goal record {goal_id}")
@@ -738,7 +711,7 @@ def write_goal(root: Path, goal: dict[str, object]) -> None:
     goal_id = goal.get("id")
     if not isinstance(goal_id, str):
         raise ValueError("goal requires an id")
-    write_request(goal_path(root, goal_id), goal)
+    write_request(layout.goal_path(root, goal_id), goal)
 
 
 def read_goal_plan_file(path: Path) -> tuple[dict[str, object], str, str]:
@@ -846,10 +819,6 @@ def goal_plan_progress(plan: dict[str, object]) -> tuple[int, int, dict[str, obj
     return completed, len(typed_steps), current, remaining
 
 
-def goal_lock_id(goal_id: str) -> str:
-    return f"goal-{goal_id}"
-
-
 def clear_blocked_goal_email(goal: dict[str, object]) -> None:
     for field in (
         "blocked_email_to",
@@ -868,7 +837,7 @@ def is_single_email_recipient(value: str) -> bool:
 
 
 def queued_goal_reminder_exists(root: Path, goal_id: str) -> bool:
-    for state in (ACTIVE_STATE, "pending", "running"):
+    for state in (layout.ACTIVE_STATE, "pending", "running"):
         for path in (root / state).glob("*.json"):
             try:
                 request = load_request(path)
@@ -881,7 +850,7 @@ def queued_goal_reminder_exists(root: Path, goal_id: str) -> bool:
 
 def latest_queued_goal_callback_at(root: Path, goal_id: str) -> float | None:
     latest: float | None = None
-    for state in (ACTIVE_STATE, "pending", "running", "done", "failed", "canceled"):
+    for state in (layout.ACTIVE_STATE, "pending", "running", "done", "failed", "canceled"):
         for path in (root / state).glob("*.json"):
             try:
                 request = load_request(path)
@@ -899,7 +868,7 @@ def update_goal_from_callback(root: Path, request: dict[str, object]) -> None:
     goal_id = request.get("goal_id")
     if not isinstance(goal_id, str):
         return
-    lock = acquire_owner_lock(root, goal_lock_id(goal_id), blocking=True)
+    lock = acquire_owner_lock(root, layout.goal_lock_id(goal_id), blocking=True)
     try:
         goal = load_goal(root, goal_id)
         if goal.get("state") != "active":
@@ -988,19 +957,12 @@ def callback_target_key(request: dict[str, object]) -> str | None:
     return None
 
 
-def target_lock_dir() -> Path:
-    override = os.environ.get(TARGET_LOCK_DIR_ENV)
-    if override:
-        return Path(override).expanduser()
-    return daemon_state_dir() / "target-locks"
-
-
 def target_lock_path(request: dict[str, object]) -> Path | None:
     key = callback_target_key(request)
     if key is None:
         return None
     digest = hashlib.sha256(key.encode("utf-8")).hexdigest()
-    return target_lock_dir() / f"{digest}.lock"
+    return layout.target_lock_dir() / f"{digest}.lock"
 
 
 def retained_target_lease_path(request: dict[str, object]) -> Path | None:
@@ -1049,7 +1011,7 @@ def retained_target_lease_is_held(request: dict[str, object]) -> bool:
         if not isinstance(request_id, str) or not isinstance(queue_root, str) or not queue_root:
             return True
         root = Path(queue_root)
-        if not ack_path(root, request_id).exists() and not request_path(root, "canceled", request_id).exists():
+        if not layout.ack_path(root, request_id).exists() and not layout.request_path(root, "canceled", request_id).exists():
             return True
         try:
             path.unlink()
@@ -1128,7 +1090,7 @@ def reconcile_acknowledged_retained_leases(root: Path) -> None:
     for state in ("running", "failed", "done", "canceled"):
         for path in sorted((root / state).glob("*.json")):
             request_id = path.stem
-            if not ack_path(root, request_id).exists() and not request_path(root, "canceled", request_id).exists():
+            if not layout.ack_path(root, request_id).exists() and not layout.request_path(root, "canceled", request_id).exists():
                 continue
             try:
                 request = load_request(path)
@@ -1310,15 +1272,15 @@ def desktop_app_server_socket(request: dict[str, object]) -> Path | BridgeEndpoi
     if request.get("callback_mode") == "desktop" and sys.platform in ("darwin", "win32") and not configured_bridge:
         raise CallbackTransportBlocked("Desktop callbacks require an explicitly configured shared Core")
     if sys.platform == "darwin" and configured_bridge:
-        return load_unix_bridge_endpoint(Path(str(configured_bridge)).expanduser(), codex_home())
+        return load_unix_bridge_endpoint(Path(str(configured_bridge)).expanduser(), layout.codex_home())
     if os.name == "nt":
         if not configured_bridge:
             return None
-        return load_bridge_endpoint(Path(configured_bridge).expanduser(), codex_home())
+        return load_bridge_endpoint(Path(configured_bridge).expanduser(), layout.codex_home())
     configured = os.environ.get(APP_SERVER_SOCKET_ENV)
     if configured and truthy_env(ALLOW_APP_SERVER_SOCKET_OVERRIDE_ENV):
         return Path(configured).expanduser()
-    return codex_home() / "app-server-control" / "app-server-control.sock"
+    return layout.codex_home() / "app-server-control" / "app-server-control.sock"
 
 
 def desktop_sandbox_policy(request: dict[str, object]) -> dict[str, object] | None:
@@ -1721,7 +1683,7 @@ def start_desktop_app_server_turn(payload: dict[str, object]) -> DesktopAppServe
             # handshake. Persist before sending any turn/start bytes so an
             # earlier parent timeout or worker crash cannot authorize replay.
             retain_target_lease(root, callback)
-            if ack_path(root, str(callback["id"])).exists() or is_canceled(root, str(callback["id"])):
+            if layout.ack_path(root, str(callback["id"])).exists() or is_canceled(root, str(callback["id"])):
                 try:
                     release_retained_target_lease(root, callback)
                 except (OSError, RuntimeError) as cleanup_error:
@@ -2006,10 +1968,10 @@ def run_resume_until_exit_or_ack(
     args: argparse.Namespace,
 ) -> tuple[subprocess.CompletedProcess[str] | None, bool, bool]:
     command = resume_command(request)
-    delivery_lock = acquire_owner_lock(root, delivery_lock_id(request_id), blocking=False)
+    delivery_lock = acquire_owner_lock(root, layout.delivery_lock_id(request_id), blocking=False)
     if delivery_lock is None:
-        return None, ack_path(root, request_id).exists(), True
-    if ack_path(root, request_id).exists():
+        return None, layout.ack_path(root, request_id).exists(), True
+    if layout.ack_path(root, request_id).exists():
         release_owner_lock(delivery_lock, remove=False)
         return subprocess.CompletedProcess(command, 0), True, False
     if is_canceled(root, request_id):
@@ -2023,7 +1985,7 @@ def run_resume_until_exit_or_ack(
         release_owner_lock(delivery_lock, remove=False)
         release_owner_lock(target_lock, remove=False)
         raise TargetLeaseUnavailable(callback_target_key(request) or "unknown target")
-    if ack_path(root, request_id).exists():
+    if layout.ack_path(root, request_id).exists():
         release_owner_lock(delivery_lock, remove=False)
         release_owner_lock(target_lock, remove=False)
         return subprocess.CompletedProcess(command, 0), True, False
@@ -2038,13 +2000,13 @@ def run_resume_until_exit_or_ack(
     payload = {
         "command": command,
         "prompt": str(request["prompt"]),
-        "callback_hook_path": str(callback_hook_path()),
+        "callback_hook_path": str(layout.callback_hook_path()),
         "cwd": resume_cwd(request),
         "request": request,
         "queue_dir": str(root),
         "timeout": timeout,
-        "ack_path": str(ack_path(root, request_id)),
-        "canceled_path": str(request_path(root, "canceled", request_id)),
+        "ack_path": str(layout.ack_path(root, request_id)),
+        "canceled_path": str(layout.request_path(root, "canceled", request_id)),
     }
     env = os.environ.copy()
     if os.name == "nt":
@@ -2080,7 +2042,7 @@ def run_resume_until_exit_or_ack(
                 process.stdin.close()
 
         while True:
-            acked = ack_path(root, request_id).exists()
+            acked = layout.ack_path(root, request_id).exists()
             canceled = is_canceled(root, request_id)
             returncode = process.poll()
             if acked or canceled:
@@ -2100,14 +2062,14 @@ def run_resume_until_exit_or_ack(
                 return result, acked, returncode is None
             if returncode is not None:
                 child_returncode = finish_delivery_worker(process)
-                acked = ack_path(root, request_id).exists()
+                acked = layout.ack_path(root, request_id).exists()
                 if (not acked and child_returncode != pi_callback.PUBLISHED_RETURN_CODE
                         and not is_canceled(root, request_id) and desktop_submission_pending(root, request)):
                     child_returncode = 125
                 return subprocess.CompletedProcess(command, child_returncode), acked, False
             if time.monotonic() >= deadline:
                 stop_resume_process(process)
-                acked = ack_path(root, request_id).exists()
+                acked = layout.ack_path(root, request_id).exists()
                 code = (125 if not acked and not is_canceled(root, request_id)
                         and desktop_submission_pending(root, request) else 124)
                 return subprocess.CompletedProcess(command, code), acked, False
@@ -2170,18 +2132,14 @@ def move_request(source: Path, destination_dir: Path) -> Path:
     return destination
 
 
-def owner_lock_path(root: Path, request_id: str) -> Path:
-    return root / LOCKS_STATE / f"{request_id}.lock"
-
-
 def acquire_owner_lock(root: Path, request_id: str, *, blocking: bool) -> tuple[object, Path] | None:
     if os.name == "nt":
         ensure_daemon_dirs(root)
-        return acquire_path_lock(owner_lock_path(root, request_id), blocking=blocking)
+        return acquire_path_lock(layout.owner_lock_path(root, request_id), blocking=blocking)
     if fcntl is None:  # pragma: no cover - supported deployments are POSIX
         raise RuntimeError("durable callback ownership requires POSIX flock support")
     ensure_daemon_dirs(root)
-    path = owner_lock_path(root, request_id)
+    path = layout.owner_lock_path(root, request_id)
     handle = path.open("a+", encoding="utf-8")
     os.set_inheritable(handle.fileno(), False)
     operation = fcntl.LOCK_EX | (0 if blocking else fcntl.LOCK_NB)
@@ -2210,12 +2168,8 @@ def release_owner_lock(lock: tuple[object, Path] | None, *, remove: bool) -> Non
             pass
 
 
-def delivery_lock_id(request_id: str) -> str:
-    return f"delivery-{request_id}"
-
-
 def delivery_lock_is_held(root: Path, request_id: str) -> bool:
-    lock = acquire_owner_lock(root, delivery_lock_id(request_id), blocking=False)
+    lock = acquire_owner_lock(root, layout.delivery_lock_id(request_id), blocking=False)
     if lock is None:
         return True
     release_owner_lock(lock, remove=False)
@@ -2255,8 +2209,8 @@ def make_active_request(args: argparse.Namespace, started_at: float) -> dict[str
     request = make_request(args, active_prompt(args))
     request.update(
         {
-            "queue_dir": str(queue_dir(args)),
-            "lifecycle_state": ACTIVE_STATE,
+            "queue_dir": str(layout.queue_dir(args)),
+            "lifecycle_state": layout.ACTIVE_STATE,
             "task": args.task,
             "command": args.command or " ".join(args.wrapped_command),
             "started_at": started_at,
@@ -2269,19 +2223,19 @@ def make_active_request(args: argparse.Namespace, started_at: float) -> dict[str
 
 
 def request_already_transitioned(root: Path, request_id: str) -> bool:
-    return any(request_path(root, state, request_id).exists() for state in ("pending", "running", "done", "failed", "canceled"))
+    return any(layout.request_path(root, state, request_id).exists() for state in ("pending", "running", "done", "failed", "canceled"))
 
 
 def is_canceled(root: Path, request_id: str) -> bool:
-    return request_path(root, "canceled", request_id).exists()
+    return layout.request_path(root, "canceled", request_id).exists()
 
 
 def remove_live_request_copies(root: Path, request_id: str) -> None:
     """Remove dispatchable copies after a durable cancellation tombstone exists."""
     for _ in range(2):
         removed = False
-        for state in (ACTIVE_STATE, "pending", "running", "failed"):
-            path = request_path(root, state, request_id)
+        for state in (layout.ACTIVE_STATE, "pending", "running", "failed"):
+            path = layout.request_path(root, state, request_id)
             try:
                 path.unlink()
             except FileNotFoundError:
@@ -2293,7 +2247,7 @@ def remove_live_request_copies(root: Path, request_id: str) -> None:
 
 
 def discard_unlaunched_active(root: Path, request_id: str) -> None:
-    path = request_path(root, ACTIVE_STATE, request_id)
+    path = layout.request_path(root, layout.ACTIVE_STATE, request_id)
     try:
         path.unlink()
     except FileNotFoundError:
@@ -2328,7 +2282,7 @@ def best_effort_disarm(
 
 def transition_active_to_pending(root: Path, request: dict[str, object], prompt: str) -> int:
     request_id = str(request["id"])
-    source = request_path(root, ACTIVE_STATE, request_id)
+    source = layout.request_path(root, layout.ACTIVE_STATE, request_id)
     if is_canceled(root, request_id):
         remove_live_request_copies(root, request_id)
         print(f"atc: callback {request_id} was canceled; suppressing finalization", file=sys.stderr)
@@ -2385,7 +2339,7 @@ def recovery_prompt(request: dict[str, object], now: float) -> str:
 def recover_active(root: Path) -> int:
     ensure_daemon_dirs(root)
     recovered = 0
-    for path in sorted((root / ACTIVE_STATE).glob("*.json")):
+    for path in sorted((root / layout.ACTIVE_STATE).glob("*.json")):
         request_id = path.stem
         lock = acquire_owner_lock(root, request_id, blocking=False)
         if lock is None:
@@ -2440,14 +2394,14 @@ def recover_active(root: Path) -> int:
 
 def cancel_one(root: Path, request_id: str, message: str | None = None) -> bool:
     ensure_daemon_dirs(root)
-    canceled = request_path(root, "canceled", request_id)
+    canceled = layout.request_path(root, "canceled", request_id)
     if canceled.exists():
         remove_live_request_copies(root, request_id)
         print(f"atc: callback {request_id} is already canceled in {root}", file=sys.stderr)
         return True
 
-    for state in (ACTIVE_STATE, "pending", "running", "failed"):
-        source = request_path(root, state, request_id)
+    for state in (layout.ACTIVE_STATE, "pending", "running", "failed"):
+        source = layout.request_path(root, state, request_id)
         if not source.exists():
             continue
         try:
@@ -2487,7 +2441,7 @@ def cancel_one(root: Path, request_id: str, message: str | None = None) -> bool:
 def cancel_all(root: Path, message: str | None = None) -> int:
     ensure_daemon_dirs(root)
     request_ids: set[str] = set()
-    for state in (ACTIVE_STATE, "pending", "running", "failed"):
+    for state in (layout.ACTIVE_STATE, "pending", "running", "failed"):
         request_ids.update(path.stem for path in (root / state).glob("*.json"))
     canceled = 0
     for request_id in sorted(request_ids):
@@ -2521,7 +2475,7 @@ def process_one(root: Path, args: argparse.Namespace) -> bool:
     try:
         request = load_request(running)
         request_id = str(request.get("id", running.stem))
-        if ack_path(root, request_id).exists():
+        if layout.ack_path(root, request_id).exists():
             move_request(running, root / "done")
             return True
         attempts = int(request.get("attempts", 0)) + 1
@@ -2631,7 +2585,7 @@ def process_one(root: Path, args: argparse.Namespace) -> bool:
         # durable after ack() looked for failed/<id>, but just before this
         # process moved running/<id> there.  Once failed/ is visible, either
         # this reconciliation or ack() itself will converge it to done/.
-        if destination_dir == root / "failed" and ack_path(root, request_id).exists():
+        if destination_dir == root / "failed" and layout.ack_path(root, request_id).exists():
             try:
                 move_request(finalized, root / "done")
                 if request.get("retain_target_lease") is True:
@@ -2653,7 +2607,7 @@ def recover_running(root: Path) -> None:
         try:
             request = load_request(path)
             request_id = str(request.get("id", path.stem))
-            destination = root / ("done" if ack_path(root, request_id).exists() else "pending")
+            destination = root / ("done" if layout.ack_path(root, request_id).exists() else "pending")
             move_request(path, destination)
         except FileNotFoundError:
             if is_canceled(root, path.stem):
@@ -2683,7 +2637,7 @@ def process_goal_reminders(root: Path) -> bool:
         lock: tuple[object, Path] | None = None
         try:
             goal_id = path.stem
-            lock = acquire_owner_lock(root, goal_lock_id(goal_id), blocking=True)
+            lock = acquire_owner_lock(root, layout.goal_lock_id(goal_id), blocking=True)
             goal = load_goal(root, goal_id)
             if goal.get("state") != "active":
                 continue
@@ -2772,7 +2726,7 @@ def daemon_has_live_delivery_workers(root: Path) -> bool:
     # ACK can move a callback to done before its Agent exits. A replacement
     # daemon has no in-memory child table; the inherited OS lease is still the
     # source of truth, regardless of the callback's current queue state.
-    for path in (root / LOCKS_STATE).glob("delivery-*.lock"):
+    for path in (root / layout.LOCKS_STATE).glob("delivery-*.lock"):
         lock = acquire_path_lock(path, blocking=False)
         if lock is None:
             return True
@@ -2781,7 +2735,7 @@ def daemon_has_live_delivery_workers(root: Path) -> bool:
 
 
 def daemon(args: argparse.Namespace) -> int:
-    root = queue_dir(args)
+    root = layout.queue_dir(args)
     ensure_daemon_dirs(root)
     daemon_lock = acquire_owner_lock(root, "daemon-singleton", blocking=False)
     if daemon_lock is None:
@@ -2895,25 +2849,6 @@ def screen_required_error() -> str:
     )
 
 
-def managed_tasks_root(root: Path) -> Path:
-    root = root.expanduser().absolute()
-    return root.parent / TASKS_DIR_NAME if root.name == "queue" else root / TASKS_DIR_NAME
-
-
-def managed_task_dir(root: Path, task_id: str) -> Path:
-    if not task_id or any(character not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_" for character in task_id):
-        raise ValueError("task id must contain only letters, numbers, '-' or '_'")
-    return managed_tasks_root(root) / task_id
-
-
-def managed_task_path(root: Path, task_id: str) -> Path:
-    return managed_task_dir(root, task_id) / "task.json"
-
-
-def managed_result_path(root: Path, task_id: str) -> Path:
-    return managed_task_dir(root, task_id) / "result.json"
-
-
 def current_machine_id() -> str:
     return host_platform().current_machine_id()
 
@@ -2922,9 +2857,9 @@ def write_managed_task(root: Path, task: dict[str, object]) -> None:
     task_id = task.get("id")
     if not isinstance(task_id, str):
         raise ValueError("managed task requires an id")
-    directory = managed_task_dir(root, task_id)
+    directory = layout.managed_task_dir(root, task_id)
     private_directory(directory)
-    write_request(managed_task_path(root, task_id), task)
+    write_request(layout.managed_task_path(root, task_id), task)
 
 
 def load_managed_task(path: Path) -> dict[str, object]:
@@ -2957,11 +2892,11 @@ def load_managed_task(path: Path) -> dict[str, object]:
 
 
 def managed_callback_exists(root: Path, task_id: str) -> bool:
-    if ack_path(root, task_id).exists():
+    if layout.ack_path(root, task_id).exists():
         return True
     return any(
-        request_path(root, state, task_id).exists()
-        for state in (ACTIVE_STATE, "pending", "running", "done", "failed", "canceled")
+        layout.request_path(root, state, task_id).exists()
+        for state in (layout.ACTIVE_STATE, "pending", "running", "done", "failed", "canceled")
     )
 
 
@@ -3246,7 +3181,7 @@ def launch_managed_screen(root: Path, task: dict[str, object]) -> bool:
     task.pop("next_launch_at", None)
     write_managed_task(root, task)
     argv = worker_command("_screen-worker", "--task-file",
-                          str(managed_task_path(root, str(task["id"]))),
+                          str(layout.managed_task_path(root, str(task["id"]))),
                           f"--token={task['token']}")
     try:
         ScreenBackend().launch(session, argv, Path(str(task["cwd"])), Path(str(task["log_path"])))
@@ -3339,7 +3274,7 @@ def launch_managed_task(root: Path, task: dict[str, object]) -> bool:
     task.pop("next_launch_at", None)
     write_managed_task(root, task)
     argv = worker_command("_task-worker", "--task-file",
-                          str(managed_task_path(root, str(task["id"]))),
+                          str(layout.managed_task_path(root, str(task["id"]))),
                           "--attempt", str(attempt))
     try:
         backend.launch(owner, argv, Path(str(task["cwd"])), Path(str(task["log_path"])))
@@ -3354,7 +3289,7 @@ def launch_managed_task(root: Path, task: dict[str, object]) -> bool:
 
 
 def recover_managed_tasks(root: Path) -> int:
-    tasks_root = managed_tasks_root(root)
+    tasks_root = layout.managed_tasks_root(root)
     if not tasks_root.exists():
         return 0
     current_boot = current_boot_id()
@@ -3388,7 +3323,7 @@ def recover_managed_tasks(root: Path) -> int:
                 processed += 1
                 continue
             # Results take priority over an unavailable manager or stale owner.
-            result_path = managed_result_path(root, task_id)
+            result_path = layout.managed_result_path(root, task_id)
             if state in ("running", "launching") and result_path.exists():
                 result = json.loads(result_path.read_text(encoding="utf-8"))
                 if not isinstance(result, dict) or result.get("id") != task_id or not isinstance(result.get("exit_code"), int):
@@ -3513,7 +3448,7 @@ def submit_managed_run(args: argparse.Namespace) -> int:
         print(f"atc: refusing to submit task: {exc}", file=sys.stderr)
         return 125
     args._health_backend = backend
-    root = queue_dir(args).expanduser().absolute()
+    root = layout.queue_dir(args).expanduser().absolute()
     ensure_daemon_dirs(root)
     try:
         validate_managed_goal(root, getattr(args, "goal_id", None))
@@ -3524,7 +3459,7 @@ def submit_managed_run(args: argparse.Namespace) -> int:
     try:
         while True:
             task_id = secrets.token_hex(4)
-            task_directory = managed_task_dir(root, task_id)
+            task_directory = layout.managed_task_dir(root, task_id)
             try:
                 # Reserve atomically so concurrent submissions cannot share an ID.
                 task_directory.mkdir(mode=0o700, parents=True, exist_ok=False)
@@ -3660,7 +3595,7 @@ def run_task_worker(args: argparse.Namespace) -> int:
     try:
         task = load_managed_task(task_path)
         root = Path(str(task["queue_dir"])).expanduser().absolute()
-        if task_path != managed_task_path(root, str(task["id"])).absolute():
+        if task_path != layout.managed_task_path(root, str(task["id"])).absolute():
             raise ValueError("task outside its recorded queue")
         lock = acquire_owner_lock(root, f"managed-task-{task['id']}", blocking=True)
         if lock is None:
@@ -3718,7 +3653,7 @@ def run_screen_worker(args: argparse.Namespace) -> int:
         print("atc: refusing unauthorized screen worker", file=sys.stderr)
         return 125
     root = Path(str(task["queue_dir"])).expanduser().absolute()
-    if task_path != managed_task_path(root, str(task["id"])).absolute():
+    if task_path != layout.managed_task_path(root, str(task["id"])).absolute():
         print("atc: refusing managed task outside its recorded queue", file=sys.stderr)
         return 125
     lock = acquire_owner_lock(root, f"managed-task-{task['id']}", blocking=True)
@@ -3839,7 +3774,7 @@ def run_managed_worker_locked(root: Path, task: dict[str, object]) -> int:
             "completed_at": completed_at,
             "outcome": "completed",
         }
-        write_request(managed_result_path(root, str(task["id"])), result)
+        write_request(layout.managed_result_path(root, str(task["id"])), result)
     except (OSError, UnicodeError, ValueError) as exc:
         task["state"] = "interrupted"
         task["outcome"] = "unknown"
@@ -4024,19 +3959,6 @@ def add_common_flags(parser: argparse.ArgumentParser) -> None:
     )
 
 
-def codex_home() -> Path:
-    return Path(os.environ.get("CODEX_HOME", "~/.codex")).expanduser()
-
-
-def atc_home() -> Path:
-    """ATC's own state root; it belongs to no single Agent profile."""
-    return Path(os.environ.get(ATC_HOME_ENV) or "~/.atc").expanduser()
-
-
-def claude_home() -> Path:
-    return Path(os.environ.get("CLAUDE_CONFIG_DIR", "~/.claude")).expanduser()
-
-
 SKILL_TARGETS = ("codex", "claude", "pi", "both", "all")
 
 
@@ -4093,10 +4015,10 @@ def install_skill(args: argparse.Namespace) -> int:
     keep = bool(getattr(args, "keep_existing", False))
     status = 0
     if target_name in ("codex", "both", "all"):
-        status |= install_skill_tree(codex_home() / "skills" / "agent-atc", include_codex_plugin=True, force=args.force,
+        status |= install_skill_tree(layout.codex_home() / "skills" / "agent-atc", include_codex_plugin=True, force=args.force,
                                      keep_existing=keep)
     if target_name in ("claude", "both", "all"):
-        status |= install_skill_tree(claude_home() / "skills" / "agent-atc", include_codex_plugin=False, force=args.force,
+        status |= install_skill_tree(layout.claude_home() / "skills" / "agent-atc", include_codex_plugin=False, force=args.force,
                                      keep_existing=keep, focused="claude_skill")
     if target_name in ("pi", "all"):
         status |= install_skill_tree(pi_callback.profile_dir() / "skills" / "agent-atc", include_codex_plugin=False,
@@ -4161,16 +4083,8 @@ def run_supervisorctl(args: list[str]) -> int:
     return result.returncode
 
 
-def daemon_state_dir() -> Path:
-    return atc_home()
-
-
-def callback_hook_path() -> Path:
-    return daemon_state_dir() / CALLBACK_HOOK_FILE_NAME
-
-
 def read_callback_prompt_policy(path: Path | None = None) -> dict[str, int]:
-    source = path or daemon_state_dir() / CALLBACK_PROMPT_POLICY_FILE_NAME
+    source = path or layout.daemon_state_dir() / CALLBACK_PROMPT_POLICY_FILE_NAME
     try:
         data = yaml.safe_load(source.read_text(encoding="utf-8"))
     except FileNotFoundError:
@@ -4195,7 +4109,7 @@ def positive_prompt_interval(value: str) -> int:
 
 
 def callback_prompt_policy(args: argparse.Namespace) -> int:
-    path = daemon_state_dir() / CALLBACK_PROMPT_POLICY_FILE_NAME
+    path = layout.daemon_state_dir() / CALLBACK_PROMPT_POLICY_FILE_NAME
     updates = {key: getattr(args, key, None) for key in DEFAULT_CALLBACK_PROMPT_POLICY}
     updates = {key: value for key, value in updates.items() if value is not None}
     lock = None
@@ -4308,7 +4222,7 @@ def select_delivery_prompt(payload: dict[str, object]) -> str:
 
 
 def ensure_callback_hook_file() -> Path:
-    path = callback_hook_path()
+    path = layout.callback_hook_path()
     if os.name == "nt":
         private_directory(path.parent)
         try:
@@ -4327,7 +4241,7 @@ def ensure_callback_hook_file() -> Path:
 
 
 def attach_callback_hook(prompt: str, path: Path | None = None) -> str:
-    source = path or callback_hook_path()
+    source = path or layout.callback_hook_path()
     try:
         hook = source.read_text(encoding="utf-8")
     except FileNotFoundError:
@@ -4338,14 +4252,6 @@ def attach_callback_hook(prompt: str, path: Path | None = None) -> str:
     if not hook.strip():
         return prompt
     return f"{prompt.rstrip()}\n\n{CALLBACK_HOOK_SECTION}\n{hook.rstrip()}"
-
-
-def service_proxy_env_path() -> Path:
-    return daemon_state_dir() / "service-proxy.env"
-
-
-def daemon_runtime_path() -> Path:
-    return daemon_state_dir() / "daemon-runtime.json"
 
 
 def parse_proxy_environment_file(path: Path) -> dict[str, str]:
@@ -4419,7 +4325,7 @@ def configure_proxy_environment(args: argparse.Namespace) -> Path | None:
     clear = bool(getattr(args, "clear_proxy", False))
     if sum(bool(option) for option in (source, inherit, clear)) > 1:
         raise ValueError("--proxy-env-file, --inherit-proxy, and --clear-proxy cannot be used together")
-    target = service_proxy_env_path()
+    target = layout.service_proxy_env_path()
     if clear:
         try:
             target.unlink()
@@ -4447,12 +4353,12 @@ def configure_proxy_environment(args: argparse.Namespace) -> Path | None:
 
 
 def configured_proxy_environment() -> dict[str, str]:
-    path = service_proxy_env_path()
+    path = layout.service_proxy_env_path()
     return parse_proxy_environment_file(path) if path.exists() else {}
 
 
 def load_service_proxy_environment() -> None:
-    source = Path(os.environ.get(PROXY_ENV_FILE_ENV, service_proxy_env_path())).expanduser()
+    source = Path(os.environ.get(PROXY_ENV_FILE_ENV, layout.service_proxy_env_path())).expanduser()
     values = parse_proxy_environment_file(source) if source.exists() else {}
     for name in PROXY_ENV_NAMES:
         os.environ.pop(name, None)
@@ -4468,8 +4374,8 @@ def daemon_environment(args: argparse.Namespace, *, include_proxy_values: bool =
         SCREEN_BIN_ENV: screen_binary() or "screen",
         DESKTOP_APP_SERVER_ENV: os.environ.get(DESKTOP_APP_SERVER_ENV, "1"),
         "PATH": getattr(args, "path", None) or os.environ.get("PATH", ""),
-        PROXY_ENV_FILE_ENV: str(service_proxy_env_path()),
-        ATC_HOME_ENV: str(daemon_state_dir().resolve()),
+        PROXY_ENV_FILE_ENV: str(layout.service_proxy_env_path()),
+        layout.ATC_HOME_ENV: str(layout.daemon_state_dir().resolve()),
     }
     if include_proxy_values:
         values.update(configured_proxy_environment())
@@ -4499,12 +4405,12 @@ def daemon_process_identity(pid: int) -> dict[str, object] | None:
 
 
 def write_daemon_runtime(root: Path | None = None) -> None:
-    path = daemon_runtime_path()
+    path = layout.daemon_runtime_path()
     payload = {
         "pid": os.getpid(),
         "boot_id": current_boot_id(),
         "process_identity": daemon_process_identity(os.getpid()),
-        "queue_dir": str((root if root is not None else queue_dir()).resolve()),
+        "queue_dir": str((root if root is not None else layout.queue_dir()).resolve()),
         "reload_protocol": RELOAD_PROTOCOL_VERSION,
         "version": __version__,
         "started_at": time.time(),
@@ -4513,7 +4419,7 @@ def write_daemon_runtime(root: Path | None = None) -> None:
 
 
 def read_daemon_runtime() -> dict[str, object] | None:
-    path = daemon_runtime_path()
+    path = layout.daemon_runtime_path()
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError, json.JSONDecodeError):
@@ -4578,7 +4484,7 @@ def consume_daemon_reload_request(root: Path, *, filename: str = "daemon-reload.
 
 
 def clear_daemon_runtime() -> None:
-    path = daemon_runtime_path()
+    path = layout.daemon_runtime_path()
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError, json.JSONDecodeError):
@@ -4616,7 +4522,7 @@ def pid_is_running(pid: int) -> bool:
 def start_standalone_daemon(args: argparse.Namespace) -> int:
     if os.name == "nt":
         raise ValueError("Use --service windows-task on Windows for an independent coordinator")
-    root = daemon_state_dir()
+    root = layout.daemon_state_dir()
     root.mkdir(parents=True, exist_ok=True)
     pid_path = root / "daemon.pid"
     log_path = root / "daemon.log"
@@ -4624,7 +4530,7 @@ def start_standalone_daemon(args: argparse.Namespace) -> int:
     # PID files can outlive their container and refer to an unrelated process
     # after restart. The OS-held per-queue lock is the source of ownership;
     # the runtime fingerprint is only used to authorize a safe reload signal.
-    queue_root = queue_dir(args)
+    queue_root = layout.queue_dir(args)
     admission = acquire_owner_lock(queue_root, "daemon-singleton", blocking=False)
     if admission is None:
         existing_pid = read_pid(pid_path)
@@ -4692,7 +4598,7 @@ def start_supervisord_if_available() -> int:
 
 
 def install_supervisor(args: argparse.Namespace) -> int:
-    root = daemon_state_dir()
+    root = layout.daemon_state_dir()
     root.mkdir(parents=True, exist_ok=True)
     target = supervisor_config_path(args)
     if target.exists() and not args.force:
@@ -4738,7 +4644,7 @@ def start_daemon_fallback(args: argparse.Namespace) -> int:
 
 
 def has_running_callbacks(args: argparse.Namespace) -> bool:
-    root = queue_dir(args)
+    root = layout.queue_dir(args)
     return any((root / "running").glob("*.json"))
 
 
@@ -4894,7 +4800,7 @@ def setup(args: argparse.Namespace) -> int:
     ensure_callback_hook_file()
     report_claude_agent_readiness(args)
     try:
-        desktop.install_for_setup(codex_home(), args)
+        desktop.install_for_setup(layout.codex_home(), args)
     except (OSError, ValueError) as exc:
         print(f"atc: could not prepare the optional Desktop launcher: {exc}; "
               "CLI setup can continue. Retry with atc desktop prepare.", file=sys.stderr)
@@ -4944,9 +4850,9 @@ def setup(args: argparse.Namespace) -> int:
 
 
 def ack(args: argparse.Namespace) -> int:
-    root = queue_dir(args)
+    root = layout.queue_dir(args)
     ensure_daemon_dirs(root)
-    marker = ack_path(root, args.id)
+    marker = layout.ack_path(root, args.id)
     payload = {
         "id": args.id,
         "marked_at": time.time(),
@@ -4955,7 +4861,7 @@ def ack(args: argparse.Namespace) -> int:
         payload["message"] = args.message
     write_request(marker, payload)
     for state in ("failed", "running", "pending"):
-        source = request_path(root, state, args.id)
+        source = layout.request_path(root, state, args.id)
         if not source.exists():
             continue
         try:
@@ -4980,23 +4886,23 @@ def ack(args: argparse.Namespace) -> int:
 
 def retry_callback(args: argparse.Namespace) -> int:
     """Requeue a known callback; never resubmit its completed workload."""
-    root = queue_dir(args).expanduser().absolute()
+    root = layout.queue_dir(args).expanduser().absolute()
     if not re.fullmatch(r"[A-Za-z0-9_-]+", args.id):
         print("atc: invalid callback id", file=sys.stderr)
         return 2
     delivery_lock = target_lock = None
     try:
         ensure_daemon_dirs(root)
-        delivery_lock = acquire_owner_lock(root, delivery_lock_id(args.id), blocking=False)
+        delivery_lock = acquire_owner_lock(root, layout.delivery_lock_id(args.id), blocking=False)
         if delivery_lock is None:
             raise ValueError("callback delivery is still active")
-        source = request_path(root, "failed", args.id)
+        source = layout.request_path(root, "failed", args.id)
         if not source.exists():
-            source = request_path(root, "pending", args.id)
+            source = layout.request_path(root, "pending", args.id)
         request = load_request(source)
         if source.parent.name == "pending" and request.get("callback_mode") != "manual":
             raise ValueError("callback is already pending")
-        if ack_path(root, args.id).exists() or is_canceled(root, args.id):
+        if layout.ack_path(root, args.id).exists() or is_canceled(root, args.id):
             raise ValueError("acknowledged or canceled callbacks cannot be retried")
         if request.get("retain_target_lease") is True or desktop_submission_pending(root, request):
             raise ValueError("previous submission outcome is unknown; inspect the original session before recovery")
@@ -5024,7 +4930,7 @@ def retry_callback(args: argparse.Namespace) -> int:
         request["attempts"] = 0
         for key in ("last_error", "delivery_state", "next_attempt_at", "last_deferred_reason"):
             request.pop(key, None)
-        if not source.exists() or ack_path(root, args.id).exists() or is_canceled(root, args.id):
+        if not source.exists() or layout.ack_path(root, args.id).exists() or is_canceled(root, args.id):
             raise ValueError("callback changed during recovery; inspect its current state")
         write_request(source, request)
         if source.parent.name != "pending":
@@ -5042,12 +4948,12 @@ def retry_callback(args: argparse.Namespace) -> int:
 
 
 def goal_start(args: argparse.Namespace) -> int:
-    root = queue_dir(args)
+    root = layout.queue_dir(args)
     ensure_daemon_dirs(root)
     target, source = resolve_target(args)
     goal_id = args.id or uuid.uuid4().hex
     try:
-        path = goal_path(root, goal_id)
+        path = layout.goal_path(root, goal_id)
     except ValueError as exc:
         print(f"atc: error: {exc}", file=sys.stderr)
         return 2
@@ -5061,7 +4967,7 @@ def goal_start(args: argparse.Namespace) -> int:
     except ValueError as exc:
         print(f"atc: error: {exc}", file=sys.stderr)
         return 2
-    lock = acquire_owner_lock(root, goal_lock_id(goal_id), blocking=True)
+    lock = acquire_owner_lock(root, layout.goal_lock_id(goal_id), blocking=True)
     try:
         if path.exists():
             print(f"atc: goal {goal_id} already exists", file=sys.stderr)
@@ -5079,13 +4985,13 @@ def goal_start(args: argparse.Namespace) -> int:
 
 
 def goal_check(args: argparse.Namespace) -> int:
-    root = queue_dir(args)
+    root = layout.queue_dir(args)
     try:
-        goal_path(root, args.id)
+        layout.goal_path(root, args.id)
     except ValueError as exc:
         print(f"atc: error: {exc}", file=sys.stderr)
         return 2
-    lock = acquire_owner_lock(root, goal_lock_id(args.id), blocking=True)
+    lock = acquire_owner_lock(root, layout.goal_lock_id(args.id), blocking=True)
     try:
         try:
             goal = load_goal(root, args.id)
@@ -5133,13 +5039,13 @@ def goal_check(args: argparse.Namespace) -> int:
 
 
 def goal_set_plan(args: argparse.Namespace) -> int:
-    root = queue_dir(args)
+    root = layout.queue_dir(args)
     try:
-        goal_path(root, args.id)
+        layout.goal_path(root, args.id)
     except ValueError as exc:
         print(f"atc: error: {exc}", file=sys.stderr)
         return 2
-    lock = acquire_owner_lock(root, goal_lock_id(args.id), blocking=True)
+    lock = acquire_owner_lock(root, layout.goal_lock_id(args.id), blocking=True)
     try:
         try:
             goal = load_goal(root, args.id)
@@ -5181,9 +5087,9 @@ def goal_set_plan(args: argparse.Namespace) -> int:
 
 
 def goal_ack(args: argparse.Namespace) -> int:
-    root = queue_dir(args)
+    root = layout.queue_dir(args)
     try:
-        goal_path(root, args.id)
+        layout.goal_path(root, args.id)
     except ValueError as exc:
         print(f"atc: error: {exc}", file=sys.stderr)
         return 2
@@ -5201,7 +5107,7 @@ def goal_ack(args: argparse.Namespace) -> int:
         if args.email_to and args.email_to != configured_recipient:
             print("atc: error: --email-to must match ATC_BLOCKED_EMAIL_TO", file=sys.stderr)
             return 2
-    lock = acquire_owner_lock(root, goal_lock_id(args.id), blocking=True)
+    lock = acquire_owner_lock(root, layout.goal_lock_id(args.id), blocking=True)
     try:
         try:
             goal = load_goal(root, args.id)
@@ -5271,7 +5177,7 @@ def process_blocked_goal_email(root: Path) -> bool:
         lock: tuple[object, Path] | None = None
         try:
             goal_id = path.stem
-            lock = acquire_owner_lock(root, goal_lock_id(goal_id), blocking=True)
+            lock = acquire_owner_lock(root, layout.goal_lock_id(goal_id), blocking=True)
             goal = load_goal(root, goal_id)
             if goal.get("state") != "blocked_conditions":
                 continue
@@ -5324,13 +5230,13 @@ def process_blocked_goal_email(root: Path) -> bool:
 
 
 def goal_resume(args: argparse.Namespace) -> int:
-    root = queue_dir(args)
+    root = layout.queue_dir(args)
     try:
-        goal_path(root, args.id)
+        layout.goal_path(root, args.id)
     except ValueError as exc:
         print(f"atc: error: {exc}", file=sys.stderr)
         return 2
-    lock = acquire_owner_lock(root, goal_lock_id(args.id), blocking=True)
+    lock = acquire_owner_lock(root, layout.goal_lock_id(args.id), blocking=True)
     try:
         try:
             goal = load_goal(root, args.id)
@@ -5356,7 +5262,7 @@ def goal_resume(args: argparse.Namespace) -> int:
 
 
 def cancel(args: argparse.Namespace) -> int:
-    root = queue_dir(args)
+    root = layout.queue_dir(args)
     if args.all:
         cancel_all(root, args.message)
         return 0
@@ -5398,7 +5304,7 @@ def queued_items(root: Path, states: list[str]) -> list[tuple[str, Path, dict[st
 
 
 def status(args: argparse.Namespace) -> int:
-    root = queue_dir(args)
+    root = layout.queue_dir(args)
     states = args.state or ["pending", "running"]
     items = queued_items(root, states)
     if not items:
@@ -5417,7 +5323,7 @@ def status(args: argparse.Namespace) -> int:
             line += " | manual receipt; automatic callback disabled"
         if request.get("delivery_state") == "blocked":
             line += " | callback blocked; saved workload result retained"
-        if state == "running" and ack_path(root, request_id).exists():
+        if state == "running" and layout.ack_path(root, request_id).exists():
             line += " | acknowledged; resumed Codex process still active"
         error = request.get("last_error")
         if isinstance(error, str) and error:
@@ -5757,7 +5663,7 @@ def main() -> int:
     status_parser.add_argument(
         "--state",
         action="append",
-        choices=[ACTIVE_STATE, "pending", "running", "failed"],
+        choices=[layout.ACTIVE_STATE, "pending", "running", "failed"],
         help="Queue state to include; repeat as needed (default: pending and running)",
     )
     status_parser.add_argument("--limit", type=int, default=5, help="Maximum items to print")

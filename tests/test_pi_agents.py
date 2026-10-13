@@ -21,6 +21,7 @@ import unittest
 from unittest import mock
 
 from agent_atc import cli
+from agent_atc.store import layout
 from agent_atc.install import diagnostics
 from agent_atc.harness.pi import channel as pi_callback
 from agent_atc.harness import AGENTS, CHILD_AGENT_NAMES, ChildOptions, get_agent, get_child_agent
@@ -171,7 +172,7 @@ class PiAgentContractTests(unittest.TestCase):
         environment = mock.patch.dict(os.environ, {
             "ATC_TEMPLATE_DIR": str(self.templates), "CODEX_HOME": str(self.codex_home), "ATC_HOME": str(self.codex_home / "atc-home"),
             "CLAUDE_CONFIG_DIR": str(self.claude_home),
-            cli.TARGET_LOCK_DIR_ENV: str(self.directory / "target-locks"),
+            layout.TARGET_LOCK_DIR_ENV: str(self.directory / "target-locks"),
             "PYTHONIOENCODING": "utf-8",
             "PI_CODING_AGENT_DIR": str(self.directory / "pi-profile"),
         })
@@ -197,7 +198,7 @@ class PiAgentContractTests(unittest.TestCase):
         return result, output.getvalue()
 
     def task(self):
-        paths = list(cli.managed_tasks_root(self.queue).glob("*/task.json"))
+        paths = list(layout.managed_tasks_root(self.queue).glob("*/task.json"))
         self.assertEqual(len(paths), 1)
         return paths[0], cli.load_managed_task(paths[0])
 
@@ -208,7 +209,7 @@ class PiAgentContractTests(unittest.TestCase):
             self.assertNotEqual(exc.code, 0)
         else:
             self.assertNotEqual(result, 0)
-        self.assertFalse(cli.managed_tasks_root(self.queue).exists())
+        self.assertFalse(layout.managed_tasks_root(self.queue).exists())
 
     def write_template(self, body, name="review.yaml"):
         path = self.templates / name
@@ -339,7 +340,7 @@ class PiAgentContractTests(unittest.TestCase):
                 self.assertEqual(result_path.read_bytes(), report.encode("utf-8"))
                 assert_private_file(self, result_path)
                 self.assertFalse(Path(task["environment_path"]).exists())
-                durable = json.loads(cli.managed_result_path(self.queue, task["id"]).read_text(encoding="utf-8"))
+                durable = json.loads(layout.managed_result_path(self.queue, task["id"]).read_text(encoding="utf-8"))
                 self.assertEqual(durable["exit_code"], exit_code)
                 log = Path(task["log_path"]).read_text(encoding="utf-8")
                 self.assertIn(report, log)
@@ -408,7 +409,7 @@ class PiAgentContractTests(unittest.TestCase):
                     contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()) as stderr:
                 cli.main()
             self.assertIn(session, stderr.getvalue())
-            self.assertFalse(cli.managed_tasks_root(self.queue).exists())
+            self.assertFalse(layout.managed_tasks_root(self.queue).exists())
 
     def test_doctor_for_a_pi_callback_parent_keeps_cli_resume_and_a_valid_repair_command(self):
         session = str(self.directory / "pi-session.jsonl")
@@ -790,7 +791,7 @@ class PiAgentContractTests(unittest.TestCase):
                 cli.main()
             self.assertNotEqual(rejected.exception.code, 0)
             submit.assert_not_called()
-            self.assertFalse(cli.managed_tasks_root(self.queue).exists())
+            self.assertFalse(layout.managed_tasks_root(self.queue).exists())
 
     def test_doctor_checks_pi_child_executable_separately_from_callback_agent(self):
         environment = {"ATC_CODEX_BIN": "fixture-codex",

@@ -11,6 +11,7 @@ import time
 import unittest
 
 from agent_atc import callback_transport, cli
+from agent_atc.store import layout
 from agent_atc.harness.pi import channel as bridge
 
 
@@ -18,7 +19,7 @@ def build_bound(tmp_path):
     os.environ['PI_CODING_AGENT_DIR'] = str(tmp_path / 'pi')
     os.environ['CODEX_HOME'] = str(tmp_path / 'codex')
     os.environ['ATC_HOME'] = str(tmp_path / 'atc')
-    os.environ[cli.TARGET_LOCK_DIR_ENV] = str(tmp_path / 'target-locks')
+    os.environ[layout.TARGET_LOCK_DIR_ENV] = str(tmp_path / 'target-locks')
     os.environ.pop(bridge.CHANNEL_ROOT_ENV, None)
     session = tmp_path / 'session 中文.jsonl'
     session.write_text(json.dumps({'type': 'session', 'version': 3, 'id': 'session-fixture',
@@ -37,8 +38,8 @@ def build_bound(tmp_path):
              'delivery_modes': ['follow-up', 'steer']}
     cli.write_request(directory / 'owner.json', owner)
     payload = {'request': request, 'queue_dir': str(queue), 'prompt': request['prompt'],
-               'ack_path': str(cli.ack_path(queue, 'fixture')),
-               'canceled_path': str(cli.request_path(queue, 'canceled', 'fixture')),
+               'ack_path': str(layout.ack_path(queue, 'fixture')),
+               'canceled_path': str(layout.request_path(queue, 'canceled', 'fixture')),
                'command': cli.resume_command(request), 'cwd': str(tmp_path), 'timeout': 1}
     return request, owner, directory, queue, payload
 
@@ -128,7 +129,7 @@ class PiLiveCallbackTests(unittest.TestCase):
         with self.assertRaisesRegex(cli.CallbackTransportBlocked, 'different delivery policy'):
             bridge.prepare_delivery(payload)
         assert bridge.read_record(file, versions=(1, 2)) == envelope
-        cli.write_request(cli.ack_path(queue, 'fixture'), {'id': 'fixture'})
+        cli.write_request(layout.ack_path(queue, 'fixture'), {'id': 'fixture'})
         cli.release_retained_target_lease(queue, request)
 
     def test_online_publication_retains_lease_and_never_spawns_pi(self):
@@ -141,7 +142,7 @@ class PiLiveCallbackTests(unittest.TestCase):
         envelope = json.loads(next((directory / 'inbox').glob('*.json')).read_text())
         assert envelope['prompt'] == payload['prompt']
         assert cli.retained_target_lease_is_held(request)
-        cli.write_request(cli.ack_path(queue, 'fixture'), {'id': 'fixture'})
+        cli.write_request(layout.ack_path(queue, 'fixture'), {'id': 'fixture'})
         assert cli.wait_for_remote_delivery(payload, delivery, 1)['returncode'] == 0
         assert not cli.retained_target_lease_is_held(request)
 
@@ -155,7 +156,7 @@ class PiLiveCallbackTests(unittest.TestCase):
         assert cli.wait_for_remote_delivery(payload, delivery, 0.01)['returncode'] == 125
         assert cli.retained_target_lease_is_held(request)
         cli.write_request(queue / 'failed/fixture.json', request)
-        cli.write_request(cli.ack_path(queue, 'fixture'), {'id': 'fixture'})
+        cli.write_request(layout.ack_path(queue, 'fixture'), {'id': 'fixture'})
         cli.reconcile_acknowledged_retained_leases(queue)
         assert not cli.retained_target_lease_is_held(request)
 

@@ -178,6 +178,7 @@ class ChannelServer:
 
     def poll(self) -> None:
         from ... import cli
+        from ...store import layout
 
         if self.stepped_aside:
             return
@@ -193,7 +194,7 @@ class ChannelServer:
                 except (OSError, ValueError):
                     continue
                 if (not isinstance(request, dict) or not claude_code._matches(request, self.session, None)
-                        or cli.ack_path(self.root, callback_id).exists()):
+                        or layout.ack_path(self.root, callback_id).exists()):
                     continue
                 pushed_at = self.pushed.get(callback_id)
                 if pushed_at is not None:
@@ -237,8 +238,9 @@ class ChannelServer:
 def serve(args: argparse.Namespace) -> int:
     """Hidden `atc _claude-channel`: started by Claude Code, never by hand."""
     from ... import cli
+    from ...store import layout
 
-    root = cli.queue_dir(args).expanduser().absolute()
+    root = layout.queue_dir(args).expanduser().absolute()
     cli.ensure_daemon_dirs(root)
     server = ChannelServer(root, parent_pid=args.parent_pid or os.getppid(), environment=os.environ,
                            poll_interval=args.poll_interval, ack_grace=claude_code.LIVE_ACK_GRACE_SECONDS)
@@ -248,10 +250,11 @@ def serve(args: argparse.Namespace) -> int:
 def mcp_config(root: Path, environment: Mapping[str, str]) -> str:
     """Server entry for --mcp-config; it must find the same locks as the daemon."""
     from ... import cli
+    from ...store import layout
 
     command = worker_command("_claude-channel", "--queue-dir", str(root))
     server: dict[str, object] = {"command": command[0], "args": command[1:]}
-    passed = {name: environment[name] for name in (cli.TARGET_LOCK_DIR_ENV, cli.ATC_HOME_ENV, "CLAUDE_CONFIG_DIR", "CODEX_HOME")
+    passed = {name: environment[name] for name in (layout.TARGET_LOCK_DIR_ENV, layout.ATC_HOME_ENV, "CLAUDE_CONFIG_DIR", "CODEX_HOME")
               if environment.get(name)}
     if passed:
         server["env"] = passed  # MCP servers may not inherit Claude's whole environment.
@@ -267,8 +270,9 @@ def launch_command(claude: str, root: Path, claude_args: list[str],
 def launch(args: argparse.Namespace) -> int:
     """`atc claude [claude args]`: interactive Claude Code with the ATC channel."""
     from ... import cli
+    from ...store import layout
 
-    root = cli.queue_dir(args).expanduser().absolute()
+    root = layout.queue_dir(args).expanduser().absolute()
     found = claude_code.discover_executable(os.environ)
     if found is None:
         print("atc claude: Claude Code was not found; set ATC_CLAUDE_BIN", file=sys.stderr)

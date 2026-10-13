@@ -15,6 +15,7 @@ import unittest
 from unittest import mock
 
 from agent_atc import cli
+from agent_atc.store import layout
 from agent_atc.install import windows_service
 from agent_atc.harness.codex.desktop.connection import BridgeEndpoint, load_bridge_endpoint
 from agent_atc.owners import windows
@@ -73,11 +74,11 @@ class BridgeClientTests(unittest.TestCase):
         self.write_metadata()
         with mock.patch.dict(os.environ, {cli.DESKTOP_APP_SERVER_ENV: "1",
                                          cli.APP_SERVER_BRIDGE_FILE_ENV: str(self.metadata)}, clear=True), \
-                mock.patch.object(cli, "codex_home", return_value=self.profile):
+                mock.patch.object(layout, "codex_home", return_value=self.profile):
             self.assertIsInstance(cli.desktop_app_server_socket(request), BridgeEndpoint)
-            with mock.patch.object(cli, "queue_dir", return_value=self.directory / "queue"), \
+            with mock.patch.object(layout, "queue_dir", return_value=self.directory / "queue"), \
                     mock.patch.object(cli, "daemon_command", return_value=["python.exe", "daemon"]), \
-                    mock.patch.object(cli, "claude_home", return_value=self.directory / "claude"), \
+                    mock.patch.object(layout, "claude_home", return_value=self.directory / "claude"), \
                     mock.patch.object(cli, "daemon_environment", return_value={}):
                 from argparse import Namespace
                 config = windows_service.configuration(Namespace(name="test", restart_sec=2))

@@ -16,6 +16,7 @@ import unittest
 from unittest import mock
 
 from agent_atc import cli
+from agent_atc.store import layout
 from agent_atc.owners import LaunchError, OwnerState
 from agent_atc.owners.windows import WindowsBackend
 from agent_atc.system import windows_process
@@ -33,7 +34,7 @@ class WindowsLifecycleTests(unittest.TestCase):
         self.stack.enter_context(mock.patch.dict(os.environ, {
             "CODEX_HOME": str(self.directory / "codex-profile"), "ATC_HOME": str(self.directory / "codex-profile" / "atc-home"),
             "CLAUDE_CONFIG_DIR": str(self.directory / "claude-profile"),
-            cli.TARGET_LOCK_DIR_ENV: str(self.directory / "global-target-locks"),
+            layout.TARGET_LOCK_DIR_ENV: str(self.directory / "global-target-locks"),
             "PYTHONPATH": str(Path(cli.__file__).resolve().parents[1]),
             "PYTHONIOENCODING": "utf-8",
         }))
@@ -52,7 +53,7 @@ class WindowsLifecycleTests(unittest.TestCase):
         )
         with contextlib.redirect_stderr(io.StringIO()) as errors:
             self.assertEqual(cli.run(args), 0, errors.getvalue())
-        return next(cli.managed_tasks_root(self.root).glob("*/task.json"))
+        return next(layout.managed_tasks_root(self.root).glob("*/task.json"))
 
     def launching(self, path):
         with mock.patch.object(WindowsBackend, "launch") as launch:
@@ -68,7 +69,7 @@ class WindowsLifecycleTests(unittest.TestCase):
             "queue_dir": str(root), "lifecycle_state": state, "attempts": 0,
         }
         cli.ensure_daemon_dirs(root)
-        cli.write_request(cli.request_path(root, state, ident), request)
+        cli.write_request(layout.request_path(root, state, ident), request)
         return request
 
     def wait_for(self, predicate, timeout=10):
@@ -156,7 +157,7 @@ class WindowsLifecycleTests(unittest.TestCase):
         os.environ.clear()
         os.environ.update(environment)
         self.assertEqual(workload.call_count, 1)
-        result = json.loads(cli.managed_result_path(self.root, str(task["id"])).read_text(encoding="utf-8"))
+        result = json.loads(layout.managed_result_path(self.root, str(task["id"])).read_text(encoding="utf-8"))
         self.assertEqual(result["exit_code"], 7)
         self.assertEqual(result["outcome"], "completed")
         # Also model the crash after result publication but before metadata.
@@ -182,8 +183,8 @@ class WindowsLifecycleTests(unittest.TestCase):
         lease = cli.retained_target_lease_path(request)
         with mock.patch.object(cli, "acquire_retained_target_lease_lock", side_effect=PermissionError("global lease denied")), contextlib.redirect_stderr(io.StringIO()):
             self.assertEqual(cli.ack(argparse.Namespace(queue_dir=str(self.root), id=request["id"], message="inspected")), 0)
-        self.assertTrue(cli.ack_path(self.root, request["id"]).exists())
-        self.assertTrue(cli.request_path(self.root, "done", request["id"]).exists())
+        self.assertTrue(layout.ack_path(self.root, request["id"]).exists())
+        self.assertTrue(layout.request_path(self.root, "done", request["id"]).exists())
         self.assertTrue(lease.exists())
         cli.reconcile_acknowledged_retained_leases(self.root)
         self.assertFalse(lease.exists())
@@ -197,7 +198,7 @@ class WindowsLifecycleTests(unittest.TestCase):
                                 capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=20,
                                 **windows_process.background_popen_kwargs())
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertTrue(cli.ack_path(self.root, request["id"]).exists())
+        self.assertTrue(layout.ack_path(self.root, request["id"]).exists())
         self.assertIn("'quote", str(self.root))
 
     def test_coordinator_death_leaves_delivery_and_cross_queue_lease_alive(self):
@@ -238,7 +239,7 @@ class WindowsLifecycleTests(unittest.TestCase):
                 self.assertTrue(cli.target_lock_is_held(contender))
                 self.assertIsNone(cli.select_pending(other_root, time.time()))
                 cli.recover_running(self.root)
-                self.assertTrue(cli.request_path(self.root, "running", "owner").exists())
+                self.assertTrue(layout.request_path(self.root, "running", "owner").exists())
                 with mock.patch.object(cli, "resume_command", return_value=[sys.executable, str(fixture)]):
                     with self.assertRaises(cli.TargetLeaseUnavailable):
                         cli.run_resume_until_exit_or_ack(other_root, "contender", contender, argparse.Namespace(resume_timeout=5))

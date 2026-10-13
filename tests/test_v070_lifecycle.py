@@ -13,6 +13,7 @@ from pathlib import Path
 from unittest import mock
 
 from agent_atc import cli
+from agent_atc.store import layout
 from agent_atc.owners import LaunchError, OwnerState, ScreenBackend, SystemdUserBackend
 
 
@@ -42,7 +43,7 @@ class NativeTaskLifecycleTests(unittest.TestCase):
         ) as launch:
             self.assertEqual(cli.run(args), 0)
             launch.assert_not_called()
-        return next(cli.managed_tasks_root(self.root).glob("*/task.json"))
+        return next(layout.managed_tasks_root(self.root).glob("*/task.json"))
 
     def mark_running(self, path: Path) -> dict[str, object]:
         with mock.patch.object(SystemdUserBackend, "launch"):
@@ -82,7 +83,7 @@ class NativeTaskLifecycleTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 cli.select_execution_backend(argparse.Namespace(backend="systemd"))
             self.assertEqual(cli.select_execution_backend(argparse.Namespace(backend="auto")), "screen")
-        self.assertFalse(cli.managed_tasks_root(self.root).exists())
+        self.assertFalse(layout.managed_tasks_root(self.root).exists())
 
     def test_manager_query_failure_does_not_interrupt_or_duplicate_running_work(self) -> None:
         path = self.submit()
@@ -94,7 +95,7 @@ class NativeTaskLifecycleTests(unittest.TestCase):
             cli.recover_managed_tasks(self.root)
         launch.assert_not_called()
         self.assertEqual(cli.load_managed_task(path)["state"], "running")
-        self.assertFalse(cli.request_path(self.root, "pending", str(task["id"])).exists())
+        self.assertFalse(layout.request_path(self.root, "pending", str(task["id"])).exists())
 
     def test_ambiguous_launch_is_never_reissued_even_after_owner_disappears(self) -> None:
         path = self.submit()
@@ -120,7 +121,7 @@ class NativeTaskLifecycleTests(unittest.TestCase):
         path = self.submit()
         task = self.mark_running(path)
         result = {"version": 1, "id": task["id"], "exit_code": 7, "completed_at": time.time()}
-        cli.write_request(cli.managed_result_path(self.root, str(task["id"])), result)
+        cli.write_request(layout.managed_result_path(self.root, str(task["id"])), result)
         with mock.patch.object(SystemdUserBackend, "probe", return_value=OwnerState.UNKNOWN), mock.patch.object(
             SystemdUserBackend, "launch"
         ) as launch:
@@ -143,13 +144,13 @@ class NativeTaskLifecycleTests(unittest.TestCase):
         task = self.mark_running(path)
         task["started_at"] = 100.0
         cli.write_managed_task(self.root, task)
-        cli.write_request(cli.managed_result_path(self.root, str(task["id"])), {
+        cli.write_request(layout.managed_result_path(self.root, str(task["id"])), {
             "version": 1, "id": task["id"], "exit_code": 0,
             "completed_at": 225.5,
         })
         with mock.patch.object(cli.time, "time", return_value=10000.0):
             cli.recover_managed_tasks(self.root)
-        callback = cli.load_request(cli.request_path(self.root, "pending", str(task["id"])))
+        callback = cli.load_request(layout.request_path(self.root, "pending", str(task["id"])))
         self.assertEqual(callback["duration_seconds"], 125.5)
         self.assertIn("Duration: 2m 5.5s", callback["prompt_compact"])
         self.assertIn("Duration: 125.5s", Path(callback["prompt_details_path"]).read_text())
@@ -157,7 +158,7 @@ class NativeTaskLifecycleTests(unittest.TestCase):
     def test_foreign_result_identity_cannot_mark_task_complete(self) -> None:
         path = self.submit()
         task = self.mark_running(path)
-        cli.write_request(cli.managed_result_path(self.root, str(task["id"])), {
+        cli.write_request(layout.managed_result_path(self.root, str(task["id"])), {
             "version": 1, "id": "different-task", "exit_code": 0,
         })
         with mock.patch.object(SystemdUserBackend, "probe", return_value=OwnerState.ABSENT), mock.patch.object(
@@ -297,7 +298,7 @@ class NativeTaskLifecycleTests(unittest.TestCase):
         self.assertEqual(launch.call_count, 1)
         self.assertEqual(cli.load_managed_task(path)["state"], "launching")
         for ident in ("unsupported-callback", "unsupported-worker"):
-            recorded = json.loads(cli.managed_task_path(self.root, ident).read_text())
+            recorded = json.loads(layout.managed_task_path(self.root, ident).read_text())
             self.assertEqual(recorded["state"], "submitted")
 
     def test_recovery_reloads_state_after_lock_before_launching_stale_snapshot(self) -> None:
@@ -341,7 +342,7 @@ class NativeTaskLifecycleTests(unittest.TestCase):
         self.assertEqual(task["exit_code"], 7)
         self.assertFalse(task.get("callback_queued", False))
         self.assertEqual(list((self.root / "pending").glob("*.json")), [])
-        result = json.loads(cli.managed_result_path(self.root, str(task["id"])).read_text())
+        result = json.loads(layout.managed_result_path(self.root, str(task["id"])).read_text())
         self.assertEqual(result["exit_code"], 7)
         with mock.patch.object(SystemdUserBackend, "launch") as relaunch:
             cli.recover_managed_tasks(self.root)
@@ -370,7 +371,7 @@ class NativeTaskLifecycleTests(unittest.TestCase):
         task = cli.load_managed_task(path)
         self.assertEqual(task["state"], "running")
         self.assertNotIn("recovery_reason", task)
-        result = json.loads(cli.managed_result_path(self.root, str(task["id"])).read_text())
+        result = json.loads(layout.managed_result_path(self.root, str(task["id"])).read_text())
         self.assertEqual(result["outcome"], "completed")
         self.assertEqual(result["exit_code"], 7)
         with mock.patch.object(SystemdUserBackend, "launch") as relaunch, mock.patch.object(

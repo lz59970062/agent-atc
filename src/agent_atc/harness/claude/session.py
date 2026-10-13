@@ -224,9 +224,10 @@ def _session_of(request: Mapping[str, object]) -> str | None:
 
 def live_watcher_dir(session: str) -> Path:
     from ... import cli
+    from ...store import layout
 
     digest = hashlib.sha256(f"session:{session}".encode("utf-8")).hexdigest()
-    return cli.target_lock_dir() / LIVE_WATCHER_DIR_NAME / digest
+    return layout.target_lock_dir() / LIVE_WATCHER_DIR_NAME / digest
 
 
 def register_live_watcher(session: str, *, prefix: str = "") -> tuple[object, Path]:
@@ -236,6 +237,7 @@ def register_live_watcher(session: str, *, prefix: str = "") -> tuple[object, Pa
     daemon never observes an unlocked live file.
     """
     from ... import cli
+    from ...store import layout
 
     directory = live_watcher_dir(session)
     directory.mkdir(parents=True, exist_ok=True)
@@ -251,6 +253,7 @@ def register_live_watcher(session: str, *, prefix: str = "") -> tuple[object, Pa
 
 def release_live_watcher(lock: tuple[object, Path]) -> None:
     from ... import cli
+    from ...store import layout
 
     try:
         lock[1].unlink()
@@ -272,6 +275,7 @@ def channel_is_held(session: str) -> bool:
 
 def _held(session: str, prefix: str) -> bool:
     from ... import cli
+    from ...store import layout
 
     directory = live_watcher_dir(session)
     if not directory.is_dir():
@@ -289,9 +293,10 @@ def _held(session: str, prefix: str) -> bool:
 def _claim(root: Path, path: Path) -> str | None:
     """Move one callback through running/ and return the prompt to print."""
     from ... import cli
+    from ...store import layout
 
     request_id = path.stem
-    delivery_lock = cli.acquire_owner_lock(root, cli.delivery_lock_id(request_id), blocking=False)
+    delivery_lock = cli.acquire_owner_lock(root, layout.delivery_lock_id(request_id), blocking=False)
     if delivery_lock is None:
         return None
     target_lock = None
@@ -309,9 +314,9 @@ def _claim(root: Path, path: Path) -> str | None:
         except FileNotFoundError:
             return None
         request = cli.load_request(running)
-        if cli.ack_path(root, request_id).exists() or cli.is_canceled(root, request_id):
+        if layout.ack_path(root, request_id).exists() or cli.is_canceled(root, request_id):
             return None  # The finally block returns it; the daemon finalizes it.
-        payload = {"prompt": str(request["prompt"]), "callback_hook_path": str(cli.callback_hook_path()),
+        payload = {"prompt": str(request["prompt"]), "callback_hook_path": str(layout.callback_hook_path()),
                    "request": request, "queue_dir": str(root)}
         prompt = cli.select_delivery_prompt(payload)
         now = time.time()
@@ -354,16 +359,17 @@ def wait(args: argparse.Namespace) -> int:
     the OS releases the waiter's lock and the daemon delivers as usual.
     """
     from ... import cli
+    from ...store import layout
 
     session = args.session or os.environ.get(SESSION_ENV, "").strip()
     if not session:
         print(f"atc wait is only for Claude Code sessions: {SESSION_ENV} is unset. "
               "Other agents receive callbacks from the daemon and should not run it.", file=sys.stderr)
         return 2
-    root = cli.queue_dir(args).expanduser().absolute()
+    root = layout.queue_dir(args).expanduser().absolute()
     cli.ensure_daemon_dirs(root)
     try:
-        if args.task and not cli.managed_task_path(root, args.task).exists():
+        if args.task and not layout.managed_task_path(root, args.task).exists():
             raise ValueError(f"unknown task {args.task} in {root}")
     except ValueError as exc:
         print(f"atc wait: {exc}", file=sys.stderr)
@@ -385,7 +391,7 @@ def wait(args: argparse.Namespace) -> int:
                     except (OSError, ValueError):
                         continue
                     if (isinstance(request, dict) and _matches(request, session, args.task)
-                            and not cli.ack_path(root, path.stem).exists()):
+                            and not layout.ack_path(root, path.stem).exists()):
                         prompt = _claim(root, path)
                         if prompt is not None:
                             prompts.append(prompt)

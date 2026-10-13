@@ -19,6 +19,7 @@ import unittest
 from unittest import mock
 
 from agent_atc import cli
+from agent_atc.store import layout
 
 
 class DesktopDeliveryTimeoutTests(unittest.TestCase):
@@ -40,7 +41,7 @@ class DesktopDeliveryTimeoutTests(unittest.TestCase):
         self.addCleanup(self.stack.close)
         self.stack.enter_context(mock.patch.dict(os.environ, {
             "CODEX_HOME": str(self.directory / "codex-profile"), "ATC_HOME": str(self.directory / "codex-profile" / "atc-home"),
-            cli.TARGET_LOCK_DIR_ENV: str(self.directory / "target-locks"),
+            layout.TARGET_LOCK_DIR_ENV: str(self.directory / "target-locks"),
             "PYTHONPATH": str(Path(cli.__file__).resolve().parents[1]),
             "PYTHONIOENCODING": "utf-8",
         }))
@@ -52,6 +53,7 @@ class DesktopDeliveryTimeoutTests(unittest.TestCase):
             import argparse,json,os,sys,time
             from pathlib import Path
             from agent_atc import cli
+            from agent_atc.store import layout
             root=Path(ROOT)
             request=json.loads(REQUEST)
             events=Path(EVENTS)
@@ -127,20 +129,20 @@ class DesktopDeliveryTimeoutTests(unittest.TestCase):
         self.assertFalse(self.cli_calls.exists())
 
     def test_unknown_submission_enters_failed_without_retry_and_blocks_other_queue(self):
-        cli.write_request(cli.request_path(self.root, "pending", self.request["id"]), self.request)
+        cli.write_request(layout.request_path(self.root, "pending", self.request["id"]), self.request)
         args = argparse.Namespace(resume_timeout=1, retries=3, retry_delay=0, retry_backoff=1)
         with mock.patch.object(cli, "delivery_worker_command", return_value=self.worker_command("unknown")), mock.patch.object(
             cli, "resume_command", return_value=self.fallback_command()
         ):
             self.assertTrue(cli.process_one(self.root, args))
             self.assertFalse(cli.process_one(self.root, args))
-        failed = cli.load_request(cli.request_path(self.root, "failed", self.request["id"]))
+        failed = cli.load_request(layout.request_path(self.root, "failed", self.request["id"]))
         self.assertTrue(failed["retain_target_lease"])
         self.assertEqual(failed["attempts"], 1)
-        self.assertFalse(cli.request_path(self.root, "pending", self.request["id"]).exists())
+        self.assertFalse(layout.request_path(self.root, "pending", self.request["id"]).exists())
         other = self.directory / "other-queue"
         cli.ensure_daemon_dirs(other)
-        cli.write_request(cli.request_path(other, "pending", "contender"), dict(self.request, id="contender", queue_dir=str(other)))
+        cli.write_request(layout.request_path(other, "pending", "contender"), dict(self.request, id="contender", queue_dir=str(other)))
         self.assertIsNone(cli.select_pending(other, time.time()))
         self.assert_submission_recorded_once()
 
@@ -165,8 +167,8 @@ class DesktopDeliveryTimeoutTests(unittest.TestCase):
     def test_acknowledged_submission_releases_intent_even_if_rpc_reply_is_lost(self):
         for mode in ("acknowledged", "unknown-after-ack"):
             with self.subTest(mode=mode):
-                if cli.ack_path(self.root, self.request["id"]).exists():
-                    cli.ack_path(self.root, self.request["id"]).unlink()
+                if layout.ack_path(self.root, self.request["id"]).exists():
+                    layout.ack_path(self.root, self.request["id"]).unlink()
                 if self.events.exists():
                     self.events.unlink()
                 result, acked, _running = self.run_worker(mode, timeout=3)

@@ -21,6 +21,7 @@ import unittest
 from unittest import mock
 
 from agent_atc import cli
+from agent_atc.store import layout
 from agent_atc.owners import SystemdUserBackend
 from agent_atc.runtime import worker_command
 
@@ -129,7 +130,7 @@ class RealDiagnosticsRepairTests(unittest.TestCase):
                     auth_advisory.assert_called_once()
                     self.assertEqual(len(daemons), 1, "repair must start one actual pinned coordinator")
                     daemon = daemons[0]
-                    state = cli.daemon_state_dir()
+                    state = layout.daemon_state_dir()
                     log_path = state / "daemon.log"
 
                     deadline = time.monotonic() + 15.0

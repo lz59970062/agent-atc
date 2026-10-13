@@ -40,6 +40,7 @@ def bridge_file(profile: Path) -> Path:
 
 def selection(args: argparse.Namespace) -> dict[str, str]:
     from . import cli
+    from .store import layout
 
     frozen = getattr(args, "_callback_route", None)
     if isinstance(frozen, dict):
@@ -55,7 +56,7 @@ def selection(args: argparse.Namespace) -> dict[str, str]:
         raise ValueError("Desktop callback mode currently supports Codex only")
     route = {"callback_mode": mode, "callback_origin": "desktop" if desktop else "other"}
     if mode == "desktop":
-        route["callback_bridge_file"] = str(bridge_file(cli.codex_home()))
+        route["callback_bridge_file"] = str(bridge_file(layout.codex_home()))
     if cli.resolve_agent(args) == "pi":
         from .harness.pi import channel as pi_callback
         route.update(pi_callback.route_fields())
@@ -64,6 +65,7 @@ def selection(args: argparse.Namespace) -> dict[str, str]:
 
 def inspect_route(request: dict[str, object], *, timeout: float = 2) -> dict[str, object]:
     from . import cli
+    from .store import layout
 
     mode = request.get("callback_mode", "cli")
     report: dict[str, object] = {"mode": mode, "status": "unverified", "end_to_end_verified": False}
@@ -115,6 +117,7 @@ def inspect_route(request: dict[str, object], *, timeout: float = 2) -> dict[str
 
 def preflight(args: argparse.Namespace) -> bool:
     from . import cli
+    from .store import layout
 
     try:
         route = selection(args)

@@ -20,6 +20,7 @@ from pathlib import Path
 from unittest import mock
 
 from agent_atc import cli
+from agent_atc.store import layout
 from agent_atc.install import diagnostics
 from agent_atc.owners import SystemdUserBackend
 
@@ -58,10 +59,10 @@ class RealStandaloneScreenTests(unittest.TestCase):
 
             try:
                 with mock.patch.dict(os.environ, environment, clear=True):
-                    state = cli.daemon_state_dir()
+                    state = layout.daemon_state_dir()
                     state.mkdir(parents=True)
                     (state / "daemon.pid").write_text(str(sleeper.pid))
-                    runtime = cli.daemon_runtime_path()
+                    runtime = layout.daemon_runtime_path()
                     runtime.write_text(json.dumps({
                         "pid": sleeper.pid, "reload_protocol": cli.RELOAD_PROTOCOL_VERSION,
                         "queue_dir": str(root), "process_identity": {
@@ -154,7 +155,7 @@ class RealStandaloneScreenTests(unittest.TestCase):
             with mock.patch.dict(os.environ, environment, clear=True):
                 self.assertFalse(SystemdUserBackend().available())
                 self.assertEqual(cli.run(args), 0)
-            task_path = next(cli.managed_tasks_root(root).glob("*/task.json"))
+            task_path = next(layout.managed_tasks_root(root).glob("*/task.json"))
             task = cli.load_managed_task(task_path)
             self.assertEqual(task["execution_backend"], "screen")
             ready = directory / "coordinator-ready"
@@ -166,6 +167,7 @@ class RealStandaloneScreenTests(unittest.TestCase):
                 from pathlib import Path
                 sys.path.insert(0, {source!r})
                 from agent_atc import cli
+                from agent_atc.store import layout
                 cli.recover_managed_tasks(Path(sys.argv[1]))
                 Path(sys.argv[2]).write_text("launched")
                 time.sleep(60)
@@ -191,9 +193,9 @@ class RealStandaloneScreenTests(unittest.TestCase):
                     self.assertFalse(output.exists())
 
                     release.write_text("finish", encoding="utf-8")
-                    callback_path = cli.request_path(root, "pending", str(task["id"]))
+                    callback_path = layout.request_path(root, "pending", str(task["id"]))
                     self.wait_until(lambda: callback_path.exists(), "screen workload did not produce durable callback")
-                    result = json.loads(cli.managed_result_path(root, str(task["id"])).read_text())
+                    result = json.loads(layout.managed_result_path(root, str(task["id"])).read_text())
                     self.assertEqual(result["exit_code"], 7)
                     self.assertEqual(output.read_text(), "finished after standalone coordinator was killed")
                     with mock.patch.dict(os.environ, environment, clear=True):

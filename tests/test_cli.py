@@ -21,6 +21,7 @@ from pathlib import Path
 from unittest import mock
 
 from agent_atc import cli
+from agent_atc.store import layout
 
 
 def assert_private_file(test: unittest.TestCase, path: Path) -> None:
@@ -131,7 +132,7 @@ class CliTests(unittest.TestCase):
                 self.assertEqual(cli.run(args), 0)
 
             wrapped.assert_not_called()
-            manifests = list(cli.managed_tasks_root(root).glob("*/task.json"))
+            manifests = list(layout.managed_tasks_root(root).glob("*/task.json"))
             self.assertEqual(len(manifests), 1)
             task = cli.load_managed_task(manifests[0])
             self.assertEqual(task["state"], "submitted")
@@ -148,7 +149,7 @@ class CliTests(unittest.TestCase):
             with mock.patch.object(cli, "screen_binary", return_value=None):
                 self.assertEqual(cli.run(args), 125)
 
-            self.assertFalse(cli.managed_tasks_root(root).exists())
+            self.assertFalse(layout.managed_tasks_root(root).exists())
 
     def test_done_defaults_to_daemon_queue_without_requiring_screen(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -184,7 +185,7 @@ class CliTests(unittest.TestCase):
                 self.assertEqual(cli.run(args), 0)
 
             wrapped.assert_not_called()
-            self.assertFalse(cli.managed_tasks_root(root).exists())
+            self.assertFalse(layout.managed_tasks_root(root).exists())
             self.assertIn("daemon -> auto backend -> independent worker -> task", output.getvalue())
 
     def test_agent_parser_matches_run_style_and_preserves_prompt(self) -> None:
@@ -227,7 +228,7 @@ class CliTests(unittest.TestCase):
             ):
                 self.assertEqual(cli.agent(args), 0)
 
-            task_path = next(cli.managed_tasks_root(root).glob("*/task.json"))
+            task_path = next(layout.managed_tasks_root(root).glob("*/task.json"))
             task = cli.load_managed_task(task_path)
             prompt_path = Path(str(task["agent_prompt_path"]))
             result_path = Path(str(task["agent_result_path"]))
@@ -278,7 +279,7 @@ class CliTests(unittest.TestCase):
             ):
                 self.assertEqual(cli.agent(args), 0)
 
-            task_path = next(cli.managed_tasks_root(root).glob("*/task.json"))
+            task_path = next(layout.managed_tasks_root(root).glob("*/task.json"))
             task = cli.load_managed_task(task_path)
             task["state"] = "launching"
             cli.write_managed_task(root, task)
@@ -322,7 +323,7 @@ class CliTests(unittest.TestCase):
             ):
                 self.assertEqual(cli.agent(args), 0)
 
-            task_path = next(cli.managed_tasks_root(root).glob("*/task.json"))
+            task_path = next(layout.managed_tasks_root(root).glob("*/task.json"))
             task = cli.load_managed_task(task_path)
             environment_path = Path(str(task["environment_path"]))
             assert_private_file(self, environment_path)
@@ -423,7 +424,7 @@ class CliTests(unittest.TestCase):
             ):
                 self.assertEqual(cli.run(args), 0)
 
-            task_path = next(cli.managed_tasks_root(root).glob("*/task.json"))
+            task_path = next(layout.managed_tasks_root(root).glob("*/task.json"))
             self.assertEqual(cli.load_managed_task(task_path)["token"], "atc_-abc")
 
     def test_daemon_launches_submitted_task_through_screen(self) -> None:
@@ -432,7 +433,7 @@ class CliTests(unittest.TestCase):
             args = self._run_args(tmp, root, [sys.executable, "-c", "pass"])
             with mock.patch.object(cli, "screen_binary", return_value="/usr/bin/screen"):
                 self.assertEqual(cli.run(args), 0)
-            task_path = next(cli.managed_tasks_root(root).glob("*/task.json"))
+            task_path = next(layout.managed_tasks_root(root).glob("*/task.json"))
             task = cli.load_managed_task(task_path)
             task["token"] = "-abc"
             cli.write_managed_task(root, task)
@@ -464,7 +465,7 @@ class CliTests(unittest.TestCase):
             args = self._run_args(tmp, root, [sys.executable, "-c", "pass"])
             with mock.patch.object(cli, "screen_binary", return_value="/usr/bin/screen"):
                 self.assertEqual(cli.run(args), 0)
-            task_path = next(cli.managed_tasks_root(root).glob("*/task.json"))
+            task_path = next(layout.managed_tasks_root(root).glob("*/task.json"))
 
             completed = subprocess.CompletedProcess(["screen"], 0)
             with (
@@ -488,7 +489,7 @@ class CliTests(unittest.TestCase):
             args = self._run_args(tmp, root, [sys.executable, "-c", "pass"])
             with mock.patch.object(cli, "screen_binary", return_value="/usr/bin/screen"):
                 self.assertEqual(cli.run(args), 0)
-            task_path = next(cli.managed_tasks_root(root).glob("*/task.json"))
+            task_path = next(layout.managed_tasks_root(root).glob("*/task.json"))
 
             completed = subprocess.CompletedProcess(["screen"], 0)
             with (
@@ -530,7 +531,7 @@ class CliTests(unittest.TestCase):
             args = self._run_args(tmp, root, [sys.executable, "-c", "pass"])
             with mock.patch.object(cli, "screen_binary", return_value="/usr/bin/screen"):
                 self.assertEqual(cli.run(args), 0)
-            task_path = next(cli.managed_tasks_root(root).glob("*/task.json"))
+            task_path = next(layout.managed_tasks_root(root).glob("*/task.json"))
             task = cli.load_managed_task(task_path)
             task.update(
                 {
@@ -563,7 +564,7 @@ class CliTests(unittest.TestCase):
             run_args = self._run_args(tmp, root, [sys.executable, "-c", "pass"])
             with mock.patch.object(cli, "screen_binary", return_value="/usr/bin/screen"):
                 self.assertEqual(cli.run(run_args), 0)
-            task_path = next(cli.managed_tasks_root(root).glob("*/task.json"))
+            task_path = next(layout.managed_tasks_root(root).glob("*/task.json"))
             task = cli.load_managed_task(task_path)
             task["state"] = "launching"
             cli.write_managed_task(root, task)
@@ -600,7 +601,7 @@ class CliTests(unittest.TestCase):
             run_args.agent = "claude"
             with mock.patch.object(cli, "screen_binary", return_value="/usr/bin/screen"):
                 self.assertEqual(cli.run(run_args), 0)
-            task_path = next(cli.managed_tasks_root(root).glob("*/task.json"))
+            task_path = next(layout.managed_tasks_root(root).glob("*/task.json"))
             task = cli.load_managed_task(task_path)
             task.update({"state": "running", "boot_id": "old-boot", "agent": "claude"})
             cli.write_managed_task(root, task)
@@ -629,7 +630,7 @@ class CliTests(unittest.TestCase):
             run_args = self._run_args(tmp, root, [sys.executable, "-c", "pass"])
             with mock.patch.object(cli, "screen_binary", return_value="/usr/bin/screen"):
                 self.assertEqual(cli.run(run_args), 0)
-            task_path = next(cli.managed_tasks_root(root).glob("*/task.json"))
+            task_path = next(layout.managed_tasks_root(root).glob("*/task.json"))
             task = cli.load_managed_task(task_path)
             task.update({"state": "running", "boot_id": cli.current_boot_id()})
             cli.write_managed_task(root, task)
@@ -650,7 +651,7 @@ class CliTests(unittest.TestCase):
             run_args = self._run_args(tmp, root, [sys.executable, "-c", "pass"])
             with mock.patch.object(cli, "screen_binary", return_value="/usr/bin/screen"):
                 self.assertEqual(cli.run(run_args), 0)
-            task_path = next(cli.managed_tasks_root(root).glob("*/task.json"))
+            task_path = next(layout.managed_tasks_root(root).glob("*/task.json"))
 
             with (
                 mock.patch.object(cli, "current_machine_id", return_value="different-machine"),
@@ -683,7 +684,7 @@ class CliTests(unittest.TestCase):
             run_args.goal_id = "stage-goal"
             with mock.patch.object(cli, "screen_binary", return_value="/usr/bin/screen"):
                 self.assertEqual(cli.run(run_args), 0)
-            task_path = next(cli.managed_tasks_root(root).glob("*/task.json"))
+            task_path = next(layout.managed_tasks_root(root).glob("*/task.json"))
             task = cli.load_managed_task(task_path)
             task.update({"state": "running", "boot_id": "old-boot"})
             cli.write_managed_task(root, task)
@@ -723,14 +724,14 @@ class CliTests(unittest.TestCase):
             request_id = str(request["id"])
             lock = cli.acquire_owner_lock(root, request_id, blocking=True)
             self.assertIsNotNone(lock)
-            cli.write_request(cli.request_path(root, cli.ACTIVE_STATE, request_id), request)
+            cli.write_request(layout.request_path(root, layout.ACTIVE_STATE, request_id), request)
 
             self.assertEqual(cli.recover_active(root), 0)
-            self.assertTrue(cli.request_path(root, cli.ACTIVE_STATE, request_id).exists())
+            self.assertTrue(layout.request_path(root, layout.ACTIVE_STATE, request_id).exists())
 
             cli.release_owner_lock(lock, remove=False)
             self.assertEqual(cli.recover_active(root), 1)
-            recovered = json.loads(cli.request_path(root, "pending", request_id).read_text(encoding="utf-8"))
+            recovered = json.loads(layout.request_path(root, "pending", request_id).read_text(encoding="utf-8"))
             self.assertEqual(recovered["outcome"], "unknown")
             details = Path(recovered["prompt_details_path"]).read_text()
             self.assertIn("may still be running", details)
@@ -744,7 +745,7 @@ class CliTests(unittest.TestCase):
             first = cli.acquire_owner_lock(root, "daemon-singleton", blocking=False)
             self.assertIsNotNone(first)
             self.assertIsNone(cli.acquire_owner_lock(root, "daemon-singleton", blocking=False))
-            lock_path = cli.owner_lock_path(root, "daemon-singleton")
+            lock_path = layout.owner_lock_path(root, "daemon-singleton")
 
             cli.release_owner_lock(first, remove=False)
             self.assertTrue(lock_path.exists())
@@ -773,7 +774,7 @@ class CliTests(unittest.TestCase):
             args = self._run_args(tmp, root, ["missing-command"])
             with mock.patch.object(cli, "screen_binary", return_value="/usr/bin/screen"):
                 self.assertEqual(cli.submit_managed_run(args), 0)
-            task_path = next(cli.managed_tasks_root(root).glob("*/task.json"))
+            task_path = next(layout.managed_tasks_root(root).glob("*/task.json"))
             task = cli.load_managed_task(task_path)
             task["state"] = "launching"
             cli.write_managed_task(root, task)
@@ -808,10 +809,10 @@ class CliTests(unittest.TestCase):
             )
             cli.prepare_request_for_queue(root, request, cli.build_prompt(args, 3.0))
             request_id = str(request["id"])
-            cli.write_request(cli.request_path(root, cli.ACTIVE_STATE, request_id), request)
+            cli.write_request(layout.request_path(root, layout.ACTIVE_STATE, request_id), request)
 
             self.assertEqual(cli.recover_active(root), 1)
-            recovered = json.loads(cli.request_path(root, "pending", request_id).read_text(encoding="utf-8"))
+            recovered = json.loads(layout.request_path(root, "pending", request_id).read_text(encoding="utf-8"))
             self.assertEqual(recovered["outcome"], "completed")
             self.assertEqual(recovered["exit_code"], 9)
             self.assertIn("Exit code: 9", Path(recovered["prompt_details_path"]).read_text())
@@ -823,11 +824,11 @@ class CliTests(unittest.TestCase):
             args = self._run_args(tmp, root, [sys.executable, "-c", "pass"])
             request = cli.make_active_request(args, time.time())
             request_id = str(request["id"])
-            cli.write_request(cli.request_path(root, cli.ACTIVE_STATE, request_id), request)
+            cli.write_request(layout.request_path(root, layout.ACTIVE_STATE, request_id), request)
 
             self.assertEqual(cli.recover_active(root), 0)
-            self.assertFalse(cli.request_path(root, cli.ACTIVE_STATE, request_id).exists())
-            self.assertFalse(cli.request_path(root, "pending", request_id).exists())
+            self.assertFalse(layout.request_path(root, layout.ACTIVE_STATE, request_id).exists())
+            self.assertFalse(layout.request_path(root, "pending", request_id).exists())
 
     def test_make_request_binds_codex_thread_id_by_default(self) -> None:
         args = argparse.Namespace(
@@ -1230,8 +1231,8 @@ class CliTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "queue"
             cli.ensure_daemon_dirs(root)
-            source = cli.request_path(root, cli.ACTIVE_STATE, "same-id")
-            destination = cli.request_path(root, "pending", "same-id")
+            source = layout.request_path(root, layout.ACTIVE_STATE, "same-id")
+            destination = layout.request_path(root, "pending", "same-id")
             cli.write_request(source, payload("same-id", tmp, "identical"))
             cli.write_request(destination, payload("same-id", tmp, "identical"))
 
@@ -1239,8 +1240,8 @@ class CliTests(unittest.TestCase):
             self.assertFalse(source.exists())
             self.assertEqual(json.loads(destination.read_text(encoding="utf-8"))["prompt"], "identical")
 
-            source = cli.request_path(root, cli.ACTIVE_STATE, "divergent")
-            destination = cli.request_path(root, "pending", "divergent")
+            source = layout.request_path(root, layout.ACTIVE_STATE, "divergent")
+            destination = layout.request_path(root, "pending", "divergent")
             cli.write_request(source, payload("divergent", tmp, "new completed source"))
             cli.write_request(destination, payload("divergent", tmp, "stale destination"))
 
@@ -1249,8 +1250,8 @@ class CliTests(unittest.TestCase):
             self.assertTrue(source.exists())
             self.assertTrue(destination.exists())
 
-            source = cli.request_path(root, cli.ACTIVE_STATE, "collision")
-            destination = cli.request_path(root, "pending", "collision")
+            source = layout.request_path(root, layout.ACTIVE_STATE, "collision")
+            destination = layout.request_path(root, "pending", "collision")
             cli.write_request(source, payload("collision", tmp, "source"))
             cli.write_request(destination, payload("different-id", tmp, "destination"))
 
@@ -1271,17 +1272,17 @@ class CliTests(unittest.TestCase):
             ack_args = argparse.Namespace(queue_dir=str(root), id="monotonic-ack", message="received")
 
             self.assertEqual(cli.ack(ack_args), 0)
-            first = json.loads(cli.ack_path(root, "monotonic-ack").read_text(encoding="utf-8"))
+            first = json.loads(layout.ack_path(root, "monotonic-ack").read_text(encoding="utf-8"))
             self.assertEqual(cli.ack(ack_args), 0)
-            second = json.loads(cli.ack_path(root, "monotonic-ack").read_text(encoding="utf-8"))
+            second = json.loads(layout.ack_path(root, "monotonic-ack").read_text(encoding="utf-8"))
             self.assertGreaterEqual(second["marked_at"], first["marked_at"])
 
             args = argparse.Namespace(retries=3, retry_delay=0.0, retry_backoff=2.0)
             with mock.patch.object(cli, "run_resume_until_exit_or_ack") as resume:
                 self.assertTrue(cli.process_one(root, args))
             resume.assert_not_called()
-            self.assertTrue(cli.request_path(root, "done", "monotonic-ack").exists())
-            self.assertTrue(cli.ack_path(root, "monotonic-ack").exists())
+            self.assertTrue(layout.request_path(root, "done", "monotonic-ack").exists())
+            self.assertTrue(layout.ack_path(root, "monotonic-ack").exists())
 
     def test_normal_running_ack_does_not_require_target_lock_directory_write(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -1294,13 +1295,13 @@ class CliTests(unittest.TestCase):
                 target={"kind": "session", "value": "queue-only-session"},
             )
             cli.ensure_daemon_dirs(root)
-            cli.move_request(cli.request_path(root, "pending", "queue-only-ack"), root / "running")
+            cli.move_request(layout.request_path(root, "pending", "queue-only-ack"), root / "running")
             args = argparse.Namespace(queue_dir=str(root), id="queue-only-ack", message="inspected")
 
-            with mock.patch.dict(os.environ, {cli.TARGET_LOCK_DIR_ENV: str(target_locks)}, clear=False):
+            with mock.patch.dict(os.environ, {layout.TARGET_LOCK_DIR_ENV: str(target_locks)}, clear=False):
                 self.assertEqual(cli.ack(args), 0)
 
-            self.assertTrue(cli.ack_path(root, "queue-only-ack").exists())
+            self.assertTrue(layout.ack_path(root, "queue-only-ack").exists())
             self.assertFalse(target_locks.exists())
 
     def test_daemon_reconciles_retained_lease_after_sandboxed_ack(self) -> None:
@@ -1314,14 +1315,14 @@ class CliTests(unittest.TestCase):
                 target={"kind": "session", "value": "deferred-lease-session"},
             )
             cli.ensure_daemon_dirs(root)
-            cli.move_request(cli.request_path(root, "pending", "deferred-lease-ack"), root / "failed")
-            failed_path = cli.request_path(root, "failed", "deferred-lease-ack")
+            cli.move_request(layout.request_path(root, "pending", "deferred-lease-ack"), root / "failed")
+            failed_path = layout.request_path(root, "failed", "deferred-lease-ack")
             failed = cli.load_request(failed_path)
             failed["retain_target_lease"] = True
             cli.write_request(failed_path, failed)
             args = argparse.Namespace(queue_dir=str(root), id="deferred-lease-ack", message=None)
 
-            with mock.patch.dict(os.environ, {cli.TARGET_LOCK_DIR_ENV: str(target_locks)}, clear=False):
+            with mock.patch.dict(os.environ, {layout.TARGET_LOCK_DIR_ENV: str(target_locks)}, clear=False):
                 cli.retain_target_lease(root, failed)
                 lease_path = cli.retained_target_lease_path(failed)
                 self.assertIsNotNone(lease_path)
@@ -1335,8 +1336,8 @@ class CliTests(unittest.TestCase):
                 cli.reconcile_acknowledged_retained_leases(root)
                 self.assertFalse(lease_path.exists())
 
-            self.assertTrue(cli.request_path(root, "done", "deferred-lease-ack").exists())
-            self.assertTrue(cli.ack_path(root, "deferred-lease-ack").exists())
+            self.assertTrue(layout.request_path(root, "done", "deferred-lease-ack").exists())
+            self.assertTrue(layout.ack_path(root, "deferred-lease-ack").exists())
 
     def test_late_ack_reconciles_failed_request_to_done(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -1345,20 +1346,20 @@ class CliTests(unittest.TestCase):
             self._write_request(root, "late-failed-ack", tmp, target=target)
             cli.ensure_daemon_dirs(root)
             cli.move_request(
-                cli.request_path(root, "pending", "late-failed-ack"),
+                layout.request_path(root, "pending", "late-failed-ack"),
                 root / "failed",
             )
-            failed = cli.load_request(cli.request_path(root, "failed", "late-failed-ack"))
+            failed = cli.load_request(layout.request_path(root, "failed", "late-failed-ack"))
             failed["retain_target_lease"] = True
-            cli.write_request(cli.request_path(root, "failed", "late-failed-ack"), failed)
+            cli.write_request(layout.request_path(root, "failed", "late-failed-ack"), failed)
             args = argparse.Namespace(queue_dir=str(root), id="late-failed-ack", message="late delivery completed")
 
-            with mock.patch.dict(os.environ, {cli.TARGET_LOCK_DIR_ENV: str(Path(tmp) / "target-locks")}, clear=False):
+            with mock.patch.dict(os.environ, {layout.TARGET_LOCK_DIR_ENV: str(Path(tmp) / "target-locks")}, clear=False):
                 cli.retain_target_lease(root, failed)
                 self.assertEqual(cli.ack(args), 0)
-                self.assertFalse(cli.request_path(root, "failed", "late-failed-ack").exists())
-                self.assertTrue(cli.request_path(root, "done", "late-failed-ack").exists())
-                self.assertTrue(cli.ack_path(root, "late-failed-ack").exists())
+                self.assertFalse(layout.request_path(root, "failed", "late-failed-ack").exists())
+                self.assertTrue(layout.request_path(root, "done", "late-failed-ack").exists())
+                self.assertTrue(layout.ack_path(root, "late-failed-ack").exists())
                 self.assertFalse(cli.retained_target_lease_is_held(failed))
 
     def test_late_ack_releases_manual_recovery_lease_across_queue_roots(self) -> None:
@@ -1368,14 +1369,14 @@ class CliTests(unittest.TestCase):
             target = {"kind": "session", "value": "late-ack-thread"}
             self._write_request(root_a, "late-failed-ack", tmp, target=target)
             cli.ensure_daemon_dirs(root_a)
-            cli.move_request(cli.request_path(root_a, "pending", "late-failed-ack"), root_a / "failed")
-            failed = cli.load_request(cli.request_path(root_a, "failed", "late-failed-ack"))
+            cli.move_request(layout.request_path(root_a, "pending", "late-failed-ack"), root_a / "failed")
+            failed = cli.load_request(layout.request_path(root_a, "failed", "late-failed-ack"))
             failed["retain_target_lease"] = True
-            cli.write_request(cli.request_path(root_a, "failed", "late-failed-ack"), failed)
+            cli.write_request(layout.request_path(root_a, "failed", "late-failed-ack"), failed)
             self._write_request(root_b, "same-session", tmp, target=target)
             args = argparse.Namespace(queue_dir=str(root_a), id="late-failed-ack", message=None)
 
-            with mock.patch.dict(os.environ, {cli.TARGET_LOCK_DIR_ENV: str(Path(tmp) / "target-locks")}, clear=False):
+            with mock.patch.dict(os.environ, {layout.TARGET_LOCK_DIR_ENV: str(Path(tmp) / "target-locks")}, clear=False):
                 cli.retain_target_lease(root_a, failed)
                 self.assertIsNone(cli.select_pending(root_b, time.time()))
                 self.assertEqual(cli.ack(args), 0)
@@ -1388,13 +1389,13 @@ class CliTests(unittest.TestCase):
             target = {"kind": "session", "value": "restart-thread"}
             self._write_request(root_a, "reconciled", tmp, target=target)
             cli.ensure_daemon_dirs(root_a)
-            cli.move_request(cli.request_path(root_a, "pending", "reconciled"), root_a / "done")
-            completed = cli.load_request(cli.request_path(root_a, "done", "reconciled"))
+            cli.move_request(layout.request_path(root_a, "pending", "reconciled"), root_a / "done")
+            completed = cli.load_request(layout.request_path(root_a, "done", "reconciled"))
             self._write_request(root_b, "same-session", tmp, target=target)
 
-            with mock.patch.dict(os.environ, {cli.TARGET_LOCK_DIR_ENV: str(Path(tmp) / "target-locks")}, clear=False):
+            with mock.patch.dict(os.environ, {layout.TARGET_LOCK_DIR_ENV: str(Path(tmp) / "target-locks")}, clear=False):
                 cli.retain_target_lease(root_a, completed)
-                cli.write_request(cli.ack_path(root_a, "reconciled"), {"id": "reconciled", "marked_at": time.time()})
+                cli.write_request(layout.ack_path(root_a, "reconciled"), {"id": "reconciled", "marked_at": time.time()})
                 self.assertEqual(cli.select_pending(root_b, time.time()).stem, "same-session")
                 self.assertFalse(cli.retained_target_lease_is_held(completed))
 
@@ -1403,11 +1404,11 @@ class CliTests(unittest.TestCase):
             root = Path(tmp) / "queue"
             target = {"kind": "session", "value": "reconcile-thread"}
             self._write_request(root, "reconciled", tmp, target=target)
-            request = cli.load_request(cli.request_path(root, "pending", "reconciled"))
+            request = cli.load_request(layout.request_path(root, "pending", "reconciled"))
 
-            with mock.patch.dict(os.environ, {cli.TARGET_LOCK_DIR_ENV: str(Path(tmp) / "target-locks")}, clear=False):
+            with mock.patch.dict(os.environ, {layout.TARGET_LOCK_DIR_ENV: str(Path(tmp) / "target-locks")}, clear=False):
                 cli.retain_target_lease(root, request)
-                cli.write_request(cli.ack_path(root, "reconciled"), {"id": "reconciled", "marked_at": time.time()})
+                cli.write_request(layout.ack_path(root, "reconciled"), {"id": "reconciled", "marked_at": time.time()})
                 lock = cli.acquire_retained_target_lease_lock(request, blocking=False)
                 self.assertIsNotNone(lock)
                 try:
@@ -1422,14 +1423,14 @@ class CliTests(unittest.TestCase):
             target = {"kind": "session", "value": "timeout-thread"}
             self._write_request(root, "timeout-ack", tmp, target=target)
             cli.ensure_daemon_dirs(root)
-            cli.move_request(cli.request_path(root, "pending", "timeout-ack"), root / "running")
-            request = cli.load_request(cli.request_path(root, "running", "timeout-ack"))
+            cli.move_request(layout.request_path(root, "pending", "timeout-ack"), root / "running")
+            request = cli.load_request(layout.request_path(root, "running", "timeout-ack"))
             args = argparse.Namespace(queue_dir=str(root), id="timeout-ack", message=None)
 
-            with mock.patch.dict(os.environ, {cli.TARGET_LOCK_DIR_ENV: str(Path(tmp) / "target-locks")}, clear=False):
+            with mock.patch.dict(os.environ, {layout.TARGET_LOCK_DIR_ENV: str(Path(tmp) / "target-locks")}, clear=False):
                 cli.retain_target_lease(root, request)
                 self.assertEqual(cli.ack(args), 0)
-                self.assertTrue(cli.request_path(root, "running", "timeout-ack").exists())
+                self.assertTrue(layout.request_path(root, "running", "timeout-ack").exists())
                 self.assertFalse(cli.retained_target_lease_is_held(request))
 
     def test_ack_racing_final_failed_transition_converges_to_done(self) -> None:
@@ -1444,25 +1445,25 @@ class CliTests(unittest.TestCase):
                 if source.parent.name == "running" and destination == root / "failed":
                     cli.retain_target_lease(root, cli.load_request(source))
                     cli.write_request(
-                        cli.ack_path(root, request_id),
+                        layout.ack_path(root, request_id),
                         {"id": request_id, "marked_at": time.time()},
                     )
                 return original_move(source, destination)
 
             completed = subprocess.CompletedProcess(["codex"], 125)
             with (
-                mock.patch.dict(os.environ, {cli.TARGET_LOCK_DIR_ENV: str(Path(tmp) / "target-locks")}, clear=False),
+                mock.patch.dict(os.environ, {layout.TARGET_LOCK_DIR_ENV: str(Path(tmp) / "target-locks")}, clear=False),
                 mock.patch.object(cli, "run_resume_until_exit_or_ack", return_value=(completed, False, False)),
                 mock.patch.object(cli, "move_request", side_effect=move_with_late_ack),
             ):
                 self.assertTrue(cli.process_one(root, args))
-                request = cli.load_request(cli.request_path(root, "done", request_id))
+                request = cli.load_request(layout.request_path(root, "done", request_id))
                 self.assertFalse(cli.retained_target_lease_is_held(request))
 
-            self.assertTrue(cli.ack_path(root, request_id).exists())
-            self.assertTrue(cli.request_path(root, "done", request_id).exists())
-            self.assertFalse(cli.request_path(root, "failed", request_id).exists())
-            self.assertFalse(cli.request_path(root, "running", request_id).exists())
+            self.assertTrue(layout.ack_path(root, request_id).exists())
+            self.assertTrue(layout.request_path(root, "done", request_id).exists())
+            self.assertFalse(layout.request_path(root, "failed", request_id).exists())
+            self.assertFalse(layout.request_path(root, "running", request_id).exists())
 
     def test_ack_releases_queue_for_other_session_but_keeps_same_session_lease(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -1481,7 +1482,7 @@ class CliTests(unittest.TestCase):
             with mock.patch.dict(os.environ, {"ATC_CODEX_BIN": str(fake_codex)}):
                 self.assertTrue(cli.process_one(root, args))
             self.assertLess(time.monotonic() - started, 2.0)
-            self.assertTrue(cli.request_path(root, "running", "a-running").exists())
+            self.assertTrue(layout.request_path(root, "running", "a-running").exists())
             self.assertTrue(cli.delivery_lock_is_held(root, "a-running"))
 
             self._write_request(root, "b-same", tmp, target={"kind": "session", "value": "session-a"})
@@ -1489,19 +1490,19 @@ class CliTests(unittest.TestCase):
             self.assertEqual(cli.select_pending(root, time.time()).stem, "c-other")
 
             cli.recover_running(root)
-            self.assertTrue(cli.request_path(root, "running", "a-running").exists())
+            self.assertTrue(layout.request_path(root, "running", "a-running").exists())
             for delivery in cli._BACKGROUND_RESUMES.values():
                 delivery.deadline = time.monotonic() - 1.0
             cli.reap_background_resumes()
             self.assertFalse(cli._BACKGROUND_RESUMES)
             cli.recover_running(root)
-            self.assertTrue(cli.request_path(root, "done", "a-running").exists())
+            self.assertTrue(layout.request_path(root, "done", "a-running").exists())
 
     def test_delivery_rechecks_ack_after_lock_before_spawning_worker(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "queue"
             self._write_request(root, "ack-race", tmp, target={"kind": "session", "value": "race-session"})
-            request = cli.load_request(cli.request_path(root, "pending", "ack-race"))
+            request = cli.load_request(layout.request_path(root, "pending", "ack-race"))
             args = argparse.Namespace(resume_timeout=10.0)
             original_acquire = cli.acquire_owner_lock
 
@@ -1512,8 +1513,8 @@ class CliTests(unittest.TestCase):
                 blocking: bool,
             ) -> tuple[object, Path] | None:
                 lock = original_acquire(queue_root, lock_id, blocking=blocking)
-                if lock_id == cli.delivery_lock_id("ack-race"):
-                    cli.write_request(cli.ack_path(root, "ack-race"), {"id": "ack-race", "marked_at": time.time()})
+                if lock_id == layout.delivery_lock_id("ack-race"):
+                    cli.write_request(layout.ack_path(root, "ack-race"), {"id": "ack-race", "marked_at": time.time()})
                 return lock
 
             with (
@@ -1532,8 +1533,8 @@ class CliTests(unittest.TestCase):
             root = Path(tmp) / "queue"
             self._write_request(root, "held-canceled", tmp, target={"kind": "session", "value": "held-session"})
             cli.ensure_daemon_dirs(root)
-            cli.move_request(cli.request_path(root, "pending", "held-canceled"), root / "canceled")
-            delivery_lock = cli.acquire_owner_lock(root, cli.delivery_lock_id("held-canceled"), blocking=False)
+            cli.move_request(layout.request_path(root, "pending", "held-canceled"), root / "canceled")
+            delivery_lock = cli.acquire_owner_lock(root, layout.delivery_lock_id("held-canceled"), blocking=False)
             self.assertIsNotNone(delivery_lock)
             try:
                 self._write_request(root, "same-target", tmp, target={"kind": "session", "value": "held-session"})
@@ -1549,7 +1550,7 @@ class CliTests(unittest.TestCase):
             root_b = Path(tmp) / "queue-b"
             target = {"kind": "session", "value": "shared-session"}
             self._write_request(root_a, "owner", tmp, target=target)
-            owner = cli.load_request(cli.request_path(root_a, "pending", "owner"))
+            owner = cli.load_request(layout.request_path(root_a, "pending", "owner"))
             self._write_request(root_b, "a-same", tmp, target=target)
             self._write_request(
                 root_b,
@@ -1560,7 +1561,7 @@ class CliTests(unittest.TestCase):
 
             with mock.patch.dict(
                 os.environ,
-                {cli.TARGET_LOCK_DIR_ENV: str(Path(tmp) / "global-target-locks")},
+                {layout.TARGET_LOCK_DIR_ENV: str(Path(tmp) / "global-target-locks")},
             ):
                 lease = cli.acquire_target_lock(owner, blocking=False)
                 self.assertIsNotNone(lease)
@@ -1579,13 +1580,13 @@ class CliTests(unittest.TestCase):
             root_b = Path(tmp) / "queue-b"
             target = {"kind": "session", "value": "race-session"}
             self._write_request(root_a, "owner", tmp, target=target)
-            owner = cli.load_request(cli.request_path(root_a, "pending", "owner"))
+            owner = cli.load_request(layout.request_path(root_a, "pending", "owner"))
             self._write_request(root_b, "contender", tmp, target=target)
             args = argparse.Namespace(retries=3, retry_delay=0.0, retry_backoff=2.0, resume_timeout=10.0)
 
             with mock.patch.dict(
                 os.environ,
-                {cli.TARGET_LOCK_DIR_ENV: str(Path(tmp) / "global-target-locks")},
+                {layout.TARGET_LOCK_DIR_ENV: str(Path(tmp) / "global-target-locks")},
             ):
                 lease = cli.acquire_target_lock(owner, blocking=False)
                 self.assertIsNotNone(lease)
@@ -1599,7 +1600,7 @@ class CliTests(unittest.TestCase):
                 finally:
                     cli.release_owner_lock(lease, remove=False)
 
-            pending = cli.request_path(root_b, "pending", "contender")
+            pending = layout.request_path(root_b, "pending", "contender")
             self.assertTrue(pending.exists())
             request = json.loads(pending.read_text(encoding="utf-8"))
             self.assertEqual(request["attempts"], 0)
@@ -1620,13 +1621,13 @@ class CliTests(unittest.TestCase):
                 "retain_target_lease": True,
             }
             cli.ensure_daemon_dirs(root_a)
-            cli.write_request(cli.request_path(root_a, "failed", "desktop-unknown"), failed)
+            cli.write_request(layout.request_path(root_a, "failed", "desktop-unknown"), failed)
             self._write_request(root_b, "contender", tmp, target=target)
             args = argparse.Namespace(retries=3, retry_delay=0.0, retry_backoff=2.0, resume_timeout=10.0)
 
             with mock.patch.dict(
                 os.environ,
-                {cli.TARGET_LOCK_DIR_ENV: str(Path(tmp) / "global-target-locks")},
+                {layout.TARGET_LOCK_DIR_ENV: str(Path(tmp) / "global-target-locks")},
             ):
                 cli.retain_target_lease(root_a, failed)
                 with (
@@ -1636,7 +1637,7 @@ class CliTests(unittest.TestCase):
                     self.assertTrue(cli.process_one(root_b, args))
                 spawn.assert_not_called()
 
-            pending = cli.request_path(root_b, "pending", "contender")
+            pending = layout.request_path(root_b, "pending", "contender")
             self.assertTrue(pending.exists())
             request = json.loads(pending.read_text(encoding="utf-8"))
             self.assertEqual(request["attempts"], 0)
@@ -1661,12 +1662,12 @@ class CliTests(unittest.TestCase):
                 os.environ,
                 {
                     "ATC_CODEX_BIN": str(fake_codex),
-                    cli.TARGET_LOCK_DIR_ENV: str(Path(tmp) / "global-target-locks"),
+                    layout.TARGET_LOCK_DIR_ENV: str(Path(tmp) / "global-target-locks"),
                 },
             ):
                 self.assertTrue(cli.process_one(root_a, args))
                 self._write_request(root_b, "same-session", tmp, target=target)
-                contender = cli.load_request(cli.request_path(root_b, "pending", "same-session"))
+                contender = cli.load_request(layout.request_path(root_b, "pending", "same-session"))
                 self.assertTrue(cli.target_lock_is_held(contender))
                 self.assertIsNone(cli.select_pending(root_b, time.time()))
 
@@ -1681,21 +1682,21 @@ class CliTests(unittest.TestCase):
             root = Path(tmp) / "queue"
             self._write_request(root, "cancel-race", tmp)
             cli.ensure_daemon_dirs(root)
-            cli.move_request(cli.request_path(root, "pending", "cancel-race"), root / "running")
-            running = cli.request_path(root, "running", "cancel-race")
+            cli.move_request(layout.request_path(root, "pending", "cancel-race"), root / "running")
+            running = layout.request_path(root, "running", "cancel-race")
             data = json.loads(running.read_text(encoding="utf-8"))
 
             def cancel_during_move(source: Path, destination: Path) -> Path:
                 canceled = dict(data)
                 canceled.update({"canceled_at": time.time(), "canceled_from": "running"})
-                cli.write_request(cli.request_path(root, "canceled", "cancel-race"), canceled)
+                cli.write_request(layout.request_path(root, "canceled", "cancel-race"), canceled)
                 source.unlink()
                 raise FileNotFoundError(source)
 
             with mock.patch.object(cli, "move_request", side_effect=cancel_during_move):
                 cli.recover_running(root)
 
-            self.assertTrue(cli.request_path(root, "canceled", "cancel-race").exists())
+            self.assertTrue(layout.request_path(root, "canceled", "cancel-race").exists())
 
     @unittest.skipUnless(os.name == "posix", "POSIX SIGKILL/session inheritance; Windows has native handle tests")
     def test_real_daemon_sigkill_does_not_redeliver_live_resume(self) -> None:
@@ -1736,7 +1737,7 @@ class CliTests(unittest.TestCase):
             try:
                 deadline = time.time() + 10.0
                 while time.time() < deadline:
-                    if cli.request_path(root, "running", "restart-lease").exists() and launch_log.exists():
+                    if layout.request_path(root, "running", "restart-lease").exists() and launch_log.exists():
                         child_pid = int(launch_log.read_text(encoding="utf-8").splitlines()[0])
                         break
                     time.sleep(0.05)
@@ -1754,7 +1755,7 @@ class CliTests(unittest.TestCase):
                 )
                 self.assertEqual(replacement.returncode, 0)
                 self.assertEqual(len(launch_log.read_text(encoding="utf-8").splitlines()), 1)
-                self.assertTrue(cli.request_path(root, "running", "restart-lease").exists())
+                self.assertTrue(layout.request_path(root, "running", "restart-lease").exists())
                 self.assertTrue(cli.delivery_lock_is_held(root, "restart-lease"))
 
                 os.kill(child_pid, signal.SIGTERM)
@@ -1762,7 +1763,7 @@ class CliTests(unittest.TestCase):
                 while time.time() < deadline and cli.delivery_lock_is_held(root, "restart-lease"):
                     time.sleep(0.05)
                 cli.recover_running(root)
-                self.assertTrue(cli.request_path(root, "pending", "restart-lease").exists())
+                self.assertTrue(layout.request_path(root, "pending", "restart-lease").exists())
             finally:
                 if daemon.poll() is None:
                     daemon.kill()
@@ -1794,7 +1795,7 @@ class CliTests(unittest.TestCase):
                 descendant_pid = int(descendant_pid_path.read_text(encoding="utf-8"))
                 os.kill(descendant_pid, 0)
                 self.assertFalse(cli.delivery_lock_is_held(root, "no-fd-leak"))
-                self.assertTrue(cli.request_path(root, "pending", "no-fd-leak").exists())
+                self.assertTrue(layout.request_path(root, "pending", "no-fd-leak").exists())
             finally:
                 if descendant_pid is not None:
                     try:
@@ -1892,13 +1893,13 @@ class CliTests(unittest.TestCase):
     def test_state_home_is_independent_of_the_codex_profile(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             with mock.patch.dict(os.environ, {"ATC_HOME": str(Path(tmp) / "atc"), "CODEX_HOME": str(Path(tmp) / "codex")}):
-                self.assertEqual(cli.daemon_state_dir(), Path(tmp) / "atc")
-                self.assertEqual(cli.queue_dir(), Path(tmp) / "atc" / "queue")
-                self.assertEqual(cli.callback_hook_path(), Path(tmp) / "atc" / "callback-hook.md")
+                self.assertEqual(layout.daemon_state_dir(), Path(tmp) / "atc")
+                self.assertEqual(layout.queue_dir(), Path(tmp) / "atc" / "queue")
+                self.assertEqual(layout.callback_hook_path(), Path(tmp) / "atc" / "callback-hook.md")
             environment = {name: value for name, value in os.environ.items() if name != "ATC_HOME"}
             environment.update(HOME=tmp, USERPROFILE=tmp)
             with mock.patch.dict(os.environ, environment, clear=True):
-                self.assertEqual(cli.daemon_state_dir(), Path(tmp) / ".atc")
+                self.assertEqual(layout.daemon_state_dir(), Path(tmp) / ".atc")
 
     def test_callback_hook_file_is_created_once_and_preserves_user_content(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -2980,7 +2981,7 @@ class CliTests(unittest.TestCase):
                 },
                 clear=False,
             ),
-            mock.patch.object(cli, "codex_home", return_value=Path("/tmp/codex-home")),
+            mock.patch.object(layout, "codex_home", return_value=Path("/tmp/codex-home")),
         ):
             expected = None if os.name == "nt" else Path("/tmp/codex-home/app-server-control/app-server-control.sock")
             self.assertEqual(cli.desktop_app_server_socket(request), expected)
@@ -3066,7 +3067,7 @@ class CliTests(unittest.TestCase):
                         os.environ,
                         {
                             "CODEX_LONG_TASK_DELIVERY_LOCK_FDS": json.dumps([lock_fd]),
-                            cli.TARGET_LOCK_DIR_ENV: str(Path(tmp) / "target-locks"),
+                            layout.TARGET_LOCK_DIR_ENV: str(Path(tmp) / "target-locks"),
                         },
                         clear=False,
                     ),
@@ -3084,7 +3085,7 @@ class CliTests(unittest.TestCase):
             self.assertTrue(result["manual_recovery_required"])
             self.assertTrue(delivery.closed)
             popen.assert_not_called()
-            with mock.patch.dict(os.environ, {cli.TARGET_LOCK_DIR_ENV: str(Path(tmp) / "target-locks")}, clear=False):
+            with mock.patch.dict(os.environ, {layout.TARGET_LOCK_DIR_ENV: str(Path(tmp) / "target-locks")}, clear=False):
                 self.assertTrue(cli.retained_target_lease_is_held(request))
 
     def test_desktop_delivery_worker_clears_timeout_marker_after_late_ack(self) -> None:
@@ -3131,7 +3132,7 @@ class CliTests(unittest.TestCase):
                         os.environ,
                         {
                             "CODEX_LONG_TASK_DELIVERY_LOCK_FDS": json.dumps([lock_fd]),
-                            cli.TARGET_LOCK_DIR_ENV: str(Path(tmp) / "target-locks"),
+                            layout.TARGET_LOCK_DIR_ENV: str(Path(tmp) / "target-locks"),
                         },
                         clear=False,
                     ),
@@ -3145,7 +3146,7 @@ class CliTests(unittest.TestCase):
                 os.close(read_fd)
 
             self.assertEqual(json.loads(output.getvalue())["returncode"], 0)
-            with mock.patch.dict(os.environ, {cli.TARGET_LOCK_DIR_ENV: str(Path(tmp) / "target-locks")}, clear=False):
+            with mock.patch.dict(os.environ, {layout.TARGET_LOCK_DIR_ENV: str(Path(tmp) / "target-locks")}, clear=False):
                 self.assertFalse(cli.retained_target_lease_is_held(request))
 
     def test_manual_desktop_recovery_retains_target_lease_until_canceled(self) -> None:
@@ -3161,8 +3162,8 @@ class CliTests(unittest.TestCase):
                 "prompt": "wake up",
                 "retain_target_lease": True,
             }
-            cli.write_request(cli.request_path(root, "failed", "desktop-unknown"), request)
-            with mock.patch.dict(os.environ, {cli.TARGET_LOCK_DIR_ENV: str(Path(tmp) / "target-locks")}, clear=False):
+            cli.write_request(layout.request_path(root, "failed", "desktop-unknown"), request)
+            with mock.patch.dict(os.environ, {layout.TARGET_LOCK_DIR_ENV: str(Path(tmp) / "target-locks")}, clear=False):
                 cli.retain_target_lease(root, request)
                 self.assertTrue(cli.target_has_live_resume(root, request))
                 self.assertTrue(cli.cancel_one(root, "desktop-unknown", "manual recovery resolved"))
@@ -3183,9 +3184,9 @@ class CliTests(unittest.TestCase):
                 "retain_target_lease": True,
             }
             cli.ensure_daemon_dirs(root_a)
-            cli.write_request(cli.request_path(root_a, "failed", "desktop-unknown"), failed)
+            cli.write_request(layout.request_path(root_a, "failed", "desktop-unknown"), failed)
             self._write_request(root_b, "same-session", tmp, target=target)
-            with mock.patch.dict(os.environ, {cli.TARGET_LOCK_DIR_ENV: str(Path(tmp) / "target-locks")}, clear=False):
+            with mock.patch.dict(os.environ, {layout.TARGET_LOCK_DIR_ENV: str(Path(tmp) / "target-locks")}, clear=False):
                 cli.retain_target_lease(root_a, failed)
                 self.assertIsNone(cli.select_pending(root_b, time.time()))
                 self.assertTrue(cli.cancel_one(root_a, "desktop-unknown", "manual recovery resolved"))
@@ -3197,10 +3198,10 @@ class CliTests(unittest.TestCase):
             target = {"kind": "session", "value": "timeout-thread"}
             self._write_request(root, "timeout-cancel", tmp, target=target)
             cli.ensure_daemon_dirs(root)
-            cli.move_request(cli.request_path(root, "pending", "timeout-cancel"), root / "running")
-            request = cli.load_request(cli.request_path(root, "running", "timeout-cancel"))
+            cli.move_request(layout.request_path(root, "pending", "timeout-cancel"), root / "running")
+            request = cli.load_request(layout.request_path(root, "running", "timeout-cancel"))
 
-            with mock.patch.dict(os.environ, {cli.TARGET_LOCK_DIR_ENV: str(Path(tmp) / "target-locks")}, clear=False):
+            with mock.patch.dict(os.environ, {layout.TARGET_LOCK_DIR_ENV: str(Path(tmp) / "target-locks")}, clear=False):
                 cli.retain_target_lease(root, request)
                 self.assertTrue(cli.cancel_one(root, "timeout-cancel", "stop after timeout"))
                 self.assertFalse(cli.retained_target_lease_is_held(request))

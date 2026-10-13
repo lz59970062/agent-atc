@@ -15,6 +15,7 @@ from unittest import mock
 
 from agent_atc.harness.claude import channel as claude_channel, session as claude_code
 from agent_atc import cli
+from agent_atc.store import layout
 
 SRC = str(Path(__file__).resolve().parents[1] / "src")
 SESSION = "3f0c9a52-claude-session"
@@ -35,12 +36,12 @@ class ChannelOptInTests(unittest.TestCase):
     def test_launch_adds_the_server_and_the_development_flag(self) -> None:
         root = Path("/q")
         command = claude_channel.launch_command("/bin/claude", root, ["--resume", SESSION],
-                                                {cli.TARGET_LOCK_DIR_ENV: "/locks", "PATH": "/bin"})
+                                                {layout.TARGET_LOCK_DIR_ENV: "/locks", "PATH": "/bin"})
         self.assertEqual(command[0], "/bin/claude")
         self.assertEqual(command[3:6], ["--dangerously-load-development-channels", "server:atc", "--resume"])
         server = json.loads(command[2])["mcpServers"]["atc"]
         self.assertEqual(server["args"][-3:], ["_claude-channel", "--queue-dir", "/q"])
-        self.assertEqual(server["env"], {cli.TARGET_LOCK_DIR_ENV: "/locks"})
+        self.assertEqual(server["env"], {layout.TARGET_LOCK_DIR_ENV: "/locks"})
         self.assertTrue(claude_channel.channel_enabled(command))
 
 
@@ -53,7 +54,7 @@ class ChannelServerTests(unittest.TestCase):
         self.environment = {
             "CODEX_HOME": str(self.directory / "codex-home"), "ATC_HOME": str(self.directory / "codex-home" / "atc-home"),
             "CLAUDE_CONFIG_DIR": str(self.directory / "claude"),
-            cli.TARGET_LOCK_DIR_ENV: str(self.directory / "target-locks"),
+            layout.TARGET_LOCK_DIR_ENV: str(self.directory / "target-locks"),
         }
         patcher = mock.patch.dict(os.environ, self.environment)
         patcher.start()
@@ -75,7 +76,7 @@ class ChannelServerTests(unittest.TestCase):
         request = cli.make_request(args, prompt)
         with contextlib.redirect_stderr(io.StringIO()):
             self.assertEqual(cli.enqueue_existing_request(self.root, request, prompt), 0)
-        return cli.request_path(self.root, "pending", ident)
+        return layout.request_path(self.root, "pending", ident)
 
     def server(self, *, enabled: bool = True, ack_grace: float = 3600.0) -> claude_channel.ChannelServer:
         with mock.patch.object(claude_channel, "parent_command_line",
@@ -129,7 +130,7 @@ class ChannelServerTests(unittest.TestCase):
         self.assertFalse(claude_code.channel_is_held(OTHER_SESSION))
         # The daemon only sees callbacks the channel does not own.
         selected = cli.select_pending(self.root, time.time() + 2 * claude_code.LIVE_ACK_GRACE_SECONDS)
-        self.assertIn(selected, (codex, cli.request_path(self.root, "pending", "cb-other")))
+        self.assertIn(selected, (codex, layout.request_path(self.root, "pending", "cb-other")))
         self.assertNotEqual(selected, mine)
         # A stray `atc wait` in the channel session exits instead of printing a duplicate.
         errors = io.StringIO()

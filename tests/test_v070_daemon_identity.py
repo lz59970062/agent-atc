@@ -16,6 +16,7 @@ from pathlib import Path
 from unittest import mock
 
 from agent_atc import cli
+from agent_atc.store import layout
 
 
 IDENTITY = {"boot_id": "current-boot", "machine_id": "current-machine",
@@ -37,7 +38,7 @@ class StandaloneDaemonIdentityTests(unittest.TestCase):
                 mock.patch.object(signal, "SIGHUP", 1, create=True),
                 mock.patch.object(cli, "fsync_directory", side_effect=cli.windows_io.fsync_directory),
                 mock.patch.object(cli, "acquire_owner_lock", side_effect=lambda root, ident, blocking:
-                    cli.windows_io.acquire_path_lock(cli.owner_lock_path(root, ident), blocking=blocking)),
+                    cli.windows_io.acquire_path_lock(layout.owner_lock_path(root, ident), blocking=blocking)),
             ):
                 patcher.start()
                 self.addCleanup(patcher.stop)
@@ -51,8 +52,8 @@ class StandaloneDaemonIdentityTests(unittest.TestCase):
         self.runtime = self.state / "daemon-runtime.json"
         self.args = argparse.Namespace(queue_dir=str(self.queue))
         for patcher in (
-            mock.patch.object(cli, "daemon_state_dir", return_value=self.state),
-            mock.patch.object(cli, "daemon_runtime_path", return_value=self.runtime),
+            mock.patch.object(layout, "daemon_state_dir", return_value=self.state),
+            mock.patch.object(layout, "daemon_runtime_path", return_value=self.runtime),
         ):
             patcher.start()
             self.addCleanup(patcher.stop)

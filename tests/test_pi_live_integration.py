@@ -21,6 +21,7 @@ import unittest
 from unittest import mock
 
 from agent_atc import cli
+from agent_atc.store import layout
 from agent_atc.harness.pi import channel as bridge
 from agent_atc.runtime import worker_command
 
@@ -144,7 +145,7 @@ def runtime_fixture(tmp_path):
     # No inherited real-provider credentials or personal Pi configuration.
     environment = {'PATH':os.environ['PATH'], 'HOME':str(temporary_home), 'LANG':'C.UTF-8',
         'PI_CODING_AGENT_DIR':str(profile), 'CODEX_HOME':str(tmp_path/'codex'),
-        cli.TARGET_LOCK_DIR_ENV:str(tmp_path/'target-locks'), 'NO_PROXY':'127.0.0.1', 'no_proxy':'127.0.0.1'}
+        layout.TARGET_LOCK_DIR_ENV:str(tmp_path/'target-locks'), 'NO_PROXY':'127.0.0.1', 'no_proxy':'127.0.0.1'}
     with mock.patch.dict(os.environ, environment, clear=True):
         try:
             yield provider, environment, tmp_path, profile
@@ -163,8 +164,8 @@ def callback(runtime, session, callback_id, delivery=None):
         request['version'] = 3
         request.pop('pi_delivery')
     provider.callbacks[token] = shlex.join(worker_command('ack','--queue-dir',str(queue_dir),'--id',callback_id))
-    payload={'request':request,'queue_dir':str(queue_dir),'prompt':token,'ack_path':str(cli.ack_path(queue_dir,callback_id)),
-        'canceled_path':str(cli.request_path(queue_dir,'canceled',callback_id)), 'command':cli.resume_command(request),
+    payload={'request':request,'queue_dir':str(queue_dir),'prompt':token,'ack_path':str(layout.ack_path(queue_dir,callback_id)),
+        'canceled_path':str(layout.request_path(queue_dir,'canceled',callback_id)), 'command':cli.resume_command(request),
         'cwd':str(directory),'timeout':20}
     return request, payload
 

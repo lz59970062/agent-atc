@@ -11,6 +11,7 @@ from pathlib import Path
 from unittest import mock
 
 from agent_atc import cli
+from agent_atc.store import layout
 from agent_atc.owners import SystemdUserBackend
 
 
@@ -149,7 +150,7 @@ class DaemonServiceSelectionTests(unittest.TestCase):
         ), mock.patch.object(cli, "running_in_container", return_value=True), mock.patch.object(
             cli.shutil, "which", side_effect=lambda name: "/usr/bin/" + name
         ), mock.patch.object(cli, "systemd_user_dir", return_value=self.directory / "systemd"), mock.patch.object(
-            cli, "daemon_state_dir", return_value=self.directory / "state"
+            layout, "daemon_state_dir", return_value=self.directory / "state"
         ), mock.patch.object(cli, "install_skill", return_value=0), mock.patch.object(
             cli, "ensure_callback_hook_file"
         ), mock.patch.object(cli, "report_claude_agent_readiness"), mock.patch.object(

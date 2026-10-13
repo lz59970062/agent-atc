@@ -15,6 +15,7 @@ from unittest import mock
 
 from agent_atc.harness.claude import session as claude_code
 from agent_atc import cli
+from agent_atc.store import layout
 
 SRC = str(Path(__file__).resolve().parents[1] / "src")
 SESSION = "3f0c9a52-claude-session"
@@ -173,7 +174,7 @@ class LiveWaiterTests(unittest.TestCase):
         self.root = self.directory / "queue"
         self.environment = {
             "CODEX_HOME": str(self.directory / "codex-home"), "ATC_HOME": str(self.directory / "codex-home" / "atc-home"),
-            cli.TARGET_LOCK_DIR_ENV: str(self.directory / "target-locks"),
+            layout.TARGET_LOCK_DIR_ENV: str(self.directory / "target-locks"),
         }
         patcher = mock.patch.dict(os.environ, self.environment)
         patcher.start()
@@ -190,7 +191,7 @@ class LiveWaiterTests(unittest.TestCase):
         request.update(extra)
         with contextlib.redirect_stderr(io.StringIO()):
             self.assertEqual(cli.enqueue_existing_request(self.root, request, prompt), 0)
-        return cli.request_path(self.root, "pending", ident)
+        return layout.request_path(self.root, "pending", ident)
 
     def run_wait(self, **overrides: object) -> tuple[int, str, str]:
         values = dict(queue_dir=str(self.root), session=SESSION, task=None, timeout=None, poll_interval=0.05)
@@ -238,7 +239,7 @@ class LiveWaiterTests(unittest.TestCase):
         self.assertEqual((status, output), (2, ""))
         self.assertIn("only for Claude Code", errors)
         self.assertEqual(self.run_wait(timeout=0.2)[0], 3)
-        self.assertTrue(cli.request_path(self.root, "pending", "cb-codex").exists())
+        self.assertTrue(layout.request_path(self.root, "pending", "cb-codex").exists())
 
     def test_wait_prints_callback_defers_daemon_and_ack_finishes_it(self) -> None:
         self.enqueue("cb-other", session="another-session")
@@ -249,14 +250,14 @@ class LiveWaiterTests(unittest.TestCase):
         self.assertIn("ack", output)
         self.assertNotIn("cb-other", output)
 
-        pending = cli.request_path(self.root, "pending", "cb-1")
+        pending = layout.request_path(self.root, "pending", "cb-1")
         request = json.loads(pending.read_text(encoding="utf-8"))
         self.assertGreater(request["next_attempt_at"], time.time() + 1000)
         self.assertEqual(cli.select_pending(self.root, time.time()).stem, "cb-other")
         self.assertFalse(any((self.root / "running").glob("*.json")))
 
         self.ack("cb-1")
-        self.assertTrue(cli.request_path(self.root, "done", "cb-1").exists())
+        self.assertTrue(layout.request_path(self.root, "done", "cb-1").exists())
         self.assertFalse(pending.exists())
 
     def test_unacknowledged_callback_comes_back_until_acked(self) -> None:
@@ -269,8 +270,8 @@ class LiveWaiterTests(unittest.TestCase):
         self.assertEqual(self.run_wait(timeout=0.2)[0], 3)
 
     def test_wait_filters_by_task_and_reports_acknowledged_task(self) -> None:
-        cli.managed_task_dir(self.root, "abcd1234").mkdir(parents=True)
-        cli.managed_task_path(self.root, "abcd1234").write_text("{}", encoding="utf-8")
+        layout.managed_task_dir(self.root, "abcd1234").mkdir(parents=True)
+        layout.managed_task_path(self.root, "abcd1234").write_text("{}", encoding="utf-8")
         self.enqueue("cb-unrelated", managed_task_id="ffff0000")
         self.enqueue("cb-task", managed_task_id="abcd1234")
         status, output, _ = self.run_wait(task="abcd1234")
@@ -289,7 +290,7 @@ class LiveWaiterTests(unittest.TestCase):
         status, output, _ = self.run_wait()
         self.assertEqual(status, 0)
         self.assertIn("cb-failed", output)
-        self.assertTrue(cli.request_path(self.root, "pending", "cb-failed").exists())
+        self.assertTrue(layout.request_path(self.root, "pending", "cb-failed").exists())
 
     def test_wait_skips_callbacks_the_daemon_is_delivering(self) -> None:
         self.enqueue("cb-busy")

@@ -135,6 +135,7 @@ def confirmed_owner_dead(owner: dict) -> bool:
     PID namespaces, and permission/probe failures are never proof of death.
     """
     from ... import cli
+    from ...store import layout
     identity = owner.get("owner_identity")
     current = cli.daemon_process_identity(os.getpid())
     if owner.get("managed") is not True or not isinstance(identity, dict) or not current:
@@ -175,6 +176,7 @@ def confirmed_owner_dead(owner: dict) -> bool:
 
 def valid_live_lease(owner: dict) -> bool:
     from ... import cli
+    from ...store import layout
     pid = owner.get("lease_pid")
     return (type(pid) is int and pid > 0 and isinstance(owner.get("lease_identity"), dict)
             and cli.daemon_process_identity(pid) == owner["lease_identity"])
@@ -190,6 +192,7 @@ def require_delivery_support(request: dict, owner: dict) -> None:
 
 def inspect_route(request: dict) -> dict:
     from ... import cli
+    from ...store import layout
     report = {"transport": "pi_live_session", "status": "blocked", "end_to_end_verified": False,
               "pi_delivery": request.get("pi_delivery", "follow-up")}
     try:
@@ -244,6 +247,7 @@ class PiDelivery:
                     if owner.get("owner_nonce") == self.nonce and owner.get("state") == "reserved":
                         storage.write_request(self.directory / "owner.json", self.previous_owner)
                         from ... import cli
+                        from ...store import layout
                         cli.release_retained_target_lease(self.queue, self.request)
                 except (OSError, ValueError, RuntimeError):
                     pass
@@ -290,6 +294,7 @@ def publication_outcome(root: Path, request: dict, timeout: float, now: float) -
     outcome unknown, which is never replayed automatically.
     """
     from ... import cli
+    from ...store import layout
     published = request.get("pi_published_at")
     if not isinstance(published, (int, float)):
         return None
@@ -310,6 +315,7 @@ def publication_outcome(root: Path, request: dict, timeout: float, now: float) -
 def reconcile_publications(root: Path, timeout: float) -> None:
     """Daemon hook: settle Pi callbacks whose live owner can no longer ACK them."""
     from ... import cli
+    from ...store import layout
     now = time.time()
     for path in sorted((root / "pending").glob("*.json")):
         try:
@@ -318,7 +324,7 @@ def reconcile_publications(root: Path, timeout: float) -> None:
             continue
         request_id = str(request.get("id", path.stem))
         if (cli.request_agent(request) != "pi" or "pi_published_at" not in request
-                or cli.ack_path(root, request_id).exists() or cli.is_canceled(root, request_id)):
+                or layout.ack_path(root, request_id).exists() or cli.is_canceled(root, request_id)):
             continue
         reason = publication_outcome(root, request, timeout, now)
         if reason is None:
@@ -341,7 +347,7 @@ def reconcile_publications(root: Path, timeout: float) -> None:
         except FileNotFoundError:
             continue  # ACKed or canceled meanwhile.
         print(f"atc: warning: Pi callback {request_id}: {reason}; manual recovery required", file=sys.stderr)
-        if cli.ack_path(root, request_id).exists():  # ack() raced the move.
+        if layout.ack_path(root, request_id).exists():  # ack() raced the move.
             try:
                 cli.move_request(failed, root / "done")
                 cli.release_retained_target_lease(root, request)
@@ -355,6 +361,7 @@ def extension_path() -> Path:
 
 def _reservation(directory: Path, session: str, profile: str) -> dict:
     from ... import cli
+    from ...store import layout
     header = session_header(session)
     return {"version": 1, "session_file": session, "session_id": header["id"],
             "channel_dir": str(directory), "profile_dir": profile, "managed": True,
@@ -366,6 +373,7 @@ def _reservation(directory: Path, session: str, profile: str) -> dict:
 
 def prepare_delivery(payload: dict) -> PiDelivery:
     from ... import cli
+    from ...store import layout
     request = payload["request"]
     try:
         directory, owner = owner_record(request)
@@ -454,6 +462,7 @@ def install_extension(args: argparse.Namespace) -> int:
     ensure_private_directory(profile / "agent-atc" / "channels")
     print(f"Installed Pi callback extension: {target}")
     from ... import cli
+    from ...store import layout
     skill = profile / "skills" / "agent-atc"
     if cli.install_skill_tree(skill, include_codex_plugin=False, force=bool(getattr(args, "force", False)),
                               keep_existing=not getattr(args, "force", False), focused="pi_skill") != 0:
@@ -474,6 +483,7 @@ def _fresh_session(profile: Path, cwd: Path) -> str:
 
 def _verify_owner_identity(directory: Path, nonce: str) -> bool:
     from ... import cli
+    from ...store import layout
     try:
         owner = read_record(directory / "owner.json")
         if owner.get("owner_nonce") != nonce or owner.get("state") not in ("active", "closed"):
@@ -501,6 +511,7 @@ def record_spawn(directory: Path, nonce: str, process) -> None:
     verifies the actual Node owner instead, and absence of evidence blocks recovery.
     """
     from ... import cli
+    from ...store import layout
     identity = cli.daemon_process_identity(process.pid)
     if identity is not None:
         storage.write_request(directory / f"spawn-{nonce}.json", {
@@ -509,6 +520,7 @@ def record_spawn(directory: Path, nonce: str, process) -> None:
 
 def managed_pi(args: argparse.Namespace) -> int:
     from ... import cli
+    from ...store import layout
     forwarded = list(args.pi_args)
     if forwarded[:1] == ["--"]:
         forwarded.pop(0)

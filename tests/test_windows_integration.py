@@ -20,6 +20,7 @@ import unittest
 from unittest import mock
 
 from agent_atc import cli
+from agent_atc.store import layout
 from agent_atc.install import diagnostics, windows_service
 from agent_atc.owners import OwnerState
 from agent_atc.owners.windows import WindowsBackend, scheduler_call, process_identity
@@ -37,7 +38,7 @@ class WindowsIntegrationTests(unittest.TestCase):
         self.profile = self.directory / "profile"
         self.environment = mock.patch.dict(os.environ, {
             "CODEX_HOME": str(self.profile), "ATC_HOME": str(self.profile / "atc-home"), "CLAUDE_CONFIG_DIR": str(self.directory / "claude"),
-            cli.TARGET_LOCK_DIR_ENV: str(self.directory / "target locks"),
+            layout.TARGET_LOCK_DIR_ENV: str(self.directory / "target locks"),
             "ATC_CODEX_BIN": sys.executable,
         })
         self.environment.start()
@@ -70,7 +71,7 @@ class WindowsIntegrationTests(unittest.TestCase):
             wrapped_command=[sys.executable, str(script), *arguments])
         with contextlib.redirect_stderr(io.StringIO()):
             self.assertEqual(cli.run(args), 0)
-        path = next(cli.managed_tasks_root(self.root).glob("*/task.json"))
+        path = next(layout.managed_tasks_root(self.root).glob("*/task.json"))
         task = cli.load_managed_task(path)
         self.owners.append(WindowsBackend().owner_name(task["id"], 1, self.root))
         return path, task
@@ -102,9 +103,9 @@ class WindowsIntegrationTests(unittest.TestCase):
             cli.recover_managed_tasks(self.root)
             self.assertEqual(executions.read_text(encoding="utf-8").splitlines(), ["run"])
             release.touch()
-            callback = cli.request_path(self.root, "pending", task["id"])
+            callback = layout.request_path(self.root, "pending", task["id"])
             self.wait_until(callback.exists, "runner did not publish its callback")
-            result = json.loads(cli.managed_result_path(self.root, task["id"]).read_text(encoding="utf-8"))
+            result = json.loads(layout.managed_result_path(self.root, task["id"]).read_text(encoding="utf-8"))
             self.assertEqual(result["exit_code"], 7)
             self.assertEqual(cli.load_managed_task(task_path)["state"], "completed")
             self.assertIn("completed after coordinator exit", Path(task["log_path"]).read_text(encoding="utf-8"))

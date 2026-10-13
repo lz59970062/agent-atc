@@ -13,6 +13,7 @@ import unittest
 from unittest import mock
 
 from agent_atc import cli
+from agent_atc.store import layout
 from agent_atc.harness.codex.desktop import macos as desktop
 from agent_atc.harness.codex.desktop.connection import load_unix_bridge_endpoint
 from agent_atc.harness.codex.desktop.core import app_server_arguments
@@ -52,7 +53,7 @@ class DesktopLauncherTests(unittest.TestCase):
 
     def test_prepare_only_writes_configuration_and_quoted_launcher(self):
         args = argparse.Namespace(desktop_action="prepare", app=str(self.app), wrapper=str(self.wrapper), force=False)
-        with mock.patch.object(sys, "platform", "darwin"), mock.patch.object(cli, "codex_home", return_value=self.profile), \
+        with mock.patch.object(sys, "platform", "darwin"), mock.patch.object(layout, "codex_home", return_value=self.profile), \
                 mock.patch.object(desktop, "preflight", return_value={"launch_ready": False, "launch_blockers": ["desktop_running"]}), \
                 mock.patch.object(desktop.subprocess, "Popen") as launch, contextlib.redirect_stdout(io.StringIO()):
             self.assertEqual(desktop.command(args), 0)
@@ -64,7 +65,7 @@ class DesktopLauncherTests(unittest.TestCase):
 
     def test_launch_refuses_existing_desktop_without_signaling_it(self):
         args = argparse.Namespace(desktop_action="launch", check_only=False)
-        with mock.patch.object(sys, "platform", "darwin"), mock.patch.object(cli, "codex_home", return_value=self.profile), \
+        with mock.patch.object(sys, "platform", "darwin"), mock.patch.object(layout, "codex_home", return_value=self.profile), \
                 mock.patch.object(desktop, "read_config", return_value=self.config), \
                 mock.patch.object(desktop, "preflight", return_value={"launch_ready": False}), \
                 mock.patch.object(desktop.subprocess, "Popen") as launch, \

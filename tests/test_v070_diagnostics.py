@@ -13,6 +13,7 @@ from pathlib import Path
 from unittest import mock
 
 from agent_atc import cli
+from agent_atc.store import layout
 from agent_atc.install import diagnostics
 
 
@@ -185,7 +186,7 @@ class HealthReportTests(unittest.TestCase):
         ), mock.patch.object(cli.subprocess, "Popen") as child, contextlib.redirect_stderr(io.StringIO()) as errors:
             self.assertEqual(cli.main(), 0)
         child.assert_not_called()
-        tasks = list(cli.managed_tasks_root(self.queue).glob("*/task.json"))
+        tasks = list(layout.managed_tasks_root(self.queue).glob("*/task.json"))
         self.assertEqual(len(tasks), 1)
         task = json.loads(tasks[0].read_text())
         report = json.loads(errors.getvalue().split("[atc-status]", 1)[1].split("[/atc-status]", 1)[0])
@@ -219,7 +220,7 @@ class HealthReportTests(unittest.TestCase):
             cli.main()
         report = json.loads(errors.getvalue().split("[atc-status]", 1)[1].split("[/atc-status]", 1)[0])
         self.assertEqual(report["work"], {"state": "not_submitted"})
-        self.assertFalse(cli.managed_tasks_root(self.queue).exists())
+        self.assertFalse(layout.managed_tasks_root(self.queue).exists())
 
     def test_done_reports_callback_prerequisites_without_requiring_execution_backend(self):
         args = self.arguments(mode="done", backend="systemd", _health_work={"state": "callback_queued", "id": "done-1234"})
@@ -240,7 +241,7 @@ class HealthReportTests(unittest.TestCase):
         self.assertNotIn("EXTRA_SECRET", json.dumps(report))
 
     def test_task_storage_readiness_is_checked_separately_from_queue_storage(self):
-        tasks = cli.managed_tasks_root(self.queue)
+        tasks = layout.managed_tasks_root(self.queue)
         with mock.patch.object(diagnostics, "queue_writable", side_effect=lambda path: path != tasks):
             report = diagnostics.inspect(self.arguments())
         self.assertIn("tasks_unwritable", self.issue_codes(report))

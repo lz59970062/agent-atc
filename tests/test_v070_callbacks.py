@@ -19,6 +19,7 @@ from unittest import mock
 
 from agent_atc.core import envelope as callbacks
 from agent_atc import cli
+from agent_atc.store import layout
 from test_cli import assert_private_file
 
 
@@ -108,7 +109,7 @@ class CompactCallbackTests(unittest.TestCase):
             result = subprocess.run([shell, "-NoProfile", "-NonInteractive", "-Command", candidates[0]],
                                     capture_output=True, text=True, timeout=20)
             self.assertEqual(result.returncode, 0, result.stderr)
-            ack = cli.request_path(self.root, "acks", "ack-correct-queue")
+            ack = layout.request_path(self.root, "acks", "ack-correct-queue")
             self.assertEqual(json.loads(ack.read_text(encoding="utf-8"))["id"], "ack-correct-queue")
         else:
             self.assertEqual(

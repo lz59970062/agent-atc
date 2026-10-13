@@ -22,22 +22,23 @@ def agent_directory() -> Path:
 
 def service_text(args: argparse.Namespace) -> str:
     from .. import cli
+    from ..store import layout
 
     label = macos.validate_label(args.name)
     command = cli.daemon_command(args)
     command[0] = str(Path(command[0]).expanduser().absolute())
     # Pin even the default queue: launchd does not inherit the submitting shell.
     if "--queue-dir" in command:
-        command[command.index("--queue-dir") + 1] = str(cli.queue_dir(args).resolve())
+        command[command.index("--queue-dir") + 1] = str(layout.queue_dir(args).resolve())
     else:
-        command.extend(["--queue-dir", str(cli.queue_dir(args).resolve())])
+        command.extend(["--queue-dir", str(layout.queue_dir(args).resolve())])
     environment = cli.daemon_environment(args, include_proxy_values=False)
-    environment.update(CODEX_HOME=str(cli.codex_home().resolve()),
-                       CLAUDE_CONFIG_DIR=str(cli.claude_home().resolve()))
-    for name in (cli.TARGET_LOCK_DIR_ENV, cli.APP_SERVER_SOCKET_ENV, cli.ALLOW_APP_SERVER_SOCKET_OVERRIDE_ENV):
+    environment.update(CODEX_HOME=str(layout.codex_home().resolve()),
+                       CLAUDE_CONFIG_DIR=str(layout.claude_home().resolve()))
+    for name in (layout.TARGET_LOCK_DIR_ENV, cli.APP_SERVER_SOCKET_ENV, cli.ALLOW_APP_SERVER_SOCKET_OVERRIDE_ENV):
         if name in os.environ:
             environment[name] = os.environ[name]
-    log = str(cli.daemon_state_dir().resolve() / "daemon.log")
+    log = str(layout.daemon_state_dir().resolve() / "daemon.log")
     return macos.plist_text({
         "Label": label, "ProgramArguments": command, "WorkingDirectory": str(Path.home()),
         "EnvironmentVariables": environment, "RunAtLoad": True, "KeepAlive": True,
@@ -48,6 +49,7 @@ def service_text(args: argparse.Namespace) -> str:
 
 def install(args: argparse.Namespace) -> int:
     from .. import cli
+    from ..store import layout
 
     try:
         text = service_text(args)
@@ -61,7 +63,7 @@ def install(args: argparse.Namespace) -> int:
             print(f"LaunchAgent already exists at {target}. Re-run with --force to overwrite.", file=sys.stderr)
             return 1
         cli.configure_proxy_environment(args)
-        state_dir = cli.daemon_state_dir()
+        state_dir = layout.daemon_state_dir()
         state_dir.mkdir(parents=True, exist_ok=True)
         os.chmod(state_dir, 0o700)
         cli.write_private_text(target, text)
@@ -78,7 +80,7 @@ def install(args: argparse.Namespace) -> int:
 
         state, pid, registered = macos.job_status(args.name)
         if state == OwnerState.ALIVE:
-            if pid is not None and cli.send_standalone_reload(pid, expected_queue=cli.queue_dir(args)):
+            if pid is not None and cli.send_standalone_reload(pid, expected_queue=layout.queue_dir(args)):
                 print("Requested coordinator reload after callback deliveries drain. LaunchAgent settings apply at next load.")
                 return 0
             print("atc: running LaunchAgent could not be verified for safe reload; it was left untouched", file=sys.stderr)
@@ -87,7 +89,7 @@ def install(args: argparse.Namespace) -> int:
             print("atc: LaunchAgent state is unknown; refusing to replace or start another coordinator", file=sys.stderr)
             return 1
 
-        queue = cli.queue_dir(args)
+        queue = layout.queue_dir(args)
         admission = cli.acquire_owner_lock(queue, "daemon-singleton", blocking=False)
         if admission is None:
             runtime = cli.read_daemon_runtime()

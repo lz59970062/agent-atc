@@ -15,6 +15,7 @@ import unittest
 from unittest import mock
 
 from agent_atc import cli
+from agent_atc.store import layout
 from agent_atc.install import diagnostics, launchd_service
 from agent_atc.owners import LaunchdBackend, LaunchError, OwnerState
 from agent_atc.owners import macos, screen
@@ -135,7 +136,7 @@ class MacOSContracts(unittest.TestCase):
                 "execution_backend": "launchd", "state": "launching", "agent": "codex",
                 "launch_attempt_count": 1, "launch_boot_id": "boot", "machine_id": "host",
                 "execution_owner": self.backend.owner_name(ident, 1, self.queue)}
-        args = argparse.Namespace(task_file=str(cli.managed_task_path(self.queue, ident)), attempt=1)
+        args = argparse.Namespace(task_file=str(layout.managed_task_path(self.queue, ident)), attempt=1)
         for change in ({"state": "running"}, {"launch_attempt_count": 2},
                        {"launch_boot_id": "previous"}, {"launch_boot_id": None},
                        {"machine_id": "foreign"}, {"execution_owner": "atc.other"}, {}):
@@ -173,7 +174,7 @@ class MacOSContracts(unittest.TestCase):
             cli.recover_managed_tasks(self.queue)
             cli.recover_managed_tasks(self.queue)
             launch.assert_called_once()
-        current = cli.load_managed_task(cli.managed_task_path(self.queue, "abcd1234"))
+        current = cli.load_managed_task(layout.managed_task_path(self.queue, "abcd1234"))
         self.assertTrue(current["launch_uncertain"])
         self.assertEqual(current["state"], "launching")
 
@@ -192,8 +193,8 @@ class MacOSContracts(unittest.TestCase):
             kill.assert_not_called()
 
     def test_coordinator_preview_is_read_only_private_and_pins_profiles(self):
-        with mock.patch.object(cli, "codex_home", return_value=self.directory / "codex"), mock.patch.object(
-            cli, "claude_home", return_value=self.directory / "claude"
+        with mock.patch.object(layout, "codex_home", return_value=self.directory / "codex"), mock.patch.object(
+            layout, "claude_home", return_value=self.directory / "claude"
         ), mock.patch.dict(os.environ, {"HTTPS_PROXY": "SECRET_PROXY", "API_KEY": "SECRET_API"}), mock.patch.object(
             macos, "launchctl"
         ) as control, mock.patch.object(cli, "configure_proxy_environment") as configure, contextlib.redirect_stdout(io.StringIO()) as output:
@@ -211,7 +212,7 @@ class MacOSContracts(unittest.TestCase):
 
     def test_installation_reloads_live_coordinator_without_bootout(self):
         with mock.patch.object(launchd_service, "agent_directory", return_value=self.directory / "agents"), mock.patch.object(
-            cli, "daemon_state_dir", return_value=self.directory / "state"
+            layout, "daemon_state_dir", return_value=self.directory / "state"
         ), mock.patch.object(cli, "configure_proxy_environment"), mock.patch.object(
             macos, "launchctl", return_value=subprocess.CompletedProcess([], 0)
         ) as control, mock.patch.object(macos, "job_status", return_value=(OwnerState.ALIVE, 1234, True)), mock.patch.object(

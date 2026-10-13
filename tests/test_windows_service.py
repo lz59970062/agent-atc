@@ -13,6 +13,7 @@ import unittest
 from unittest import mock
 
 from agent_atc import cli
+from agent_atc.store import layout
 from agent_atc.install import windows_service
 from agent_atc.owners import windows
 from agent_atc.system import windows_io
@@ -151,11 +152,11 @@ class WindowsServiceTests(unittest.TestCase):
     def test_draining_finds_orphan_delivery_after_ack_moved_callback_to_done(self):
         cli.ensure_daemon_dirs(self.root)
         request_id = "acknowledged-orphan"
-        cli.write_request(cli.request_path(self.root, "done", request_id), {
+        cli.write_request(layout.request_path(self.root, "done", request_id), {
             "version": 1, "id": request_id, "cwd": str(self.directory), "prompt": "fixture",
             "agent": "codex", "target": {"kind": "session", "value": "fixture-session"},
         })
-        lock = cli.acquire_owner_lock(self.root, cli.delivery_lock_id(request_id), blocking=False)
+        lock = cli.acquire_owner_lock(self.root, layout.delivery_lock_id(request_id), blocking=False)
         self.assertIsNotNone(lock)
         try:
             # The parent coordinator died after ACK, so the replacement has no

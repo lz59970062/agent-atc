@@ -30,37 +30,40 @@ def service_owner(name: str, profile: Path) -> str:
 
 def config_path(name: str) -> Path:
     from .. import cli
-    service_owner(name, cli.codex_home())  # Validate before making a path.
-    return cli.daemon_state_dir() / f"windows-{name}.json"
+    from ..store import layout
+    service_owner(name, layout.codex_home())  # Validate before making a path.
+    return layout.daemon_state_dir() / f"windows-{name}.json"
 
 
 def configuration(args: argparse.Namespace) -> dict[str, object]:
     from .. import cli
-    root = cli.queue_dir(args).resolve()
+    from ..store import layout
+    root = layout.queue_dir(args).resolve()
     command = cli.daemon_command(args)
     if "--queue-dir" in command:
         command[command.index("--queue-dir") + 1] = str(root)
     else:
         command.extend(["--queue-dir", str(root)])
     environment = cli.daemon_environment(args, include_proxy_values=False)
-    environment.update(CODEX_HOME=str(cli.codex_home().resolve()),
-                       CLAUDE_CONFIG_DIR=str(cli.claude_home().resolve()),
+    environment.update(CODEX_HOME=str(layout.codex_home().resolve()),
+                       CLAUDE_CONFIG_DIR=str(layout.claude_home().resolve()),
                        PYTHONIOENCODING="utf-8")
-    for name in (cli.TARGET_LOCK_DIR_ENV, cli.APP_SERVER_BRIDGE_FILE_ENV):
+    for name in (layout.TARGET_LOCK_DIR_ENV, cli.APP_SERVER_BRIDGE_FILE_ENV):
         if name in os.environ:
             environment[name] = os.environ[name]
     return {
         "version": 1, "run": True,
-        "owner": service_owner(args.name, cli.codex_home()),
+        "owner": service_owner(args.name, layout.codex_home()),
         "command": command, "queue_dir": str(root),
-        "environment": environment, "cwd": str(cli.daemon_state_dir().resolve()),
-        "log_path": str(cli.daemon_state_dir().resolve() / "daemon.log"),
+        "environment": environment, "cwd": str(layout.daemon_state_dir().resolve()),
+        "log_path": str(layout.daemon_state_dir().resolve() / "daemon.log"),
         "restart_sec": max(1.0, float(args.restart_sec)),
     }
 
 
 def install(args: argparse.Namespace) -> int:
     from .. import cli
+    from ..store import layout
     try:
         config = configuration(args)
         target = config_path(args.name).resolve()
@@ -162,12 +165,13 @@ def run_coordinator(path: Path) -> int:
 def uninstall(args: argparse.Namespace) -> int:
     """Remove login registration, allowing live callback owners to drain."""
     from .. import cli
+    from ..store import layout
     try:
         path = config_path(args.name)
         config = json.loads(path.read_text(encoding="utf-8"))
         root = Path(str(config["queue_dir"]))
         runtime = cli.read_daemon_runtime()
-        active = windows_io.probe_existing_lock(cli.owner_lock_path(root, "daemon-singleton"))
+        active = windows_io.probe_existing_lock(layout.owner_lock_path(root, "daemon-singleton"))
         if active and (not runtime or not cli.daemon_supports_hot_reload(runtime.get("pid"), expected_queue=root)):
             raise ValueError("coordinator identity is unverified; inspect before removal")
         config["run"] = False

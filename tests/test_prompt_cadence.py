@@ -12,6 +12,7 @@ import unittest
 from unittest import mock
 
 from agent_atc import cli
+from agent_atc.store import layout
 from test_cli import patch_inprocess_delivery_worker
 
 
@@ -239,7 +240,7 @@ class PromptCadenceTests(unittest.TestCase):
 
     def test_policy_show_is_read_only_and_partial_updates_preserve_other_interval(self):
         state = self.policy.parent / "fresh-state"
-        with mock.patch.object(cli, "daemon_state_dir", return_value=state), \
+        with mock.patch.object(layout, "daemon_state_dir", return_value=state), \
                 contextlib.redirect_stdout(io.StringIO()) as output:
             self.assertEqual(cli.callback_prompt_policy(argparse.Namespace(system_every=None, user_every=None)), 0)
             self.assertFalse(state.exists())

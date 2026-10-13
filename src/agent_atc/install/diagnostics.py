@@ -78,8 +78,9 @@ def queue_writable(root: Path) -> bool:
 def coordinator_issue(root: Path) -> dict[str, str] | None:
     """Observe the existing singleton inode without creating a new lock file."""
     from .. import cli
+    from ..store import layout
 
-    path = cli.owner_lock_path(root, "daemon-singleton")
+    path = layout.owner_lock_path(root, "daemon-singleton")
     try:
         if os.name == "nt":
             if not windows_io.probe_existing_lock(path):
@@ -112,6 +113,7 @@ def coordinator_issue(root: Path) -> dict[str, str] | None:
 def environment_profile() -> dict[str, object]:
     """Describe this runtime; supported backends determine useful checks."""
     from .. import cli
+    from ..store import layout
 
     operating_system = {"linux": "linux", "darwin": "macos", "win32": "windows"}.get(sys.platform, "other")
     return {"os": operating_system, "container": cli.running_in_container() if sys.platform == "linux" else False,
@@ -127,6 +129,7 @@ def runtime_issues(root: Path) -> list[dict[str, object]]:
     a manager outage does not flood the calling Agent with one block per task.
     """
     from .. import cli
+    from ..store import layout
 
     grouped: dict[tuple[str, str], dict[str, object]] = {}
     now = time.time()
@@ -143,7 +146,7 @@ def runtime_issues(root: Path) -> list[dict[str, object]]:
             item["task_ids"].append(task_id)
 
     def result_for(task: dict[str, object]) -> dict[str, object] | None:
-        path = cli.managed_result_path(root, str(task["id"]))
+        path = layout.managed_result_path(root, str(task["id"]))
         try:
             result = json.loads(path.read_text(encoding="utf-8"))
         except FileNotFoundError:
@@ -168,7 +171,7 @@ def runtime_issues(root: Path) -> list[dict[str, object]]:
                 "Inspect the saved result and restore callback handoff for this ID through the coordinator; do not rerun the business command.")
 
     try:
-        tasks_root = cli.managed_tasks_root(root)
+        tasks_root = layout.managed_tasks_root(root)
         if not tasks_root.exists():
             return []
         paths = sorted(directory / "task.json" for directory in tasks_root.iterdir()
@@ -263,9 +266,10 @@ def _work(args: argparse.Namespace) -> dict[str, object]:
 def inspect(args: argparse.Namespace) -> dict[str, object]:
     """Check supported environment, configuration and observed lifecycle state."""
     from .. import cli
+    from ..store import layout
 
     operation = _operation(args)
-    root = cli.queue_dir(args).expanduser().absolute()
+    root = layout.queue_dir(args).expanduser().absolute()
     issues: list[dict[str, object]] = []
     work = _work(args)
     environment = environment_profile()
@@ -305,7 +309,7 @@ def inspect(args: argparse.Namespace) -> dict[str, object]:
                 "systemd on Linux, or Task Scheduler for the logged-in Windows user.")})
     if not queue_writable(root):
         issues.append({"code": "queue_unwritable", "action": "Repair access/storage for this queue and its existing directories without deleting task records."})
-    if operation in {"run", "agent"} and not queue_writable(cli.managed_tasks_root(root)):
+    if operation in {"run", "agent"} and not queue_writable(layout.managed_tasks_root(root)):
         issues.append({"code": "tasks_unwritable", "action": "Repair access/storage for this queue's managed task directory; the default tasks directory is beside the queue."})
     issue = coordinator_issue(root)
     if issue is not None:
@@ -357,7 +361,7 @@ def inspect(args: argparse.Namespace) -> dict[str, object]:
         issues.append({"code": "callback_transport_blocked", "kind": "callback", "component": "callback_delivery",
                        "action": capability.get("action", "Configure the original session's shared Core; do not resubmit saved work.")})
 
-    skill_home = {"codex": cli.codex_home, "claude": cli.claude_home,
+    skill_home = {"codex": layout.codex_home, "claude": layout.claude_home,
                   "pi": cli.pi_callback.profile_dir}.get(callback_agent or "", lambda: None)()
     if skill_home is not None and not (skill_home / "skills" / "agent-atc" / "SKILL.md").is_file():
         issues.append({"code": "skill_missing", "action": "Install the bundled ATC skill for the selected Agent so it can inspect, acknowledge and continue callbacks."})
@@ -475,6 +479,7 @@ def delivery_issues(root: Path) -> list[dict[str, object]]:
     each group. Commands, prompts and recorded exception text are never emitted.
     """
     from .. import cli
+    from ..store import layout
 
     actions = {
         "callback_transport_blocked": (
@@ -510,7 +515,7 @@ def delivery_issues(root: Path) -> list[dict[str, object]]:
             group["callback_ids"].append(callback_id)
 
     def settled(callback_id: str) -> bool:
-        return cli.ack_path(root, callback_id).exists() or cli.is_canceled(root, callback_id)
+        return layout.ack_path(root, callback_id).exists() or cli.is_canceled(root, callback_id)
 
     try:
         with os.scandir(root / "failed") as entries:

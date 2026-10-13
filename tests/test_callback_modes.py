@@ -12,6 +12,7 @@ import unittest
 from unittest import mock
 
 from agent_atc import callback_transport as transport, cli
+from agent_atc.store import layout
 
 
 class CallbackModeTests(unittest.TestCase):
@@ -56,7 +57,7 @@ class CallbackModeTests(unittest.TestCase):
 
     def test_unconfigured_desktop_refuses_before_workload_admission(self):
         args = argparse.Namespace(agent="codex", callback_mode="desktop", session="original", last=False)
-        with mock.patch.object(cli, "select_execution_backend") as backend, mock.patch.object(cli, "managed_task_dir") as directory:
+        with mock.patch.object(cli, "select_execution_backend") as backend, mock.patch.object(layout, "managed_task_dir") as directory:
             self.assertEqual(cli.submit_managed_run(args), 125)
         backend.assert_not_called()
         directory.assert_not_called()

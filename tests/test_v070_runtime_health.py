@@ -10,6 +10,7 @@ from pathlib import Path
 from unittest import mock
 
 from agent_atc import cli
+from agent_atc.store import layout
 from agent_atc.install import diagnostics
 from agent_atc.owners import OwnerState
 
@@ -43,13 +44,13 @@ class HealthArtifacts:
             "target": {"kind": "session", "value": "bound-fixture-session"},
         }
         task.update(updates)
-        self.write_json(cli.managed_task_path(self.root, task_id), task)
+        self.write_json(layout.managed_task_path(self.root, task_id), task)
         return task
 
     def result(self, task, **updates):
         result = {"version": 1, "id": task["id"], "exit_code": 7, "completed_at": 1000.0, "outcome": "completed"}
         result.update(updates)
-        self.write_json(cli.managed_result_path(self.root, task["id"]), result)
+        self.write_json(layout.managed_result_path(self.root, task["id"]), result)
 
     def callback(self, callback_id="fixture-task", state="pending", **updates):
         value = {
@@ -58,7 +59,7 @@ class HealthArtifacts:
             "prompt": "SECRET_CALLBACK_CONTENT", "last_error": "SECRET_EXCEPTION_CONTENT",
         }
         value.update(updates)
-        self.write_json(cli.request_path(self.root, state, callback_id), value)
+        self.write_json(layout.request_path(self.root, state, callback_id), value)
         return value
 
     def snapshot(self):
@@ -166,7 +167,7 @@ class RuntimeHealthTests(HealthArtifacts, unittest.TestCase):
     def test_corrupt_result_and_task_record_are_visible_without_exposing_contents(self):
         task = self.task()
         self.result(task, id="different-task", exit_code="SECRET_INVALID_RESULT")
-        invalid = cli.managed_task_path(self.root, "corrupt-record")
+        invalid = layout.managed_task_path(self.root, "corrupt-record")
         invalid.parent.mkdir(parents=True)
         invalid.write_text("SECRET_INVALID_JSON", encoding="utf-8")
         issues, _ = self.observe_tasks()
@@ -179,7 +180,7 @@ class RuntimeHealthTests(HealthArtifacts, unittest.TestCase):
         for owner in (OwnerState.ABSENT, OwnerState.UNKNOWN):
             with self.subTest(owner=owner):
                 task = self.task()
-                result_path = cli.managed_result_path(self.root, task["id"])
+                result_path = layout.managed_result_path(self.root, task["id"])
                 result_path.unlink(missing_ok=True)
 
                 def finish_during_probe(record):
@@ -199,7 +200,7 @@ class RuntimeHealthTests(HealthArtifacts, unittest.TestCase):
 
         def finish_during_probe(record):
             task.update(state="completed", exit_code=0, completed_at=1000.0)
-            self.write_json(cli.managed_task_path(self.root, task["id"]), task)
+            self.write_json(layout.managed_task_path(self.root, task["id"]), task)
             return OwnerState.ABSENT
 
         with mock.patch.object(cli, "managed_owner_state", side_effect=finish_during_probe):
@@ -224,7 +225,7 @@ class RuntimeHealthTests(HealthArtifacts, unittest.TestCase):
         probe.assert_not_called()
 
     def test_existing_callback_in_each_lifecycle_state_satisfies_result_handoff(self):
-        for state in (cli.ACTIVE_STATE, "pending", "running", "done", "failed", "canceled", "acks"):
+        for state in (layout.ACTIVE_STATE, "pending", "running", "done", "failed", "canceled", "acks"):
             task_id = f"callback-{state}"
             self.task(task_id, state="completed", completed_at=100.0)
             self.callback(task_id, state)
@@ -245,7 +246,7 @@ class RuntimeHealthTests(HealthArtifacts, unittest.TestCase):
             diagnostics, "coordinator_issue", return_value=None
         ), mock.patch.object(diagnostics.ScreenBackend, "available", return_value=True), mock.patch.object(
             diagnostics.shutil, "which", return_value="/fixture/codex"
-        ), mock.patch.object(cli, "codex_home", return_value=self.directory), mock.patch.object(
+        ), mock.patch.object(layout, "codex_home", return_value=self.directory), mock.patch.object(
             cli, "managed_owner_state", return_value=OwnerState.ABSENT
         ):
             report = diagnostics.inspect(args)
@@ -299,7 +300,7 @@ class DeliveryHealthTests(HealthArtifacts, unittest.TestCase):
         self.assertEqual(len(issues[0]["callback_ids"]), 5)
 
     def test_corrupt_failed_record_is_unverified_instead_of_claimed_delivered_or_failed(self):
-        path = cli.request_path(self.root, "failed", "invalid")
+        path = layout.request_path(self.root, "failed", "invalid")
         path.parent.mkdir(parents=True)
         path.write_text("SECRET_BAD_JSON", encoding="utf-8")
         issues = self.observe_deliveries()
