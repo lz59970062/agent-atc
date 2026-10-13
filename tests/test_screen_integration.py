@@ -20,6 +20,7 @@ from pathlib import Path
 from unittest import mock
 
 from agent_atc import cli
+from agent_atc.commands import work as work_commands
 from agent_atc.install import services
 from agent_atc.tower import main as tower
 from agent_atc.engine import dispatch
@@ -159,7 +160,7 @@ class RealStandaloneScreenTests(unittest.TestCase):
             )
             with mock.patch.dict(os.environ, environment, clear=True):
                 self.assertFalse(SystemdUserBackend().available())
-                self.assertEqual(cli.run(args), 0)
+                self.assertEqual(work_commands.run(args), 0)
             task_path = next(layout.managed_tasks_root(root).glob("*/task.json"))
             task = managed_tasks.load_managed_task(task_path)
             self.assertEqual(task["execution_backend"], "screen")
@@ -172,6 +173,7 @@ class RealStandaloneScreenTests(unittest.TestCase):
                 from pathlib import Path
                 sys.path.insert(0, {source!r})
                 from agent_atc import cli
+                from agent_atc.commands import work as work_commands
                 from agent_atc.install import services
                 from agent_atc.tower import main as tower
                 from agent_atc.engine import dispatch

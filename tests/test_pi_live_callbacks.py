@@ -11,6 +11,7 @@ import time
 import unittest
 
 from agent_atc import callback_transport, cli
+from agent_atc.commands import callbacks as callback_commands
 from agent_atc.tower import main as tower
 from agent_atc.engine import dispatch
 from agent_atc.engine import tasks as managed_tasks
@@ -108,7 +109,7 @@ class PiLiveCallbackTests(unittest.TestCase):
         queue_store.write_request(queue/'failed/fixture.json', request)
         args = argparse.Namespace(queue_dir=str(queue), id='fixture', callback_mode='cli')
         with mock.patch.dict(os.environ, {bridge.PROFILE_ENV: str(self.directory/'other-profile')}):
-            assert cli.retry_callback(args) == 0
+            assert callback_commands.retry_callback(args) == 0
         restored = dispatch.load_request(queue/'pending/fixture.json')
         assert restored['version'] == 4 and restored['pi_delivery'] == 'steer'
         for key in bridge.ROUTE_FIELDS:
@@ -196,7 +197,7 @@ class PiLiveCallbackTests(unittest.TestCase):
         (queue / 'pending' / 'other.json').unlink()
         bridge.reconcile_publications(queue, 3600)
         assert (queue / 'pending' / 'fixture.json').exists()  # Live owner: keep waiting.
-        cli.ack(argparse.Namespace(queue_dir=str(queue), id='fixture', message=None))
+        callback_commands.ack(argparse.Namespace(queue_dir=str(queue), id='fixture', message=None))
         assert (queue / 'done' / 'fixture.json').exists()
         assert not delivery_engine.retained_target_lease_is_held(request)
 
@@ -216,7 +217,7 @@ class PiLiveCallbackTests(unittest.TestCase):
                 assert failed['retain_target_lease'] is True
                 assert 'had not admitted it yet' in failed['last_error'], failed['last_error']
                 assert delivery_engine.retained_target_lease_is_held(request)  # Never replayed automatically.
-                cli.ack(argparse.Namespace(queue_dir=str(queue), id='fixture', message=None))
+                callback_commands.ack(argparse.Namespace(queue_dir=str(queue), id='fixture', message=None))
                 assert (queue / 'done' / 'fixture.json').exists()
                 assert not delivery_engine.retained_target_lease_is_held(request)
                 for state in ('done', 'acks'):

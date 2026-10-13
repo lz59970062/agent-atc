@@ -80,107 +80,10 @@ from .engine import worker as task_worker
 from .install import services
 from .install import skills as skill_install
 from .tower import main as tower
-
-
-def done(args: argparse.Namespace) -> int:
-    callback_code = dispatch.queue_callback(args, dispatch.build_prompt(args))
-    return callback_code if args.strict else 0
-
-
-def run(args: argparse.Namespace) -> int:
-    if not args.wrapped_command:
-        raise SystemExit("run mode requires a command after --")
-
-    args.command = args.command or shell.format_command(args.wrapped_command)
-    dispatch.bind_target(args)
-    if args.dry_run:
-        print(
-            "\n".join(
-                [
-                    "[atc-submission-dry-run]",
-                    f"Task: {args.task}",
-                    f"Working directory: {os.path.abspath(args.cwd)}",
-                    f"Command: {args.command}",
-                    f"Execution: daemon -> {getattr(args, 'backend', 'auto')} backend -> independent worker -> task",
-                    "No task record was written and no command was started.",
-                ]
-            )
-        )
-        return 0
-    return dispatch.submit_managed_run(args)
-
-
-def agent(args: argparse.Namespace) -> int:
-    args.agent_prompt_text = managed_tasks.agent_prompt_text(list(args.agent_prompt))
-    args.template = getattr(args, "template", None)
-    args.template_file = getattr(args, "template_file", None)
-    args.template_version = None
-    args.template_source = None
-    args.template_handoff = None
-    args.child_model = getattr(args, "child_model", None)
-    args.child_reasoning_effort = getattr(args, "child_reasoning_effort", None)
-    system_prompt_file = getattr(args, "system_prompt_file", None)
-    args.agent_system_prompt_source = None
-    args.agent_system_prompt_text = None
-    if system_prompt_file is not None and not str(system_prompt_file).strip():
-        raise SystemExit("--system-prompt-file must not be empty")
-    if not args.agent_prompt_text.strip():
-        raise SystemExit("agent mode requires non-empty task requirements")
-    if args.child_model is not None and not args.child_model.strip():
-        raise SystemExit("--model must not be empty")
-    child_adapter = get_child_agent(args.agent_worker)
-    if args.child_reasoning_effort and not child_adapter.supports_reasoning_effort:
-        raise SystemExit(f"{child_adapter.display_name} children do not support --reasoning-effort")
-    if args.template is not None or args.template_file is not None:
-        try:
-            profile = load_template(args.template, template_file=args.template_file)
-        except (OSError, ValueError) as exc:
-            raise SystemExit(f"atc: {exc}") from exc
-        args.template = profile.name
-        args.template_version = profile.version
-        args.template_source = profile.source
-        args.template_handoff = profile.handoff
-        args.child_model = args.child_model or profile.model_for(args.agent_worker)
-        args.child_reasoning_effort = args.child_reasoning_effort or profile.reasoning_effort_for(args.agent_worker)
-        system_prompt_file = system_prompt_file or profile.system_prompt_file_for(args.agent_worker)
-        args.agent_prompt_text = profile.render(args.agent_prompt_text)
-    if args.child_reasoning_effort and args.child_reasoning_effort not in child_adapter.reasoning_efforts:
-        raise SystemExit(f"unsupported {child_adapter.display_name} reasoning effort {args.child_reasoning_effort!r}")
-    if system_prompt_file is not None:
-        if not child_adapter.supports_system_prompt_file:
-            raise SystemExit(f"{child_adapter.display_name} children do not support --system-prompt-file")
-        try:
-            source = Path(system_prompt_file).expanduser().resolve()
-            args.agent_system_prompt_text = managed_tasks.read_agent_system_prompt(source)
-        except (OSError, UnicodeError, ValueError, RuntimeError) as exc:
-            raise SystemExit(f"atc: could not load system prompt file: {exc}") from exc
-        args.agent_system_prompt_source = str(source)
-    args.task_kind = "agent"
-    args.command = args.command or f"atc agent {args.agent_worker}"
-    args.wrapped_command = []
-    dispatch.bind_target(args)
-    if args.dry_run:
-        print(
-            "\n".join(
-                [
-                    "[atc-agent-submission-dry-run]",
-                    f"Task: {args.task}",
-                    f"Working directory: {os.path.abspath(args.cwd)}",
-                    f"Child agent: {child_adapter.display_name}",
-                    f"Template: {args.template or 'none'} (version {getattr(args, 'template_version', None)})",
-                    f"Template source: {args.template_source or 'none'}",
-                    f"Child model: {args.child_model or 'CLI default'}",
-                    f"Child reasoning effort: {args.child_reasoning_effort or 'CLI default'}",
-                    f"System prompt source: {args.agent_system_prompt_source or 'CLI default'}",
-                    f"Expanded prompt:\n{args.agent_prompt_text}",
-                    f"Template handoff: {args.template_handoff or 'none'}",
-                    f"Execution: daemon -> {getattr(args, 'backend', 'auto')} backend -> independent worker -> child agent",
-                    "No task record was written and no child agent was started.",
-                ]
-            )
-        )
-        return 0
-    return dispatch.submit_managed_run(args)
+from .commands import callbacks as callback_commands
+from .commands import goals as goal_commands
+from .commands import templates as template_commands
+from .commands import work as work_commands
 
 
 def add_common_flags(parser: argparse.ArgumentParser) -> None:
@@ -250,36 +153,6 @@ def add_common_flags(parser: argparse.ArgumentParser) -> None:
     )
 
 
-def template_command(args: argparse.Namespace) -> int:
-    try:
-        if args.template_action == "register":
-            result = template_registration.register(args)
-        elif args.template_action == "unregister":
-            result = template_registration.unregister(args)
-        else:
-            result = template_registration.list_templates()
-            if not args.json:
-                for entry in result:
-                    print(f"{entry['name']} ({entry['worker']}, ${entry['skill']}): {entry['description']}")
-                if not result:
-                    print("No registered child-agent templates.")
-                return 0
-            print(json.dumps(result, ensure_ascii=False, indent=2))
-            return 0
-        if args.dry_run or args.json:
-            print(json.dumps(result, ensure_ascii=False, indent=2))
-        elif args.template_action == "register":
-            print(f"Registered {result['name']} for {result['worker']}.")
-            print(f"Skill: ${result['skill']}")
-            print(f"Template: {result['template_file']}")
-        else:
-            print(f"{result['name']} is unregistered; template and system prompt files retained.")
-        return 0
-    except (OSError, ValueError, RuntimeError) as exc:
-        print(f"atc: {exc}", file=sys.stderr)
-        return 1
-
-
 def add_proxy_environment_flags(parser: argparse.ArgumentParser) -> None:
     proxy_source = parser.add_mutually_exclusive_group()
     proxy_source.add_argument(
@@ -296,412 +169,6 @@ def add_proxy_environment_flags(parser: argparse.ArgumentParser) -> None:
         action="store_true",
         help="Remove the persisted proxy environment file before updating the daemon service",
     )
-
-
-def ack(args: argparse.Namespace) -> int:
-    root = layout.queue_dir(args)
-    queue_store.ensure_daemon_dirs(root)
-    marker = layout.ack_path(root, args.id)
-    payload = {
-        "id": args.id,
-        "marked_at": time.time(),
-    }
-    if args.message:
-        payload["message"] = args.message
-    queue_store.write_request(marker, payload)
-    for state in ("failed", "running", "pending"):
-        source = layout.request_path(root, state, args.id)
-        if not source.exists():
-            continue
-        try:
-            request = dispatch.load_request(source)
-            if state == "failed" or (state == "pending" and (request.get("callback_mode") == "manual"
-                                                              or request.get("live_delivered_at"))):
-                queue_store.move_request(source, root / "done")
-            try:
-                delivery_engine.release_retained_target_lease(root, request)
-            except (OSError, RuntimeError) as exc:
-                print(
-                    f"atc: warning: callback {args.id} is durably acknowledged; "
-                    f"daemon will reconcile its retained target lease: {exc}",
-                    file=sys.stderr,
-                )
-        except FileNotFoundError:
-            continue
-        break
-    print(f"atc: acknowledged callback {args.id} in {root}", file=sys.stderr)
-    return 0
-
-
-def retry_callback(args: argparse.Namespace) -> int:
-    """Requeue a known callback; never resubmit its completed workload."""
-    root = layout.queue_dir(args).expanduser().absolute()
-    if not re.fullmatch(r"[A-Za-z0-9_-]+", args.id):
-        print("atc: invalid callback id", file=sys.stderr)
-        return 2
-    delivery_lock = target_lock = None
-    try:
-        queue_store.ensure_daemon_dirs(root)
-        delivery_lock = queue_store.acquire_owner_lock(root, layout.delivery_lock_id(args.id), blocking=False)
-        if delivery_lock is None:
-            raise ValueError("callback delivery is still active")
-        source = layout.request_path(root, "failed", args.id)
-        if not source.exists():
-            source = layout.request_path(root, "pending", args.id)
-        request = dispatch.load_request(source)
-        if source.parent.name == "pending" and request.get("callback_mode") != "manual":
-            raise ValueError("callback is already pending")
-        if layout.ack_path(root, args.id).exists() or queue_store.is_canceled(root, args.id):
-            raise ValueError("acknowledged or canceled callbacks cannot be retried")
-        if request.get("retain_target_lease") is True or delivery_engine.desktop_submission_pending(root, request):
-            raise ValueError("previous submission outcome is unknown; inspect the original session before recovery")
-        target_lock = delivery_engine.acquire_target_lock(request, blocking=False)
-        if target_lock is None or delivery_engine.retained_target_lease_is_held(request):
-            raise ValueError("the bound session has an active or unresolved delivery")
-        if args.callback_mode:
-            options = argparse.Namespace(callback_mode=args.callback_mode, agent=dispatch.request_agent(request))
-            pi_route = {key: request[key] for key in pi_callback.ROUTE_FIELDS if key in request}
-            for key in callback_transport.ROUTE_FIELDS:
-                request.pop(key, None)
-            request.update(callback_transport.selection(options))
-            request.update(pi_route)
-            request["version"] = 3 if dispatch.request_agent(request) == "pi" else 2
-            if request.get("pi_delivery") == "steer":
-                request["version"] = 4
-        capability = callback_transport.inspect_route(request)
-        if capability["status"] == "blocked":
-            raise ValueError("callback route remains blocked: " + str(capability.get("reason")))
-        history = request.setdefault("retry_history", [])
-        if not isinstance(history, list):
-            raise ValueError("callback retry history is invalid")
-        history.append({"at": time.time(), "attempts": request.get("attempts", 0), "last_error": request.get("last_error")})
-        request["retry_history"] = history[-10:]
-        request["attempts"] = 0
-        for key in ("last_error", "delivery_state", "next_attempt_at", "last_deferred_reason"):
-            request.pop(key, None)
-        if not source.exists() or layout.ack_path(root, args.id).exists() or queue_store.is_canceled(root, args.id):
-            raise ValueError("callback changed during recovery; inspect its current state")
-        queue_store.write_request(source, request)
-        if source.parent.name != "pending":
-            queue_store.move_request(source, root / "pending")
-        print(f"atc: requeued callback {args.id}; business task was not relaunched", file=sys.stderr)
-        return 0
-    except (OSError, ValueError, RuntimeError) as error:
-        print(f"atc: callback retry refused: {error}", file=sys.stderr)
-        return 2
-    finally:
-        if target_lock is not None:
-            queue_store.release_owner_lock(target_lock, remove=False)
-        if delivery_lock is not None:
-            queue_store.release_owner_lock(delivery_lock, remove=False)
-
-
-def goal_start(args: argparse.Namespace) -> int:
-    root = layout.queue_dir(args)
-    queue_store.ensure_daemon_dirs(root)
-    target, source = dispatch.resolve_target(args)
-    goal_id = args.id or uuid.uuid4().hex
-    try:
-        path = layout.goal_path(root, goal_id)
-    except ValueError as exc:
-        print(f"atc: error: {exc}", file=sys.stderr)
-        return 2
-    if args.idle_seconds <= 0:
-        print("atc: error: --idle-seconds must be positive", file=sys.stderr)
-        return 2
-    try:
-        plan_path, plan, plan_digest = goals.resolve_goal_plan_file(
-            args.cwd, getattr(args, "plan_file", None)
-        )
-    except ValueError as exc:
-        print(f"atc: error: {exc}", file=sys.stderr)
-        return 2
-    lock = queue_store.acquire_owner_lock(root, layout.goal_lock_id(goal_id), blocking=True)
-    try:
-        if path.exists():
-            print(f"atc: goal {goal_id} already exists", file=sys.stderr)
-            return 1
-        now = time.time()
-        goals.write_goal(root, {"version": 1, "id": goal_id, "task": args.task, "cwd": args.cwd, "target": target,
-                          "target_source": source, "agent": dispatch.resolve_agent(args), "state": "active", "created_at": now,
-                          "last_external_callback_at": now, "idle_seconds": args.idle_seconds,
-                          "plan_file": str(plan_path), "plan_goal": plan["goal"],
-                          "plan_sha256_at_start": plan_digest})
-    finally:
-        queue_store.release_owner_lock(lock, remove=False)
-    print(goal_id)
-    return 0
-
-
-def goal_check(args: argparse.Namespace) -> int:
-    root = layout.queue_dir(args)
-    try:
-        layout.goal_path(root, args.id)
-    except ValueError as exc:
-        print(f"atc: error: {exc}", file=sys.stderr)
-        return 2
-    lock = queue_store.acquire_owner_lock(root, layout.goal_lock_id(args.id), blocking=True)
-    try:
-        try:
-            goal = goals.load_goal(root, args.id)
-            plan_path, plan, content, digest = goals.goal_plan_snapshot(goal)
-        except (OSError, ValueError, json.JSONDecodeError) as exc:
-            print(f"atc: error: {exc}", file=sys.stderr)
-            return 1
-        if goal.get("state") == "completed":
-            print(f"atc: error: completed goal {args.id} is terminal", file=sys.stderr)
-            return 1
-        completed, total, current, remaining = goals.goal_plan_progress(plan)
-        now = time.time()
-        goal["last_plan_checked_at"] = now
-        goal["last_plan_check_sha256"] = digest
-        goal["plan_goal"] = plan["goal"]
-        goal["plan_revision"] = plan["revision"]
-        goal["plan_completed_items"] = completed
-        goal["plan_total_items"] = total
-        goals.write_goal(root, goal)
-    finally:
-        queue_store.release_owner_lock(lock, remove=False)
-
-    print(f"Goal: {plan['goal']}")
-    print(f"Plan revision: {plan['revision']}")
-    print(f"Plan file: {plan_path}")
-    print(f"Progress: {completed}/{total} path items completed")
-    if current is None:
-        print("Current item: none; the final path item is completed")
-    else:
-        print(
-            f"Current item: {current['id']} [{current['status']}] - {current['title']}"
-        )
-        print("Remaining path:")
-        for step in remaining:
-            print(f"- {step['id']} [{step['status']}] - {step['title']}")
-    print(f"Plan SHA-256: {digest}")
-    print("\n--- YAML goal plan begin ---")
-    print(content, end="" if content.endswith("\n") else "\n")
-    print("--- YAML goal plan end ---")
-    print(
-        "Compare actual work and artifacts with every path item above. Do not report the goal "
-        "complete unless the final item and every preceding item are confirmed completed."
-    )
-    return 0
-
-
-def goal_set_plan(args: argparse.Namespace) -> int:
-    root = layout.queue_dir(args)
-    try:
-        layout.goal_path(root, args.id)
-    except ValueError as exc:
-        print(f"atc: error: {exc}", file=sys.stderr)
-        return 2
-    lock = queue_store.acquire_owner_lock(root, layout.goal_lock_id(args.id), blocking=True)
-    try:
-        try:
-            goal = goals.load_goal(root, args.id)
-        except (OSError, ValueError, json.JSONDecodeError) as exc:
-            print(f"atc: error: {exc}", file=sys.stderr)
-            return 1
-        if goal.get("state") == "completed":
-            print(f"atc: error: completed goal {args.id} is terminal", file=sys.stderr)
-            return 1
-        try:
-            plan_path, plan, plan_digest = goals.resolve_goal_plan_file(
-                str(goal.get("cwd", os.getcwd())), args.plan_file
-            )
-        except ValueError as exc:
-            print(f"atc: error: {exc}", file=sys.stderr)
-            return 2
-        goal.update(
-            {
-                "plan_file": str(plan_path),
-                "plan_goal": plan["goal"],
-                "plan_revision": plan["revision"],
-                "plan_sha256_when_attached": plan_digest,
-                "plan_attached_at": time.time(),
-            }
-        )
-        for field in (
-            "last_plan_checked_at",
-            "last_plan_check_sha256",
-            "plan_completed_items",
-            "plan_total_items",
-        ):
-            goal.pop(field, None)
-        goals.write_goal(root, goal)
-    finally:
-        queue_store.release_owner_lock(lock, remove=False)
-    print(f"atc: goal {args.id} now follows YAML plan {plan_path}")
-    print("atc: run goal check before acknowledging completion")
-    return 0
-
-
-def goal_ack(args: argparse.Namespace) -> int:
-    root = layout.queue_dir(args)
-    try:
-        layout.goal_path(root, args.id)
-    except ValueError as exc:
-        print(f"atc: error: {exc}", file=sys.stderr)
-        return 2
-    if args.state == "blocked_conditions":
-        if not args.condition or not args.condition.strip():
-            print("atc: error: --condition is required for blocked_conditions", file=sys.stderr)
-            return 2
-        if args.email_after <= 0:
-            print("atc: error: --email-after must be positive", file=sys.stderr)
-            return 2
-        if args.email_to and not goals.is_single_email_recipient(args.email_to):
-            print("atc: error: invalid email recipient", file=sys.stderr)
-            return 2
-        configured_recipient = os.environ.get("ATC_BLOCKED_EMAIL_TO")
-        if args.email_to and args.email_to != configured_recipient:
-            print("atc: error: --email-to must match ATC_BLOCKED_EMAIL_TO", file=sys.stderr)
-            return 2
-    lock = queue_store.acquire_owner_lock(root, layout.goal_lock_id(args.id), blocking=True)
-    try:
-        try:
-            goal = goals.load_goal(root, args.id)
-        except (OSError, ValueError, json.JSONDecodeError) as exc:
-            print(f"atc: error: {exc}", file=sys.stderr)
-            return 1
-        if goal.get("state") == "completed" and args.state != "completed":
-            print(f"atc: error: completed goal {args.id} is terminal", file=sys.stderr)
-            return 1
-        if args.state == "completed":
-            try:
-                plan_path, plan, _, plan_digest = goals.goal_plan_snapshot(goal)
-            except ValueError as exc:
-                print(f"atc: error: {exc}", file=sys.stderr)
-                return 1
-            supplied_digest = getattr(args, "plan_sha256", None)
-            if not supplied_digest:
-                print(
-                    f"atc: error: run 'atc goal check --id {args.id}' and pass its digest "
-                    "with --plan-sha256 before completing the goal",
-                    file=sys.stderr,
-                )
-                return 2
-            checked_digest = goal.get("last_plan_check_sha256")
-            if supplied_digest != plan_digest or checked_digest != plan_digest:
-                print(
-                    f"atc: error: YAML goal plan changed or was not checked: {plan_path}; "
-                    f"rerun 'atc goal check --id {args.id}' and compare the work again",
-                    file=sys.stderr,
-                )
-                return 1
-            completed_items, total_items, current, _ = goals.goal_plan_progress(plan)
-            if current is not None:
-                print(
-                    f"atc: error: goal path is only {completed_items}/{total_items} complete; "
-                    f"current item is {current['id']} [{current['status']}] - {current['title']}",
-                    file=sys.stderr,
-                )
-                return 1
-        now = time.time()
-        goal["state"] = args.state
-        goal["state_changed_at"] = now
-        if args.message:
-            goal["message"] = args.message
-        if args.state == "blocked_conditions":
-            goals.clear_blocked_goal_email(goal)
-            goal["condition"] = args.condition
-            goal["blocked_email_to"] = args.email_to
-            goal["blocked_email_after_seconds"] = args.email_after
-        else:
-            goal.pop("condition", None)
-            goals.clear_blocked_goal_email(goal)
-            goal["completion_plan_sha256"] = plan_digest
-            goal["completion_plan_revision"] = plan["revision"]
-            goal["completion_plan_checked_at"] = goal["last_plan_checked_at"]
-        goals.write_goal(root, goal)
-    finally:
-        queue_store.release_owner_lock(lock, remove=False)
-    print(f"atc: goal {args.id} acknowledged as {args.state}")
-    return 0
-
-
-def goal_resume(args: argparse.Namespace) -> int:
-    root = layout.queue_dir(args)
-    try:
-        layout.goal_path(root, args.id)
-    except ValueError as exc:
-        print(f"atc: error: {exc}", file=sys.stderr)
-        return 2
-    lock = queue_store.acquire_owner_lock(root, layout.goal_lock_id(args.id), blocking=True)
-    try:
-        try:
-            goal = goals.load_goal(root, args.id)
-        except (OSError, ValueError, json.JSONDecodeError) as exc:
-            print(f"atc: error: {exc}", file=sys.stderr)
-            return 1
-        if goal.get("state") == "completed":
-            print("atc: error: completed goals are terminal", file=sys.stderr)
-            return 1
-        if goal.get("state") != "blocked_conditions":
-            print("atc: error: only blocked goals can be resumed", file=sys.stderr)
-            return 1
-        now = time.time()
-        goal.update({"state": "active", "state_changed_at": now, "last_external_callback_at": now})
-        goal.pop("condition", None)
-        goal.pop("last_reminder_at", None)
-        goals.clear_blocked_goal_email(goal)
-        goals.write_goal(root, goal)
-    finally:
-        queue_store.release_owner_lock(lock, remove=False)
-    print(f"atc: goal {args.id} resumed")
-    return 0
-
-
-def cancel(args: argparse.Namespace) -> int:
-    root = layout.queue_dir(args)
-    if args.all:
-        recovery.cancel_all(root, args.message)
-        return 0
-    return 0 if recovery.cancel_one(root, args.id, args.message) else 1
-
-
-def queued_items(root: Path, states: list[str]) -> list[tuple[str, Path, dict[str, object]]]:
-    items: list[tuple[str, Path, dict[str, object]]] = []
-    for state in states:
-        for path in sorted((root / state).glob("*.json")):
-            try:
-                request = dispatch.load_request(path)
-            except Exception as exc:
-                request = {"id": path.stem, "prompt": "Task: unreadable callback", "last_error": str(exc)}
-            items.append((state, path, request))
-    items.sort(key=lambda item: float(item[2].get("created_at", 0.0)))
-    return items
-
-
-def status(args: argparse.Namespace) -> int:
-    root = layout.queue_dir(args)
-    states = args.state or ["pending", "running"]
-    items = queued_items(root, states)
-    if not items:
-        if not args.quiet_empty:
-            print(f"No pending long-task callbacks in {root}")
-        return 0
-
-    counts = {state: sum(1 for item in items if item[0] == state) for state in states}
-    summary = ", ".join(f"{state}={count}" for state, count in counts.items() if count)
-    print(f"[atc] {len(items)} item(s) need attention ({summary})")
-    limit = max(1, args.limit)
-    for state, path, request in items[:limit]:
-        request_id = str(request.get("id", path.stem))
-        line = f"  - [{state}] {dispatch.request_task(request)} | {dispatch.request_target(request)} | id {request_id}"
-        if request.get("callback_mode") == "manual":
-            line += " | manual receipt; automatic callback disabled"
-        if request.get("delivery_state") == "blocked":
-            line += " | callback blocked; saved workload result retained"
-        if state == "running" and layout.ack_path(root, request_id).exists():
-            line += " | acknowledged; resumed Codex process still active"
-        error = request.get("last_error")
-        if isinstance(error, str) and error:
-            line += f" | {error}"
-        print(line)
-    if len(items) > limit:
-        print(f"  ... {len(items) - limit} more item(s)")
-    print("  Inspect: atc status --state pending --state running")
-    return 0
 
 
 def invoke_with_diagnostics(args: argparse.Namespace, operation: Callable[[argparse.Namespace], int]) -> int:
@@ -1005,17 +472,17 @@ def main() -> int:
         from .harness.codex.desktop import launcher as desktop
         return desktop.command(args)
     if args.mode == "retry":
-        return retry_callback(args)
+        return callback_commands.retry_callback(args)
     if args.mode == "doctor":
         return diagnostics.doctor(args)
     if args.mode == "done":
-        return invoke_with_diagnostics(args, done)
+        return invoke_with_diagnostics(args, work_commands.done)
     if args.mode == "run":
         if args.wrapped_command and args.wrapped_command[0] == "--":
             args.wrapped_command = args.wrapped_command[1:]
-        return invoke_with_diagnostics(args, run)
+        return invoke_with_diagnostics(args, work_commands.run)
     if args.mode == "agent":
-        return invoke_with_diagnostics(args, agent)
+        return invoke_with_diagnostics(args, work_commands.agent)
     if args.mode == "_screen-worker":
         return task_worker.run_screen_worker(args)
     if args.mode == "_task-worker":
@@ -1045,13 +512,13 @@ def main() -> int:
             print(f"atc: {exc}", file=sys.stderr)
             return 2
     if args.mode == "template":
-        return template_command(args)
+        return template_commands.template_command(args)
     if args.mode == "setup":
         return services.setup(args)
     if args.mode == "prompt-policy":
         return reminder_policy.callback_prompt_policy(args)
     if args.mode == "ack":
-        return ack(args)
+        return callback_commands.ack(args)
     if args.mode == "wait":
         return claude_code.wait(args)
     if args.mode == "claude":
@@ -1062,18 +529,18 @@ def main() -> int:
         return claude_channel.serve(args)
     if args.mode == "goal":
         if args.goal_mode == "start":
-            return goal_start(args)
+            return goal_commands.goal_start(args)
         if args.goal_mode == "check":
-            return goal_check(args)
+            return goal_commands.goal_check(args)
         if args.goal_mode == "set-plan":
-            return goal_set_plan(args)
+            return goal_commands.goal_set_plan(args)
         if args.goal_mode == "ack":
-            return goal_ack(args)
-        return goal_resume(args)
+            return goal_commands.goal_ack(args)
+        return goal_commands.goal_resume(args)
     if args.mode == "cancel":
-        return cancel(args)
+        return callback_commands.cancel(args)
     if args.mode == "status":
-        return status(args)
+        return callback_commands.status(args)
     if args.mode == "install-shell-hook":
         return skill_install.install_shell_hook(args)
     return 2

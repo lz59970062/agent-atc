@@ -12,6 +12,7 @@ import unittest
 from unittest import mock
 
 from agent_atc import callback_transport as transport, cli
+from agent_atc.commands import callbacks as callback_commands
 from agent_atc.engine import dispatch
 from agent_atc.engine import tasks as managed_tasks
 from agent_atc.engine import delivery as delivery_engine
@@ -85,7 +86,7 @@ class CallbackModeTests(unittest.TestCase):
         queue_store.ensure_daemon_dirs(queue)
         queue_store.write_request(queue / "pending/fixture.json", self.request())
         self.assertIsNone(delivery_engine.select_pending(queue, 10**12))
-        self.assertEqual(cli.ack(argparse.Namespace(queue_dir=str(queue), id="fixture", message=None)), 0)
+        self.assertEqual(callback_commands.ack(argparse.Namespace(queue_dir=str(queue), id="fixture", message=None)), 0)
         self.assertTrue((queue / "done/fixture.json").is_file())
         self.assertFalse((queue / "pending/fixture.json").exists())
 
@@ -151,12 +152,12 @@ class CallbackModeTests(unittest.TestCase):
         request.update(retain_target_lease=True)
         queue_store.write_request(queue / "failed/fixture.json", request)
         args = argparse.Namespace(queue_dir=str(queue), id="fixture", callback_mode="manual")
-        self.assertEqual(cli.retry_callback(args), 2)
+        self.assertEqual(callback_commands.retry_callback(args), 2)
         request.pop("retain_target_lease")
         request["last_error"] = "original failure"
         queue_store.write_request(queue / "failed/fixture.json", request)
         with mock.patch.object(dispatch, "submit_managed_run") as launch:
-            self.assertEqual(cli.retry_callback(args), 0)
+            self.assertEqual(callback_commands.retry_callback(args), 0)
         launch.assert_not_called()
         saved = dispatch.load_request(queue / "pending/fixture.json")
         self.assertEqual(saved["target"], request["target"])

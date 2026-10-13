@@ -15,6 +15,7 @@ from unittest import mock
 
 from agent_atc.harness.claude import channel as claude_channel, session as claude_code
 from agent_atc import cli
+from agent_atc.commands import callbacks as callback_commands
 from agent_atc.engine import dispatch
 from agent_atc.engine import delivery as delivery_engine
 from agent_atc.store import records as queue_store
@@ -169,7 +170,7 @@ class ChannelServerTests(unittest.TestCase):
     def test_acknowledged_callbacks_are_not_pushed(self) -> None:
         self.enqueue("cb-mine")
         with contextlib.redirect_stderr(io.StringIO()):
-            cli.ack(argparse.Namespace(queue_dir=str(self.root), id="cb-mine", message=None))
+            callback_commands.ack(argparse.Namespace(queue_dir=str(self.root), id="cb-mine", message=None))
         server = self.server()
         self.poll(server)
         self.assertEqual(self.messages(server), [])

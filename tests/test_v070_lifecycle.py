@@ -13,6 +13,7 @@ from pathlib import Path
 from unittest import mock
 
 from agent_atc import cli
+from agent_atc.commands import work as work_commands
 from agent_atc.engine import dispatch
 from agent_atc.engine import tasks as managed_tasks
 from agent_atc.engine import worker as task_worker
@@ -46,7 +47,7 @@ class NativeTaskLifecycleTests(unittest.TestCase):
         with mock.patch.object(managed_tasks, "screen_binary", return_value=None), mock.patch.object(
             SystemdUserBackend, "launch"
         ) as launch:
-            self.assertEqual(cli.run(args), 0)
+            self.assertEqual(work_commands.run(args), 0)
             launch.assert_not_called()
         return next(layout.managed_tasks_root(self.root).glob("*/task.json"))
 

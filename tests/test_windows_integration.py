@@ -20,6 +20,7 @@ import unittest
 from unittest import mock
 
 from agent_atc import cli
+from agent_atc.commands import work as work_commands
 from agent_atc.install import services
 from agent_atc.tower import main as tower
 from agent_atc.engine import tasks as managed_tasks
@@ -73,7 +74,7 @@ class WindowsIntegrationTests(unittest.TestCase):
             last=False, queue_dir=str(self.root), strict=False, dry_run=False,
             wrapped_command=[sys.executable, str(script), *arguments])
         with contextlib.redirect_stderr(io.StringIO()):
-            self.assertEqual(cli.run(args), 0)
+            self.assertEqual(work_commands.run(args), 0)
         path = next(layout.managed_tasks_root(self.root).glob("*/task.json"))
         task = managed_tasks.load_managed_task(path)
         self.owners.append(WindowsBackend().owner_name(task["id"], 1, self.root))

@@ -15,6 +15,7 @@ from unittest import mock
 
 from agent_atc.harness.claude import session as claude_code
 from agent_atc import cli
+from agent_atc.commands import callbacks as callback_commands
 from agent_atc.engine import dispatch
 from agent_atc.engine import delivery as delivery_engine
 from agent_atc import runtime as atc_runtime
@@ -207,7 +208,7 @@ class LiveWaiterTests(unittest.TestCase):
 
     def ack(self, ident: str) -> None:
         with contextlib.redirect_stderr(io.StringIO()):
-            cli.ack(argparse.Namespace(queue_dir=str(self.root), id=ident, message=None))
+            callback_commands.ack(argparse.Namespace(queue_dir=str(self.root), id=ident, message=None))
 
     def test_watcher_registration_is_visible_only_for_claude_and_stale_files_are_cleaned(self) -> None:
         claude = {"agent": "claude", "target": {"kind": "session", "value": SESSION}}

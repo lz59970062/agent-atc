@@ -16,6 +16,8 @@ import unittest
 from unittest import mock
 
 from agent_atc import cli
+from agent_atc.commands import callbacks as callback_commands
+from agent_atc.commands import work as work_commands
 from agent_atc.engine import dispatch
 from agent_atc.engine import tasks as managed_tasks
 from agent_atc.engine import worker as task_worker
@@ -59,7 +61,7 @@ class WindowsLifecycleTests(unittest.TestCase):
             strict=False, wrapped_command=[sys.executable, "-c", "raise SystemExit(7)"],
         )
         with contextlib.redirect_stderr(io.StringIO()) as errors:
-            self.assertEqual(cli.run(args), 0, errors.getvalue())
+            self.assertEqual(work_commands.run(args), 0, errors.getvalue())
         return next(layout.managed_tasks_root(self.root).glob("*/task.json"))
 
     def launching(self, path):
@@ -189,7 +191,7 @@ class WindowsLifecycleTests(unittest.TestCase):
         delivery_engine.retain_target_lease(self.root, request)
         lease = delivery_engine.retained_target_lease_path(request)
         with mock.patch.object(delivery_engine, "acquire_retained_target_lease_lock", side_effect=PermissionError("global lease denied")), contextlib.redirect_stderr(io.StringIO()):
-            self.assertEqual(cli.ack(argparse.Namespace(queue_dir=str(self.root), id=request["id"], message="inspected")), 0)
+            self.assertEqual(callback_commands.ack(argparse.Namespace(queue_dir=str(self.root), id=request["id"], message="inspected")), 0)
         self.assertTrue(layout.ack_path(self.root, request["id"]).exists())
         self.assertTrue(layout.request_path(self.root, "done", request["id"]).exists())
         self.assertTrue(lease.exists())

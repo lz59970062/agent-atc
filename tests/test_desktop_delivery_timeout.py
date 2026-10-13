@@ -19,6 +19,7 @@ import unittest
 from unittest import mock
 
 from agent_atc import cli
+from agent_atc.commands import callbacks as callback_commands
 from agent_atc.engine import dispatch
 from agent_atc.engine import delivery as delivery_engine
 from agent_atc.harness.codex import app_server
@@ -57,6 +58,7 @@ class DesktopDeliveryTimeoutTests(unittest.TestCase):
             import argparse,json,os,sys,time
             from pathlib import Path
             from agent_atc import cli
+            from agent_atc.commands import callbacks as callback_commands
             from agent_atc.engine import dispatch
             from agent_atc.engine import delivery as delivery_engine
             from agent_atc.harness.codex import app_server
@@ -80,7 +82,7 @@ class DesktopDeliveryTimeoutTests(unittest.TestCase):
                     if mode == 'explicit-rejection':
                         raise app_server.AppServerRpcError('explicit rejection')
                     if mode in ('acknowledged','unknown-after-ack'):
-                        cli.ack(argparse.Namespace(queue_dir=str(root),id=request['id'],message='fixture ACK'))
+                        callback_commands.ack(argparse.Namespace(queue_dir=str(root),id=request['id'],message='fixture ACK'))
                     if mode in ('unknown','unknown-after-ack'):
                         time.sleep(0.35)
                         raise app_server.AppServerProtocolError('turn/start response lost')

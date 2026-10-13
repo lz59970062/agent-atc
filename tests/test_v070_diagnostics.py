@@ -13,6 +13,8 @@ from pathlib import Path
 from unittest import mock
 
 from agent_atc import cli
+from agent_atc.commands import callbacks as callback_commands
+from agent_atc.commands import work as work_commands
 from agent_atc.install import services
 from agent_atc.install import skills as skill_install
 from agent_atc.tower import main as tower
@@ -45,9 +47,9 @@ class DiagnosticBoundaryTests(unittest.TestCase):
 
     def test_public_task_modes_report_after_dispatch_preserving_existing_output(self):
         for argv, handler in (
-            (["run", "--session", "bound", "--", "echo", "fixture"], (cli, "run")),
-            (["agent", "claude", "--session", "bound", "--", "fixture requirement"], (cli, "agent")),
-            (["done", "--session", "bound", "--exit-code", "7"], (cli, "done")),
+            (["run", "--session", "bound", "--", "echo", "fixture"], (work_commands, "run")),
+            (["agent", "claude", "--session", "bound", "--", "fixture requirement"], (work_commands, "agent")),
+            (["done", "--session", "bound", "--exit-code", "7"], (work_commands, "done")),
         ):
             events = []
 
@@ -68,8 +70,8 @@ class DiagnosticBoundaryTests(unittest.TestCase):
 
     def test_help_version_ack_cancel_and_internal_workers_do_not_trigger_checks(self):
         for argv, handler in (
-            (["ack", "--id", "fixture"], (cli, "ack")),
-            (["cancel", "--id", "fixture"], (cli, "cancel")),
+            (["ack", "--id", "fixture"], (callback_commands, "ack")),
+            (["cancel", "--id", "fixture"], (callback_commands, "cancel")),
             (["_screen-worker", "--task-file", "/fixture/task.json", "--token=fixture"], (task_worker, "run_screen_worker")),
             (["_task-worker", "--task-file", "/fixture/task.json", "--attempt", "1"], (task_worker, "run_task_worker")),
             (["_delivery-worker"], (delivery_engine, "delivery_worker_main")),

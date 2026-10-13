@@ -18,6 +18,7 @@ import unittest
 from pathlib import Path
 
 from agent_atc import cli
+from agent_atc.commands import work as work_commands
 from agent_atc.engine import dispatch
 from agent_atc.engine import tasks as managed_tasks
 from agent_atc.store import layout
@@ -86,7 +87,7 @@ class RealSystemdIsolationTests(unittest.TestCase):
                 strict=False, wrapped_command=[sys.executable, str(workload), str(started), str(release),
                                                str(executions), str(output)],
             )
-            self.assertEqual(cli.run(args), 0)
+            self.assertEqual(work_commands.run(args), 0)
             task_path = next(layout.managed_tasks_root(root).glob("*/task.json"))
             task = managed_tasks.load_managed_task(task_path)
             task_owner = backend.owner_name(str(task["id"]), 1, root)
@@ -100,6 +101,7 @@ class RealSystemdIsolationTests(unittest.TestCase):
                 from pathlib import Path
                 sys.path.insert(0, {source!r})
                 from agent_atc import cli
+                from agent_atc.commands import work as work_commands
                 from agent_atc.engine import dispatch
                 from agent_atc.engine import tasks as managed_tasks
                 from agent_atc.store import layout

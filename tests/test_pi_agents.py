@@ -21,6 +21,7 @@ import unittest
 from unittest import mock
 
 from agent_atc import cli
+from agent_atc.commands import work as work_commands
 from agent_atc.tower import main as tower
 from agent_atc.engine import dispatch
 from agent_atc.engine import tasks as managed_tasks
@@ -791,7 +792,7 @@ class PiAgentContractTests(unittest.TestCase):
             argv = ["atc", "agent", worker, "--queue-dir", str(self.queue), "--agent", "codex",
                     "--session", "parent-codex", "--system-prompt-file", str(source), "--", "User task."]
             with self.subTest(worker=worker), mock.patch.object(sys, "argv", argv), \
-                    mock.patch.object(cli, "agent", return_value=0) as submit, \
+                    mock.patch.object(work_commands, "agent", return_value=0) as submit, \
                     contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as rejected:
                 cli.main()
             self.assertNotEqual(rejected.exception.code, 0)
