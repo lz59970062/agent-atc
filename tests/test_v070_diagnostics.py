@@ -45,9 +45,9 @@ class DiagnosticBoundaryTests(unittest.TestCase):
 
     def test_public_task_modes_report_after_dispatch_preserving_existing_output(self):
         for argv, handler in (
-            (["run", "--session", "bound", "--", "echo", "fixture"], "run"),
-            (["agent", "claude", "--session", "bound", "--", "fixture requirement"], "agent"),
-            (["done", "--session", "bound", "--exit-code", "7"], "done"),
+            (["run", "--session", "bound", "--", "echo", "fixture"], (cli, "run")),
+            (["agent", "claude", "--session", "bound", "--", "fixture requirement"], (cli, "agent")),
+            (["done", "--session", "bound", "--exit-code", "7"], (cli, "done")),
         ):
             events = []
 
@@ -59,8 +59,8 @@ class DiagnosticBoundaryTests(unittest.TestCase):
             def emit(args):
                 events.append("diagnostics")
 
-            with self.subTest(handler=handler), mock.patch.object(sys, "argv", ["atc", *argv]), mock.patch.object(
-                cli, handler, side_effect=operation
+            with self.subTest(handler=handler[1]), mock.patch.object(sys, "argv", ["atc", *argv]), mock.patch.object(
+                *handler, side_effect=operation
             ), mock.patch.object(diagnostics, "emit_if_needed", side_effect=emit), contextlib.redirect_stdout(io.StringIO()) as output:
                 self.assertEqual(cli.main(), 7)
             self.assertEqual(events, ["operation", "diagnostics"])
