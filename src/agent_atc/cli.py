@@ -32,12 +32,12 @@ except ImportError:  # pragma: no cover - the durable run lifecycle is POSIX-onl
     fcntl = None
 
 from . import __version__
-from . import callbacks
+from .core import envelope as callbacks
 from . import callback_transport
 from .harness.claude import session as claude_code
 from .harness.pi import channel as pi_callback
 from . import diagnostics
-from . import storage
+from .store import files as storage
 from . import template_registration
 from .harness.codex.desktop.connection import BridgeEndpoint, UnixBridgeEndpoint, load_bridge_endpoint, load_unix_bridge_endpoint
 from .harness import AGENTS, AGENT_NAMES, CHILD_AGENT_NAMES, ChildOptions, get_agent, get_child_agent

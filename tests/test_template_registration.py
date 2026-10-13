@@ -14,7 +14,8 @@ from unittest import mock
 
 import yaml
 
-from agent_atc import cli, storage
+from agent_atc import cli
+from agent_atc.store import files as storage
 from agent_atc.templates import load_template, user_template_dir
 
 

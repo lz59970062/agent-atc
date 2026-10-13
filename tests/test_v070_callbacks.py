@@ -17,7 +17,8 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from agent_atc import callbacks, cli
+from agent_atc.core import envelope as callbacks
+from agent_atc import cli
 from test_cli import assert_private_file
 
 

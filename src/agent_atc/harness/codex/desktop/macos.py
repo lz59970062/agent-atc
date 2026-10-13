@@ -15,7 +15,7 @@ from ....callback_transport import configuration_path
 from .connection import load_unix_bridge_endpoint
 from .core import BRIDGE_FILE_ENV, REAL_CODEX_ENV
 from ....runtime import worker_command
-from ....storage import write_private_text, write_request
+from ....store.files import write_private_text, write_request
 
 
 LAUNCHER_NAME = "Start ATC Desktop.command"

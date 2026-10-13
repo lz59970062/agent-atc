@@ -20,7 +20,7 @@ import threading
 import time
 import uuid
 
-from ... import storage
+from ...store import files as storage
 from ...system import windows_io
 
 PROTOCOL = "live-v1"
