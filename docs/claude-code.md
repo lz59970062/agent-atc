@@ -60,7 +60,7 @@ task's callback is already acknowledged), `2` not a Claude session / unknown tas
   callback is never delivered by both at once.
 - After printing, the callback returns to `pending` and the daemon waits 30 minutes for the ACK
   before resuming its normal retries. `atc ack` moves it straight to `done`.
-- All of this lives in `src/agent_atc/claude_code.py`; the shared CLI only calls into it.
+- All of this lives in `src/agent_atc/harness/claude/session.py`; the shared CLI only calls into it.
 
 ## ATC channel (research preview)
 

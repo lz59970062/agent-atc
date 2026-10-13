@@ -47,7 +47,7 @@ function Resolve-Executable([string]$Value) {
 }
 
 function Get-BridgeStatus {
-    $text = & $Python -B -m agent_atc.desktop_bridge --codex-home $CodexHome --metadata-file $metadata --status
+    $text = & $Python -B -m agent_atc.harness.codex.desktop.bridge --codex-home $CodexHome --metadata-file $metadata --status
     if ($LASTEXITCODE -notin @(0, 1)) { throw 'Cannot safely inspect the existing bridge state.' }
     try { $status = $text | ConvertFrom-Json } catch { throw 'The bridge status response is invalid.' }
     if ($null -eq $status -or $status.running -isnot [bool]) { throw 'The bridge status response has no valid running state.' }

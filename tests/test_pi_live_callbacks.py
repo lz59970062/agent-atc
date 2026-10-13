@@ -10,7 +10,8 @@ import tempfile
 import time
 import unittest
 
-from agent_atc import callback_transport, cli, pi_callback as bridge
+from agent_atc import callback_transport, cli
+from agent_atc.harness.pi import channel as bridge
 
 
 def build_bound(tmp_path):

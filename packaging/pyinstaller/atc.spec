@@ -12,7 +12,7 @@ hiddenimports = collect_submodules("agent_atc")
 # Skills, templates, PowerShell, the Pi extension; the Windows desktop assets
 # are .py files read as data, not imported.
 datas = collect_data_files("agent_atc") + collect_data_files(
-    "agent_atc", include_py_files=True, includes=["desktop_windows_assets/*.py"]
+    "agent_atc", include_py_files=True, includes=["harness/codex/desktop/windows_assets/*.py"]
 )
 
 a = Analysis(

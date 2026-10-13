@@ -9,8 +9,8 @@ from pathlib import Path
 
 import yaml
 
-from .agents import CHILD_AGENT_NAMES, get_child_agent
-from .agents.base import CODEX_REASONING_EFFORTS
+from .harness import CHILD_AGENT_NAMES, get_child_agent
+from .harness.base import CODEX_REASONING_EFFORTS
 
 TEMPLATES = {"test": {"version": 1, "codex_model": "gpt-5.6-luna", "codex_effort": "max"}}
 REASONING_EFFORTS = CODEX_REASONING_EFFORTS

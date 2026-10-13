@@ -15,7 +15,7 @@ import unittest
 from unittest import mock
 from urllib.parse import urlsplit
 
-from agent_atc import desktop_bridge as bridge
+from agent_atc.harness.codex.desktop import bridge
 from agent_atc.owners import windows
 
 
@@ -231,7 +231,7 @@ class NativeBridgeTests(unittest.TestCase):
         # Exercise redirected legacy-code-page output with a Unicode profile.
         self.env["PYTHONIOENCODING"] = "ascii"
         self.env["PYTHONPATH"] = str(Path(__file__).resolve().parents[1] / "src")
-        self.command = [sys.executable, "-m", "agent_atc.desktop_bridge", "--codex-home", str(self.profile),
+        self.command = [sys.executable, "-m", "agent_atc.harness.codex.desktop.bridge", "--codex-home", str(self.profile),
                         "--codex-bin", str(self.shim), "--startup-timeout", "3", "--handshake-timeout", "0.4"]
         self.processes = []
         self.addCleanup(self.stop_processes)

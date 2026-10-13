@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Literal
 
-from .base import ChildOptions, DEFAULT_CLAUDE_PERMISSION_MODE, resume_target
+from ..base import ChildOptions, DEFAULT_CLAUDE_PERMISSION_MODE, resume_target
 
 CLAUDE_THREAD_ID_ENV = "CLAUDE_CODE_SESSION_ID"
 CLAUDE_MARKER_ENV = "CLAUDECODE"

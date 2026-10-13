@@ -40,7 +40,7 @@ These task backends ship in `0.7.0`. Configure the callback route for your chose
 
 ## Add a harness
 
-Start with [`agents/base.py`](https://github.com/lz59970062/agent-atc/blob/main/src/agent_atc/agents/base.py) and [`agents/registry.py`](https://github.com/lz59970062/agent-atc/blob/main/src/agent_atc/agents/registry.py):
+Start with [`harness/base.py`](https://github.com/lz59970062/agent-atc/blob/main/src/agent_atc/harness/base.py) and [`harness/registry.py`](https://github.com/lz59970062/agent-atc/blob/main/src/agent_atc/harness/registry.py):
 
 1. Implement child startup: locate the executable, build its command, pass the prompt, and choose file or standard-output result capture.
 2. Define session binding: read the session identifier and retain the profile and directory needed for recovery.
@@ -52,7 +52,7 @@ Start with [`agents/base.py`](https://github.com/lz59970062/agent-atc/blob/main/
 
 ## Implementation and validation sources
 
-- [Current adapter registry](https://github.com/lz59970062/agent-atc/blob/main/src/agent_atc/agents/__init__.py)
+- [Current adapter registry](https://github.com/lz59970062/agent-atc/blob/main/src/agent_atc/harness/__init__.py)
 - [0.7.0 release validation](https://github.com/lz59970062/agent-atc/blob/main/docs/validation-0.7.0.md)
 - [Claude Code platform records](https://github.com/lz59970062/agent-atc/blob/main/docs/claude-code.md#platform-status)
 - [Pi integration validation](https://github.com/lz59970062/agent-atc/blob/main/docs/validation-pi-child.md)

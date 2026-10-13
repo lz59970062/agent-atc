@@ -27,8 +27,8 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Optional
 
-from . import claude_code
-from .runtime import worker_command
+from . import session as claude_code
+from ...runtime import worker_command
 
 SERVER_NAME = "atc"
 CHANNEL_FLAGS = ("--dangerously-load-development-channels", "--channels")
@@ -177,7 +177,7 @@ class ChannelServer:
                  "the channel may not be registered, so the daemon takes over delivery")
 
     def poll(self) -> None:
-        from . import cli
+        from ... import cli
 
         if self.stepped_aside:
             return
@@ -236,7 +236,7 @@ class ChannelServer:
 
 def serve(args: argparse.Namespace) -> int:
     """Hidden `atc _claude-channel`: started by Claude Code, never by hand."""
-    from . import cli
+    from ... import cli
 
     root = cli.queue_dir(args).expanduser().absolute()
     cli.ensure_daemon_dirs(root)
@@ -247,7 +247,7 @@ def serve(args: argparse.Namespace) -> int:
 
 def mcp_config(root: Path, environment: Mapping[str, str]) -> str:
     """Server entry for --mcp-config; it must find the same locks as the daemon."""
-    from . import cli
+    from ... import cli
 
     command = worker_command("_claude-channel", "--queue-dir", str(root))
     server: dict[str, object] = {"command": command[0], "args": command[1:]}
@@ -266,7 +266,7 @@ def launch_command(claude: str, root: Path, claude_args: list[str],
 
 def launch(args: argparse.Namespace) -> int:
     """`atc claude [claude args]`: interactive Claude Code with the ATC channel."""
-    from . import cli
+    from ... import cli
 
     root = cli.queue_dir(args).expanduser().absolute()
     found = claude_code.discover_executable(os.environ)

@@ -14,8 +14,8 @@ import time
 import unittest
 from unittest import mock
 
-from agent_atc import desktop_core as core
-from agent_atc import desktop_bridge as bridge
+from agent_atc.harness.codex.desktop import core
+from agent_atc.harness.codex.desktop import bridge
 from agent_atc.owners import windows
 
 
@@ -201,7 +201,7 @@ class NativeCoreTests(unittest.TestCase):
         self.env.update({core.REAL_CODEX_ENV: sys.executable, core.BRIDGE_FILE_ENV: str(self.metadata),
                          "CODEX_HOME": str(self.profile), "ATC_HOME": str(self.profile / "atc-home"), "CODEX_APP_TOOLS_PIPE_PATH": "fresh-test-desktop-pipe",
                          "PYTHONPATH": str(Path(__file__).resolve().parents[1] / "src")})
-        self.command = [sys.executable, "-m", "agent_atc.desktop_core"]
+        self.command = [sys.executable, "-m", "agent_atc.harness.codex.desktop.core"]
         self.process = None
         self.addCleanup(self.cleanup_process)
 

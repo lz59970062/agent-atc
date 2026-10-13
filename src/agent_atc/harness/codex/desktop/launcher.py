@@ -21,23 +21,23 @@ def install_for_setup(profile: Path, args: argparse.Namespace) -> None:
     if getattr(args, "no_desktop_launcher", False):
         return
     if sys.platform == "darwin":
-        from . import desktop_macos
+        from . import macos as desktop_macos
         desktop_macos.install_for_setup(profile, app=getattr(args, "desktop_app", None))
     elif sys.platform == "win32":
-        from . import desktop_windows
+        from . import windows as desktop_windows
         desktop_windows.install_for_setup(profile, app=getattr(args, "desktop_app", None),
                                           launch_mode=getattr(args, "desktop_launch_mode", None))
 
 
 def command(args: argparse.Namespace) -> int:
     if sys.platform == "win32":
-        from . import desktop_windows
+        from . import windows as desktop_windows
         return desktop_windows.command(args)
     if sys.platform == "darwin":
         if getattr(args, "core", None) or getattr(args, "launch_mode", None):
             print("atc: Desktop --core and --launch-mode options require Windows", file=sys.stderr)
             return 2
-        from . import desktop_macos
+        from . import macos as desktop_macos
         return desktop_macos.command(args)
     print("atc: Desktop launchers support macOS and Windows", file=sys.stderr)
     return 2

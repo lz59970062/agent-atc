@@ -17,8 +17,8 @@ import subprocess
 import sys
 import threading
 
-from .desktop_bridge import DesktopBridge, BridgeError, _verify_peer, read_http_header, validate_upgrade
-from .system.windows_process import background_popen_kwargs
+from .bridge import DesktopBridge, BridgeError, _verify_peer, read_http_header, validate_upgrade
+from ....system.windows_process import background_popen_kwargs
 
 
 REAL_CODEX_ENV = "ATC_DESKTOP_REAL_CODEX"
@@ -317,7 +317,7 @@ def main(argv: list[str] | None = None) -> int:
             return subprocess.call([str(executable), *arguments], stdin=sys.stdin, stdout=sys.stdout,
                                    stderr=sys.stderr, close_fds=True, **background_popen_kwargs())
         if sys.platform == "darwin":
-            from .desktop_unix import run_app_server as run_unix_app_server
+            from .unix import run_app_server as run_unix_app_server
             return run_unix_app_server(executable, listening)
         raw_metadata = os.environ.get(BRIDGE_FILE_ENV, "")
         if not raw_metadata:

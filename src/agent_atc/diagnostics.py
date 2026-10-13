@@ -17,8 +17,9 @@ import sys
 import tempfile
 import time
 
-from . import __version__, callback_transport, claude_code
-from .agents import get_agent, get_child_agent
+from . import __version__, callback_transport
+from .harness.claude import session as claude_code
+from .harness import get_agent, get_child_agent
 from .system import posix, windows_io
 from .owners import OwnerState
 from .owners.screen import ScreenBackend

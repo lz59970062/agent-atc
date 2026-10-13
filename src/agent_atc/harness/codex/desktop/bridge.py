@@ -28,10 +28,10 @@ import threading
 import time
 from typing import Any
 
-from .owners import windows
-from .system import windows_io
-from .system.windows_process import background_popen_kwargs, enter_worker_job, prepare_command, terminate_worker_children
-from .storage import write_private_text, write_request
+from ....owners import windows
+from ....system import windows_io
+from ....system.windows_process import background_popen_kwargs, enter_worker_job, prepare_command, terminate_worker_children
+from ....storage import write_private_text, write_request
 
 
 HEADER_LIMIT = 64 * 1024
@@ -55,7 +55,7 @@ def _sharing_conflict(error: OSError) -> bool:
 
 def _verify_peer(connection: socket.socket, expected_identity=None) -> dict[str, Any]:
     # Keep import lazy so parser/status helpers remain importable off Windows.
-    from .system.windows_tcp import verify_loopback_peer
+    from ....system.windows_tcp import verify_loopback_peer
     return verify_loopback_peer(connection, expected_identity=expected_identity)
 
 

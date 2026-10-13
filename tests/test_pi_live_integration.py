@@ -20,7 +20,8 @@ import tempfile
 import unittest
 from unittest import mock
 
-from agent_atc import cli, pi_callback as bridge
+from agent_atc import cli
+from agent_atc.harness.pi import channel as bridge
 from agent_atc.runtime import worker_command
 
 

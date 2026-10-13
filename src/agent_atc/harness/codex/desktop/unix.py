@@ -12,9 +12,9 @@ import sys
 import threading
 import time
 
-from .desktop_core import BRIDGE_FILE_ENV, RelayError, WebSocketRelay, _stdin_messages, _stdout_messages
-from .owners import macos
-from .storage import write_request
+from .core import BRIDGE_FILE_ENV, RelayError, WebSocketRelay, _stdin_messages, _stdout_messages
+from ....owners import macos
+from ....storage import write_request
 
 
 def prepare_socket(metadata: Path) -> tuple[Path, int]:
@@ -44,8 +44,8 @@ def prepare_socket(metadata: Path) -> tuple[Path, int]:
 
 
 def run_app_server(executable: Path, arguments: list[str]) -> int:
-    from .cli import AppServerConnection
-    from .desktop_connection import UnixBridgeEndpoint
+    from ....cli import AppServerConnection
+    from .connection import UnixBridgeEndpoint
 
     raw = os.environ.get(BRIDGE_FILE_ENV, "")
     if not raw:

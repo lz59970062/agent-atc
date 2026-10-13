@@ -23,7 +23,7 @@ from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import NamedTuple, Optional
 
-from .agents.claude import CLAUDE_BIN_ENV, CLAUDE_THREAD_ID_ENV as SESSION_ENV
+from .adapter import CLAUDE_BIN_ENV, CLAUDE_THREAD_ID_ENV as SESSION_ENV
 
 EXECPATH_ENV = "CLAUDE_CODE_EXECPATH"
 ENTRYPOINT_ENV = "CLAUDE_CODE_ENTRYPOINT"
@@ -223,7 +223,7 @@ def _session_of(request: Mapping[str, object]) -> str | None:
 
 
 def live_watcher_dir(session: str) -> Path:
-    from . import cli
+    from ... import cli
 
     digest = hashlib.sha256(f"session:{session}".encode("utf-8")).hexdigest()
     return cli.target_lock_dir() / LIVE_WATCHER_DIR_NAME / digest
@@ -235,7 +235,7 @@ def register_live_watcher(session: str, *, prefix: str = "") -> tuple[object, Pa
     The lock is taken under a staging name and renamed into place, so the
     daemon never observes an unlocked live file.
     """
-    from . import cli
+    from ... import cli
 
     directory = live_watcher_dir(session)
     directory.mkdir(parents=True, exist_ok=True)
@@ -250,7 +250,7 @@ def register_live_watcher(session: str, *, prefix: str = "") -> tuple[object, Pa
 
 
 def release_live_watcher(lock: tuple[object, Path]) -> None:
-    from . import cli
+    from ... import cli
 
     try:
         lock[1].unlink()
@@ -271,7 +271,7 @@ def channel_is_held(session: str) -> bool:
 
 
 def _held(session: str, prefix: str) -> bool:
-    from . import cli
+    from ... import cli
 
     directory = live_watcher_dir(session)
     if not directory.is_dir():
@@ -288,7 +288,7 @@ def _held(session: str, prefix: str) -> bool:
 
 def _claim(root: Path, path: Path) -> str | None:
     """Move one callback through running/ and return the prompt to print."""
-    from . import cli
+    from ... import cli
 
     request_id = path.stem
     delivery_lock = cli.acquire_owner_lock(root, cli.delivery_lock_id(request_id), blocking=False)
@@ -353,7 +353,7 @@ def wait(args: argparse.Namespace) -> int:
     A callback keeps being returned until it is ACKed. If the session closes,
     the OS releases the waiter's lock and the daemon delivers as usual.
     """
-    from . import cli
+    from ... import cli
 
     session = args.session or os.environ.get(SESSION_ENV, "").strip()
     if not session:

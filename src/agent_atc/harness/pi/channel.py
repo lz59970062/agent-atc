@@ -20,8 +20,8 @@ import threading
 import time
 import uuid
 
-from . import storage
-from .system import windows_io
+from ... import storage
+from ...system import windows_io
 
 PROTOCOL = "live-v1"
 CHANNEL_ROOT_ENV = "ATC_PI_CHANNEL_ROOT"
@@ -134,7 +134,7 @@ def confirmed_owner_dead(owner: dict) -> bool:
     Any reused/live PID blocks recovery. Missing identities, different hosts or
     PID namespaces, and permission/probe failures are never proof of death.
     """
-    from . import cli
+    from ... import cli
     identity = owner.get("owner_identity")
     current = cli.daemon_process_identity(os.getpid())
     if owner.get("managed") is not True or not isinstance(identity, dict) or not current:
@@ -153,7 +153,7 @@ def confirmed_owner_dead(owner: dict) -> bool:
     if os.name == "nt":
         import ctypes
         try:
-            from .owners.windows import _kernel32
+            from ...owners.windows import _kernel32
             kernel = _kernel32()
             handle = kernel.OpenProcess(0x100000, False, pid)
             if not handle:
@@ -174,7 +174,7 @@ def confirmed_owner_dead(owner: dict) -> bool:
 
 
 def valid_live_lease(owner: dict) -> bool:
-    from . import cli
+    from ... import cli
     pid = owner.get("lease_pid")
     return (type(pid) is int and pid > 0 and isinstance(owner.get("lease_identity"), dict)
             and cli.daemon_process_identity(pid) == owner["lease_identity"])
@@ -189,7 +189,7 @@ def require_delivery_support(request: dict, owner: dict) -> None:
 
 
 def inspect_route(request: dict) -> dict:
-    from . import cli
+    from ... import cli
     report = {"transport": "pi_live_session", "status": "blocked", "end_to_end_verified": False,
               "pi_delivery": request.get("pi_delivery", "follow-up")}
     try:
@@ -243,7 +243,7 @@ class PiDelivery:
                     owner = read_record(self.directory / "owner.json")
                     if owner.get("owner_nonce") == self.nonce and owner.get("state") == "reserved":
                         storage.write_request(self.directory / "owner.json", self.previous_owner)
-                        from . import cli
+                        from ... import cli
                         cli.release_retained_target_lease(self.queue, self.request)
                 except (OSError, ValueError, RuntimeError):
                     pass
@@ -289,7 +289,7 @@ def publication_outcome(root: Path, request: dict, timeout: float, now: float) -
     to: an exited, closed or replaced owner, or a missed deadline, leaves the
     outcome unknown, which is never replayed automatically.
     """
-    from . import cli
+    from ... import cli
     published = request.get("pi_published_at")
     if not isinstance(published, (int, float)):
         return None
@@ -309,7 +309,7 @@ def publication_outcome(root: Path, request: dict, timeout: float, now: float) -
 
 def reconcile_publications(root: Path, timeout: float) -> None:
     """Daemon hook: settle Pi callbacks whose live owner can no longer ACK them."""
-    from . import cli
+    from ... import cli
     now = time.time()
     for path in sorted((root / "pending").glob("*.json")):
         try:
@@ -350,11 +350,11 @@ def reconcile_publications(root: Path, timeout: float) -> None:
 
 
 def extension_path() -> Path:
-    return Path(__file__).with_name("pi_extension") / "atc-callback.js"
+    return Path(__file__).with_name("extension") / "atc-callback.js"
 
 
 def _reservation(directory: Path, session: str, profile: str) -> dict:
-    from . import cli
+    from ... import cli
     header = session_header(session)
     return {"version": 1, "session_file": session, "session_id": header["id"],
             "channel_dir": str(directory), "profile_dir": profile, "managed": True,
@@ -365,7 +365,7 @@ def _reservation(directory: Path, session: str, profile: str) -> dict:
 
 
 def prepare_delivery(payload: dict) -> PiDelivery:
-    from . import cli
+    from ... import cli
     request = payload["request"]
     try:
         directory, owner = owner_record(request)
@@ -442,7 +442,7 @@ def prepare_delivery(payload: dict) -> PiDelivery:
 def install_extension(args: argparse.Namespace) -> int:
     profile = Path(getattr(args, "profile", None) or profile_dir()).expanduser().resolve()
     target = profile / "extensions" / "atc-callback.js"
-    source = resources.files("agent_atc").joinpath("pi_extension").joinpath("atc-callback.js").read_bytes()
+    source = resources.files("agent_atc.harness.pi").joinpath("extension").joinpath("atc-callback.js").read_bytes()
     if target.is_symlink():
         raise ValueError(f"Preserving an existing extension symlink: {target}")
     if target.exists() and target.read_bytes() != source and not getattr(args, "force", False):
@@ -453,7 +453,7 @@ def install_extension(args: argparse.Namespace) -> int:
     # Windows children inherit the protected ACL initialized by the installer.
     ensure_private_directory(profile / "agent-atc" / "channels")
     print(f"Installed Pi callback extension: {target}")
-    from . import cli
+    from ... import cli
     skill = profile / "skills" / "agent-atc"
     if cli.install_skill_tree(skill, include_codex_plugin=False, force=bool(getattr(args, "force", False)),
                               keep_existing=not getattr(args, "force", False), focused="pi_skill") != 0:
@@ -473,7 +473,7 @@ def _fresh_session(profile: Path, cwd: Path) -> str:
 
 
 def _verify_owner_identity(directory: Path, nonce: str) -> bool:
-    from . import cli
+    from ... import cli
     try:
         owner = read_record(directory / "owner.json")
         if owner.get("owner_nonce") != nonce or owner.get("state") not in ("active", "closed"):
@@ -500,7 +500,7 @@ def record_spawn(directory: Path, nonce: str, process) -> None:
     Windows command shims may spawn Node under another PID; the monitor then
     verifies the actual Node owner instead, and absence of evidence blocks recovery.
     """
-    from . import cli
+    from ... import cli
     identity = cli.daemon_process_identity(process.pid)
     if identity is not None:
         storage.write_request(directory / f"spawn-{nonce}.json", {
@@ -508,7 +508,7 @@ def record_spawn(directory: Path, nonce: str, process) -> None:
 
 
 def managed_pi(args: argparse.Namespace) -> int:
-    from . import cli
+    from ... import cli
     forwarded = list(args.pi_args)
     if forwarded[:1] == ["--"]:
         forwarded.pop(0)

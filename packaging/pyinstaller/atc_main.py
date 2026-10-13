@@ -8,7 +8,7 @@ import sys
 
 if __name__ == "__main__":
     if Path(sys.argv[0]).stem == "atc-desktop-core":
-        from agent_atc.desktop_core import main
+        from agent_atc.harness.codex.desktop.core import main
     else:
         from agent_atc.cli import main
 

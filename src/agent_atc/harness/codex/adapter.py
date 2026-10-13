@@ -6,7 +6,7 @@ import json
 from collections.abc import Mapping
 from typing import Literal
 
-from .base import (
+from ..base import (
     ChildOptions,
     CODEX_REASONING_EFFORTS,
     DEFAULT_APPROVAL_POLICY,

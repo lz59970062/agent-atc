@@ -20,8 +20,9 @@ import time
 import unittest
 from unittest import mock
 
-from agent_atc import cli, diagnostics, pi_callback
-from agent_atc.agents import AGENTS, CHILD_AGENT_NAMES, ChildOptions, get_agent, get_child_agent
+from agent_atc import cli, diagnostics
+from agent_atc.harness.pi import channel as pi_callback
+from agent_atc.harness import AGENTS, CHILD_AGENT_NAMES, ChildOptions, get_agent, get_child_agent
 from agent_atc.runtime import worker_command
 from test_cli import assert_private_file, executable_python_fixture, patch_fixture_commands
 

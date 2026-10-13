@@ -22,10 +22,10 @@ dependencies = ["PyYAML>=6.0"]
 
 [project.scripts]
 atc = "agent_atc.cli:main"
-atc-desktop-core = "agent_atc.desktop_core:main"
+atc-desktop-core = "agent_atc.harness.codex.desktop.core:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
-agent_atc = ["skill/SKILL.md", "claude_skill/SKILL.md", "pi_skill/SKILL.md", "skill/agents/openai.yaml", "templates/*.md", "owners/*.ps1", "desktop_windows_assets/*.ps1", "desktop_windows_assets/*.py", "pi_extension/*.js"]
+agent_atc = ["skill/SKILL.md", "claude_skill/SKILL.md", "pi_skill/SKILL.md", "skill/agents/openai.yaml", "templates/*.md", "owners/*.ps1", "harness/codex/desktop/windows_assets/*.ps1", "harness/codex/desktop/windows_assets/*.py", "harness/pi/extension/*.js"]

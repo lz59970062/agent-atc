@@ -297,7 +297,7 @@ rerun its already completed business command or manually manufacture an ACK.
 ```powershell
 atc desktop status
 # Only if a standalone gateway remains after its clients close:
-python -m agent_atc.desktop_bridge --stop
+python -m agent_atc.harness.codex.desktop.bridge --stop
 ```
 
 For the module command, use the Python interpreter that owns the installed ATC

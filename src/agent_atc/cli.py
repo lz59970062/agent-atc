@@ -34,26 +34,27 @@ except ImportError:  # pragma: no cover - the durable run lifecycle is POSIX-onl
 from . import __version__
 from . import callbacks
 from . import callback_transport
-from . import claude_code, pi_callback
+from .harness.claude import session as claude_code
+from .harness.pi import channel as pi_callback
 from . import diagnostics
 from . import storage
 from . import template_registration
-from .desktop_connection import BridgeEndpoint, UnixBridgeEndpoint, load_bridge_endpoint, load_unix_bridge_endpoint
-from .agents import AGENTS, AGENT_NAMES, CHILD_AGENT_NAMES, ChildOptions, get_agent, get_child_agent
-from .agents.base import (
+from .harness.codex.desktop.connection import BridgeEndpoint, UnixBridgeEndpoint, load_bridge_endpoint, load_unix_bridge_endpoint
+from .harness import AGENTS, AGENT_NAMES, CHILD_AGENT_NAMES, ChildOptions, get_agent, get_child_agent
+from .harness.base import (
     DEFAULT_APPROVALS_REVIEWER,
     DEFAULT_APPROVAL_POLICY,
     DEFAULT_SANDBOX_MODE,
     DEFAULT_CLAUDE_PERMISSION_MODE,
 )
-from .agents.codex import CODEX_THREAD_ID_ENV
-from .agents.claude import (
+from .harness.codex.adapter import CODEX_THREAD_ID_ENV
+from .harness.claude.adapter import (
     CLAUDE_THREAD_ID_ENV,
     CLAUDE_MARKER_ENV,
     CLAUDE_BIN_ENV,
     CLAUDE_PERMISSION_MODE_ENV,
 )
-from .agents.pi import PI_BIN_ENV, PI_SESSION_FILE_ENV
+from .harness.pi.adapter import PI_BIN_ENV, PI_SESSION_FILE_ENV
 from .runtime import worker_command
 from .owners import LaunchError, OwnerState, ScreenBackend, SystemdUserBackend, LaunchdBackend
 from .owners import linux as linux_platform
@@ -4865,7 +4866,7 @@ def select_daemon_service(args: argparse.Namespace) -> str:
 
 
 def setup(args: argparse.Namespace) -> int:
-    from . import desktop
+    from .harness.codex.desktop import launcher as desktop
 
     try:
         desktop.validate_setup(args)
@@ -5769,7 +5770,7 @@ def main() -> int:
 
     args = parser.parse_args()
     if args.mode == "desktop":
-        from . import desktop
+        from .harness.codex.desktop import launcher as desktop
         return desktop.command(args)
     if args.mode == "retry":
         return retry_callback(args)
@@ -5822,10 +5823,10 @@ def main() -> int:
     if args.mode == "wait":
         return claude_code.wait(args)
     if args.mode == "claude":
-        from . import claude_channel
+        from .harness.claude import channel as claude_channel
         return claude_channel.launch(args)
     if args.mode == "_claude-channel":
-        from . import claude_channel
+        from .harness.claude import channel as claude_channel
         return claude_channel.serve(args)
     if args.mode == "goal":
         if args.goal_mode == "start":

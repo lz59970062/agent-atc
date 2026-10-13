@@ -40,7 +40,7 @@ Claude 还提供 `atc claude` channel 研究预览入口，已记录 Linux 上 C
 
 ## 接入新的 Harness
 
-从仓库的 [`agents/base.py`](https://github.com/lz59970062/agent-atc/blob/main/src/agent_atc/agents/base.py) 和 [`agents/registry.py`](https://github.com/lz59970062/agent-atc/blob/main/src/agent_atc/agents/registry.py) 开始：
+从仓库的 [`harness/base.py`](https://github.com/lz59970062/agent-atc/blob/main/src/agent_atc/harness/base.py) 和 [`harness/registry.py`](https://github.com/lz59970062/agent-atc/blob/main/src/agent_atc/harness/registry.py) 开始：
 
 1. 实现子 Agent 启动：定位程序、构造命令、传入提示词，并约定回答写入文件还是标准输出。
 2. 定义会话绑定：读取当前会话标识，保存恢复会话需要的 profile 和目录。
@@ -52,7 +52,7 @@ Claude 还提供 `atc claude` channel 研究预览入口，已记录 Linux 上 C
 
 ## 实现与验证依据
 
-- [当前适配器注册表](https://github.com/lz59970062/agent-atc/blob/main/src/agent_atc/agents/__init__.py)
+- [当前适配器注册表](https://github.com/lz59970062/agent-atc/blob/main/src/agent_atc/harness/__init__.py)
 - [0.7.0 发布验证](https://github.com/lz59970062/agent-atc/blob/main/docs/validation-0.7.0.md)
 - [Claude Code 平台记录](https://github.com/lz59970062/agent-atc/blob/main/docs/claude-code.md#platform-status)
 - [Pi 接入与验证](https://github.com/lz59970062/agent-atc/blob/main/docs/validation-pi-child.md)

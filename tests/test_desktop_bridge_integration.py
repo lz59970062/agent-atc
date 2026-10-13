@@ -13,8 +13,8 @@ import time
 import unittest
 
 from agent_atc import cli
-from agent_atc.desktop_connection import load_bridge_endpoint
-from agent_atc.desktop_bridge import bridge_status, stop_bridge
+from agent_atc.harness.codex.desktop.connection import load_bridge_endpoint
+from agent_atc.harness.codex.desktop.bridge import bridge_status, stop_bridge
 from agent_atc.system import windows_process
 
 
@@ -37,7 +37,7 @@ class RealCodexBridgeTests(unittest.TestCase):
             with (root / "wrapper.log").open("w", encoding="utf-8") as log:
                 installed_wrapper = os.environ.get("ATC_TEST_DESKTOP_CORE_WRAPPER")
                 launcher = ([installed_wrapper] if installed_wrapper else
-                            [sys.executable, "-m", "agent_atc.desktop_core"])
+                            [sys.executable, "-m", "agent_atc.harness.codex.desktop.core"])
                 process = subprocess.Popen(
                     [*launcher, "app-server",
                      "-c", "features.code_mode_host=true", "--analytics-default-enabled"],
@@ -115,7 +115,7 @@ class RealCodexBridgeTests(unittest.TestCase):
             metadata = root / "state" / "bridge.json"
             env = dict(os.environ, CODEX_HOME=str(profile), ATC_HOME=str(profile / "atc-home"), PYTHONIOENCODING="utf-8")
             env.pop("CODEX_THREAD_ID", None)
-            command = [sys.executable, "-m", "agent_atc.desktop_bridge",
+            command = [sys.executable, "-m", "agent_atc.harness.codex.desktop.bridge",
                        "--codex-home", str(profile), "--metadata-file", str(metadata)]
             if os.environ.get("ATC_TEST_CODEX_BRIDGE_BIN"):
                 command.extend(["--codex-bin", os.environ["ATC_TEST_CODEX_BRIDGE_BIN"]])

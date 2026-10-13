@@ -13,7 +13,8 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from agent_atc import claude_channel, claude_code, cli
+from agent_atc.harness.claude import channel as claude_channel, session as claude_code
+from agent_atc import cli
 
 SRC = str(Path(__file__).resolve().parents[1] / "src")
 SESSION = "3f0c9a52-claude-session"

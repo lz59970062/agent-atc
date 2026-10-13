@@ -4,7 +4,7 @@ from __future__ import annotations
 import unittest
 from pathlib import Path
 
-from agent_atc.agents import AGENTS, AgentRegistry, ChildOptions, get_agent
+from agent_atc.harness import AGENTS, AgentRegistry, ChildOptions, get_agent
 
 
 class FixtureAdapter:

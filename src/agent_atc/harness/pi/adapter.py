@@ -11,7 +11,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Literal
 
-from .base import ChildOptions, resume_target
+from ..base import ChildOptions, resume_target
 
 PI_BIN_ENV = "ATC_PI_BIN"
 PI_SESSION_ID_ENV = "PI_SESSION_ID"

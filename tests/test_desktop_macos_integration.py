@@ -13,7 +13,7 @@ import time
 import unittest
 
 from agent_atc import cli
-from agent_atc.desktop_connection import load_unix_bridge_endpoint
+from agent_atc.harness.codex.desktop.connection import load_unix_bridge_endpoint
 
 
 @unittest.skipUnless(sys.platform == "darwin" and os.environ.get("ATC_TEST_MACOS_DESKTOP") == "1",
@@ -33,7 +33,7 @@ class MacDesktopIntegrationTests(unittest.TestCase):
             callback = None
             with (root / "wrapper.log").open("w") as log:
                 wrapper = os.environ.get("ATC_TEST_DESKTOP_CORE_WRAPPER")
-                command = [wrapper] if wrapper else [sys.executable, "-m", "agent_atc.desktop_core"]
+                command = [wrapper] if wrapper else [sys.executable, "-m", "agent_atc.harness.codex.desktop.core"]
                 process = subprocess.Popen([*command, "-c", "features.code_mode_host=true", "app-server"],
                                            env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=log)
                 def read():

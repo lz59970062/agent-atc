@@ -12,9 +12,10 @@ import tempfile
 import unittest
 from unittest import mock
 
-from agent_atc import cli, desktop_macos as desktop
-from agent_atc.desktop_connection import load_unix_bridge_endpoint
-from agent_atc.desktop_core import app_server_arguments
+from agent_atc import cli
+from agent_atc.harness.codex.desktop import macos as desktop
+from agent_atc.harness.codex.desktop.connection import load_unix_bridge_endpoint
+from agent_atc.harness.codex.desktop.core import app_server_arguments
 
 
 @unittest.skipUnless(sys.platform == "darwin", "macOS Desktop launcher")

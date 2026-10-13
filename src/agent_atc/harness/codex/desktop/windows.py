@@ -14,10 +14,10 @@ from pathlib import Path
 import subprocess
 import sys
 
-from .callback_transport import configuration_path
-from .desktop_connection import load_bridge_endpoint
-from .runtime import worker_command
-from .storage import write_private_text, write_request
+from ....callback_transport import configuration_path
+from .connection import load_bridge_endpoint
+from ....runtime import worker_command
+from ....storage import write_private_text, write_request
 
 
 LAUNCHER_NAME = "Start ATC Desktop.cmd"
@@ -30,7 +30,7 @@ def powershell() -> Path:
 
 
 def launcher_resource() -> Path:
-    path = Path(__file__).with_name("desktop_windows_assets") / "start-desktop-bridge.ps1"
+    path = Path(__file__).with_name("windows_assets") / "start-desktop-bridge.ps1"
     if not path.is_file():
         raise ValueError("Windows Desktop launcher resources are missing; reinstall the complete ATC package")
     return path
@@ -184,7 +184,7 @@ def launch_command(config: dict[str, object], *, check_only: bool) -> list[str]:
 
 
 def command(args: argparse.Namespace) -> int:
-    from .cli import codex_home
+    from ....cli import codex_home
 
     try:
         if sys.platform != "win32":

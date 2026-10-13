@@ -7,9 +7,9 @@ an agent a callback target.
 """
 
 from .base import AgentAdapter, ChildAgentAdapter, ChildOptions
-from .claude import ClaudeAdapter
-from .codex import CodexAdapter
-from .pi import PiAdapter
+from .claude.adapter import ClaudeAdapter
+from .codex.adapter import CodexAdapter
+from .pi.adapter import PiAdapter
 from .registry import AgentRegistry
 
 AGENTS = AgentRegistry((CodexAdapter(), ClaudeAdapter(), PiAdapter()))
