@@ -13,6 +13,8 @@ import unittest
 from unittest import mock
 
 from agent_atc import cli
+from agent_atc.engine import tasks as managed_tasks
+from agent_atc.engine import worker as task_worker
 from test_cli import executable_python_fixture, patch_fixture_commands
 
 
@@ -37,7 +39,7 @@ class TemplateContractTests(unittest.TestCase):
                 "--agent", "claude", "--task", "independent contract tests",
                 *options, "--", prompt]
         with mock.patch.object(sys, "argv", argv), \
-                mock.patch.object(cli, "screen_binary", return_value="/usr/bin/screen"), \
+                mock.patch.object(managed_tasks, "screen_binary", return_value="/usr/bin/screen"), \
                 contextlib.redirect_stdout(io.StringIO()), \
                 contextlib.redirect_stderr(io.StringIO()):
             return cli.main()
@@ -125,8 +127,8 @@ class TemplateContractTests(unittest.TestCase):
         for exit_code in (0, 7):
             with self.subTest(exit_code=exit_code):
                 task = dict(original, state="completed", outcome="completed", exit_code=exit_code)
-                prompt = cli.managed_task_prompt(task, outcome="completed")
-                request = cli.managed_callback_request(task, prompt)
+                prompt = managed_tasks.managed_task_prompt(task, outcome="completed")
+                request = managed_tasks.managed_callback_request(task, prompt)
                 self.assertEqual(request["exit_code"], exit_code)
                 self.assertEqual(request["agent_template"], "test")
                 self.assertEqual(request["agent_template_version"], 1)
@@ -169,14 +171,14 @@ class TemplateContractTests(unittest.TestCase):
                 task_path = self.queue / "tasks" / task["id"] / "task.json"
                 submitted_prompt = Path(task["agent_prompt_path"]).read_text(encoding="utf-8")
                 task["state"] = "launching"
-                cli.write_managed_task(self.queue, task)
+                managed_tasks.write_managed_task(self.queue, task)
                 worker = argparse.Namespace(task_file=str(task_path), token=task["token"])
                 # A queued job must use its snapshot even if installed defaults change.
                 with mock.patch.dict(os.environ, {"STY": "test-screen"}, clear=True), \
                         mock.patch.dict(cli.TEMPLATES, {"test": {"version": 999,
                                                                "codex_model": "changed-model",
                                                                "codex_effort": "low"}}):
-                    self.assertEqual(cli.run_screen_worker(worker), exit_code)
+                    self.assertEqual(task_worker.run_screen_worker(worker), exit_code)
                 received = json.loads(capture.read_text(encoding="utf-8"))
                 self.assertEqual(received["prompt"], submitted_prompt)
                 argv = received["argv"]

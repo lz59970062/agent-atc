@@ -78,6 +78,8 @@ def queue_writable(root: Path) -> bool:
 def coordinator_issue(root: Path) -> dict[str, str] | None:
     """Observe the existing singleton inode without creating a new lock file."""
     from .. import cli
+    from ..engine import dispatch
+    from ..engine import tasks as managed_tasks
     from ..engine import delivery as delivery_engine
     from ..owners import host
     from ..store import records as queue_store
@@ -116,6 +118,8 @@ def coordinator_issue(root: Path) -> dict[str, str] | None:
 def environment_profile() -> dict[str, object]:
     """Describe this runtime; supported backends determine useful checks."""
     from .. import cli
+    from ..engine import dispatch
+    from ..engine import tasks as managed_tasks
     from ..engine import delivery as delivery_engine
     from ..owners import host
     from ..store import records as queue_store
@@ -135,6 +139,8 @@ def runtime_issues(root: Path) -> list[dict[str, object]]:
     a manager outage does not flood the calling Agent with one block per task.
     """
     from .. import cli
+    from ..engine import dispatch
+    from ..engine import tasks as managed_tasks
     from ..engine import delivery as delivery_engine
     from ..owners import host
     from ..store import records as queue_store
@@ -166,7 +172,7 @@ def runtime_issues(root: Path) -> list[dict[str, object]]:
 
     def handoff(task: dict[str, object], result: dict[str, object] | None, record_path: Path) -> None:
         task_id = str(task["id"])
-        if cli.managed_callback_exists(root, task_id):
+        if managed_tasks.managed_callback_exists(root, task_id):
             return
         finished = (result or {}).get("completed_at")
         if not isinstance(finished, (int, float)):
@@ -175,7 +181,7 @@ def runtime_issues(root: Path) -> list[dict[str, object]]:
         if now - float(finished) < HANDOFF_GRACE_SECONDS:
             return
         # The worker/coordinator may publish the callback during inspection.
-        if not cli.managed_callback_exists(root, task_id):
+        if not managed_tasks.managed_callback_exists(root, task_id):
             add("result_handoff_missing", task_id, str(task.get("execution_backend", "screen")),
                 "Inspect the saved result and restore callback handoff for this ID through the coordinator; do not rerun the business command.")
 
@@ -191,7 +197,7 @@ def runtime_issues(root: Path) -> list[dict[str, object]]:
     for path in paths:
         task_id, backend = path.parent.name, "unknown"
         try:
-            task = cli.load_managed_task(path)
+            task = managed_tasks.load_managed_task(path)
             backend = str(task.get("execution_backend", "screen"))
             state = task.get("state")
             if state not in {"submitted", "launching", "running", "completed", "interrupted", "launch_failed", "foreign_host"}:
@@ -205,7 +211,7 @@ def runtime_issues(root: Path) -> list[dict[str, object]]:
                 add("task_foreign_host", task_id, backend, "Restore the original host/container context for this unresolved task; do not restart its command on this host.")
                 continue
             # Completed historical work needs no live screen session or unit.
-            if state in {"completed", "interrupted", "launch_failed"} and cli.managed_callback_exists(root, task_id):
+            if state in {"completed", "interrupted", "launch_failed"} and managed_tasks.managed_callback_exists(root, task_id):
                 continue
             try:
                 result = result_for(task)
@@ -224,15 +230,15 @@ def runtime_issues(root: Path) -> list[dict[str, object]]:
                 add("task_boot_changed", task_id, backend, "The recorded execution predates this boot; inspect checkpoints and restore recovery reporting, not automatic command replay.")
                 continue
             launched = task.get("launch_requested_at", task.get("screen_submitted_at"))
-            if state == "launching" and isinstance(launched, (int, float)) and now - launched < cli.MANAGED_WORKER_HANDSHAKE_SECONDS:
+            if state == "launching" and isinstance(launched, (int, float)) and now - launched < managed_tasks.MANAGED_WORKER_HANDSHAKE_SECONDS:
                 continue
             try:
-                owner = cli.managed_owner_state(task)
+                owner = managed_tasks.managed_owner_state(task)
             except (OSError, RuntimeError, ValueError):
                 owner = OwnerState.UNKNOWN
             if owner == OwnerState.ALIVE:
                 continue
-            latest = cli.load_managed_task(path)
+            latest = managed_tasks.load_managed_task(path)
             try:
                 result = result_for(latest)
             except (OSError, ValueError):
@@ -275,6 +281,8 @@ def _work(args: argparse.Namespace) -> dict[str, object]:
 def inspect(args: argparse.Namespace) -> dict[str, object]:
     """Check supported environment, configuration and observed lifecycle state."""
     from .. import cli
+    from ..engine import dispatch
+    from ..engine import tasks as managed_tasks
     from ..engine import delivery as delivery_engine
     from ..owners import host
     from ..store import records as queue_store
@@ -311,7 +319,7 @@ def inspect(args: argparse.Namespace) -> dict[str, object]:
                 raise ValueError("backend selection already failed")
             selected = getattr(args, "_health_backend", None)
             if selected is None:
-                selected = cli.select_execution_backend(args)
+                selected = managed_tasks.select_execution_backend(args)
             choice = "systemd" if selected == "systemd-user" else str(selected)
             if selected == "screen" and not ScreenBackend().available():
                 raise ValueError("selected screen executable is not usable")
@@ -329,7 +337,7 @@ def inspect(args: argparse.Namespace) -> dict[str, object]:
     issues.extend(runtime_issues(root))
     issues.extend(delivery_issues(root))
 
-    callback_agent = cli.resolve_agent(args)
+    callback_agent = dispatch.resolve_agent(args)
     adapter = get_agent(callback_agent)
     executables: dict[str, str] = {}
     callback_executable = shutil.which(adapter.executable(delivery_engine.agent_environment(callback_agent)))
@@ -357,7 +365,7 @@ def inspect(args: argparse.Namespace) -> dict[str, object]:
     target_args.last = bool(getattr(args, "last", False))
     target = None
     try:
-        target, _ = cli.resolve_target(target_args)
+        target, _ = dispatch.resolve_target(target_args)
     except SystemExit:
         issues.append({"code": "session_unbound", "action": "Recover the actual originating Agent session ID and pass --session; never invent a target or substitute --last."})
 
@@ -491,6 +499,8 @@ def delivery_issues(root: Path) -> list[dict[str, object]]:
     each group. Commands, prompts and recorded exception text are never emitted.
     """
     from .. import cli
+    from ..engine import dispatch
+    from ..engine import tasks as managed_tasks
     from ..engine import delivery as delivery_engine
     from ..owners import host
     from ..store import records as queue_store
@@ -543,7 +553,7 @@ def delivery_issues(root: Path) -> list[dict[str, object]]:
                 try:
                     if settled(callback_id):
                         continue
-                    request = cli.load_request(path)
+                    request = dispatch.load_request(path)
                 except FileNotFoundError:
                     continue  # The coordinator may have moved the record.
                 except Exception:
@@ -556,7 +566,7 @@ def delivery_issues(root: Path) -> list[dict[str, object]]:
                 if request is None:
                     add("callback_record_unverified", callback_id=callback_id)
                     continue
-                agent = cli.request_agent(request)
+                agent = dispatch.request_agent(request)
                 code = ("callback_outcome_unknown" if request.get("retain_target_lease") is True
                         else "callback_transport_blocked" if request.get("delivery_state") == "blocked"
                         else "callback_delivery_failed")

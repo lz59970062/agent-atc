@@ -16,6 +16,9 @@ import unittest
 from unittest import mock
 
 from agent_atc import cli
+from agent_atc.engine import dispatch
+from agent_atc.engine import tasks as managed_tasks
+from agent_atc.engine import worker as task_worker
 from agent_atc.engine import delivery as delivery_engine
 from agent_atc.owners import host
 from agent_atc import runtime as atc_runtime
@@ -61,9 +64,9 @@ class WindowsLifecycleTests(unittest.TestCase):
 
     def launching(self, path):
         with mock.patch.object(WindowsBackend, "launch") as launch:
-            cli.recover_managed_tasks(self.root)
+            managed_tasks.recover_managed_tasks(self.root)
         self.assertEqual(launch.call_count, 1)
-        return cli.load_managed_task(path)
+        return managed_tasks.load_managed_task(path)
 
     def request(self, root, ident, state="pending"):
         request = {
@@ -96,10 +99,10 @@ class WindowsLifecycleTests(unittest.TestCase):
         ]
         for change in changes:
             with self.subTest(change=change), mock.patch.object(WindowsBackend, "admits_worker", return_value=True), mock.patch.object(
-                cli, "run_managed_worker_locked", return_value=7
+                task_worker, "run_managed_worker_locked", return_value=7
             ) as workload, mock.patch.object(windows_process, "enter_worker_job") as enter, contextlib.redirect_stderr(io.StringIO()):
                 queue_store.write_request(path, dict(task, **change))
-                self.assertEqual(cli.run_task_worker(args), 125 if change else 7)
+                self.assertEqual(task_worker.run_task_worker(args), 125 if change else 7)
                 self.assertEqual(workload.call_count, 0 if change else 1)
                 self.assertEqual(enter.call_count, 0 if change else 1)
 
@@ -109,8 +112,8 @@ class WindowsLifecycleTests(unittest.TestCase):
         for admitted, boot in ((False, "fixture-boot"), (True, None)):
             with self.subTest(admitted=admitted, boot=boot), mock.patch.object(WindowsBackend, "admits_worker", return_value=admitted), mock.patch.object(
                 host, "current_boot_id", return_value=boot
-            ), mock.patch.object(cli, "run_managed_worker_locked") as workload, contextlib.redirect_stderr(io.StringIO()):
-                self.assertEqual(cli.run_task_worker(argparse.Namespace(task_file=str(path), attempt=1)), 125)
+            ), mock.patch.object(task_worker, "run_managed_worker_locked") as workload, contextlib.redirect_stderr(io.StringIO()):
+                self.assertEqual(task_worker.run_task_worker(argparse.Namespace(task_file=str(path), attempt=1)), 125)
                 workload.assert_not_called()
 
     def test_unknown_and_ambiguous_launch_never_replay_business_work(self):
@@ -118,19 +121,19 @@ class WindowsLifecycleTests(unittest.TestCase):
         with mock.patch.object(WindowsBackend, "launch", side_effect=LaunchError("RPC reply lost", uncertain=True)) as launch, mock.patch.object(
             WindowsBackend, "probe", return_value=OwnerState.UNKNOWN
         ), contextlib.redirect_stderr(io.StringIO()):
-            cli.recover_managed_tasks(self.root)
-            cli.recover_managed_tasks(self.root)
+            managed_tasks.recover_managed_tasks(self.root)
+            managed_tasks.recover_managed_tasks(self.root)
         self.assertEqual(launch.call_count, 1)
-        task = cli.load_managed_task(path)
+        task = managed_tasks.load_managed_task(path)
         self.assertTrue(task["launch_uncertain"])
         self.assertEqual(task["state"], "launching")
         with mock.patch.object(WindowsBackend, "launch") as relaunch, mock.patch.object(
             WindowsBackend, "probe", return_value=OwnerState.ABSENT
-        ), mock.patch.object(cli, "MANAGED_WORKER_HANDSHAKE_SECONDS", 0), contextlib.redirect_stderr(io.StringIO()):
-            cli.recover_managed_tasks(self.root)
-            cli.recover_managed_tasks(self.root)
+        ), mock.patch.object(managed_tasks, "MANAGED_WORKER_HANDSHAKE_SECONDS", 0), contextlib.redirect_stderr(io.StringIO()):
+            managed_tasks.recover_managed_tasks(self.root)
+            managed_tasks.recover_managed_tasks(self.root)
         relaunch.assert_not_called()
-        recovered = cli.load_managed_task(path)
+        recovered = managed_tasks.load_managed_task(path)
         self.assertEqual((recovered["state"], recovered["outcome"]), ("interrupted", "unknown"))
         self.assertEqual(len(list((self.root / "pending").glob("*.json"))), 1)
 
@@ -138,24 +141,24 @@ class WindowsLifecycleTests(unittest.TestCase):
         path = self.submit()
         task = self.launching(path)
         task.update(state="running", boot_id="fixture-boot")
-        cli.write_managed_task(self.root, task)
+        managed_tasks.write_managed_task(self.root, task)
         with mock.patch.object(WindowsBackend, "launch") as launch, mock.patch.object(
             WindowsBackend, "probe", return_value=OwnerState.UNKNOWN
         ), mock.patch.object(host, "current_boot_id", return_value=None):
-            cli.recover_managed_tasks(self.root)
-            cli.recover_managed_tasks(self.root)
+            managed_tasks.recover_managed_tasks(self.root)
+            managed_tasks.recover_managed_tasks(self.root)
         launch.assert_not_called()
-        self.assertEqual(cli.load_managed_task(path)["state"], "running")
+        self.assertEqual(managed_tasks.load_managed_task(path)["state"], "running")
         self.assertEqual(list((self.root / "pending").glob("*.json")), [])
 
     def test_result_survives_callback_failure_and_recovers_same_id_without_replay(self):
         path = self.submit()
         task = self.launching(path)
         environment = dict(os.environ)
-        with mock.patch.object(cli, "queue_managed_task_callback", side_effect=OSError("callback write failed")), mock.patch.object(
+        with mock.patch.object(managed_tasks, "queue_managed_task_callback", side_effect=OSError("callback write failed")), mock.patch.object(
             cli.subprocess, "run", return_value=subprocess.CompletedProcess([], 7)
         ) as workload, contextlib.redirect_stderr(io.StringIO()):
-            self.assertEqual(cli.run_managed_worker_locked(self.root, task), 7)
+            self.assertEqual(task_worker.run_managed_worker_locked(self.root, task), 7)
         # The worker restores its captured environment; isolate that behavior
         # from the test runner just as the real worker process is isolated.
         os.environ.clear()
@@ -166,17 +169,17 @@ class WindowsLifecycleTests(unittest.TestCase):
         self.assertEqual(result["outcome"], "completed")
         # Also model the crash after result publication but before metadata.
         task.update(state="running", boot_id="fixture-boot")
-        cli.write_managed_task(self.root, task)
+        managed_tasks.write_managed_task(self.root, task)
         with mock.patch.object(WindowsBackend, "launch") as launch, mock.patch.object(
             WindowsBackend, "probe", return_value=OwnerState.UNKNOWN
         ) as probe, contextlib.redirect_stderr(io.StringIO()):
-            cli.recover_managed_tasks(self.root)
-            cli.recover_managed_tasks(self.root)
+            managed_tasks.recover_managed_tasks(self.root)
+            managed_tasks.recover_managed_tasks(self.root)
         launch.assert_not_called()
         probe.assert_not_called()
         callbacks = list((self.root / "pending").glob("*.json"))
         self.assertEqual(len(callbacks), 1)
-        callback = cli.load_request(callbacks[0])
+        callback = dispatch.load_request(callbacks[0])
         self.assertEqual(callback["id"], task["id"])
         self.assertEqual(callback["exit_code"], 7)
         self.assertEqual(callback["target"], {"kind": "session", "value": "windows-original-session"})

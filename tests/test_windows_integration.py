@@ -20,6 +20,7 @@ import unittest
 from unittest import mock
 
 from agent_atc import cli
+from agent_atc.engine import tasks as managed_tasks
 from agent_atc.store import layout
 from agent_atc.install import diagnostics, windows_service
 from agent_atc.owners import OwnerState
@@ -72,7 +73,7 @@ class WindowsIntegrationTests(unittest.TestCase):
         with contextlib.redirect_stderr(io.StringIO()):
             self.assertEqual(cli.run(args), 0)
         path = next(layout.managed_tasks_root(self.root).glob("*/task.json"))
-        task = cli.load_managed_task(path)
+        task = managed_tasks.load_managed_task(path)
         self.owners.append(WindowsBackend().owner_name(task["id"], 1, self.root))
         return path, task
 
@@ -91,7 +92,7 @@ class WindowsIntegrationTests(unittest.TestCase):
             raise SystemExit(7)
             """), encoding="utf-8")
         task_path, task = self.submit(script, str(started), str(release), str(executions))
-        coordinator_code = "from pathlib import Path; from agent_atc import cli; import sys,time; cli.recover_managed_tasks(Path(sys.argv[1])); time.sleep(40)"
+        coordinator_code = "from pathlib import Path; from agent_atc import cli; import sys,time; managed_tasks.recover_managed_tasks(Path(sys.argv[1])); time.sleep(40)"
         # This submitter/control process can disappear; Task Scheduler owns the runner.
         coordinator = subprocess.Popen([sys.executable, "-c", coordinator_code, str(self.root)],
                                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -100,20 +101,20 @@ class WindowsIntegrationTests(unittest.TestCase):
             coordinator.terminate()
             coordinator.wait(timeout=5)
             self.assertEqual(WindowsBackend().probe(self.owners[0]), OwnerState.ALIVE)
-            cli.recover_managed_tasks(self.root)
+            managed_tasks.recover_managed_tasks(self.root)
             self.assertEqual(executions.read_text(encoding="utf-8").splitlines(), ["run"])
             release.touch()
             callback = layout.request_path(self.root, "pending", task["id"])
             self.wait_until(callback.exists, "runner did not publish its callback")
             result = json.loads(layout.managed_result_path(self.root, task["id"]).read_text(encoding="utf-8"))
             self.assertEqual(result["exit_code"], 7)
-            self.assertEqual(cli.load_managed_task(task_path)["state"], "completed")
+            self.assertEqual(managed_tasks.load_managed_task(task_path)["state"], "completed")
             self.assertIn("completed after coordinator exit", Path(task["log_path"]).read_text(encoding="utf-8"))
             self.assertEqual(json.loads(callback.read_text(encoding="utf-8"))["target"]["value"], "fixture-no-model")
             self.wait_until(lambda: WindowsBackend().probe(self.owners[0]) == OwnerState.ABSENT,
                             "runner failed to exit")
-            cli.recover_managed_tasks(self.root)
-            self.assertTrue(cli.load_managed_task(task_path).get("owner_collected_at"))
+            managed_tasks.recover_managed_tasks(self.root)
+            self.assertTrue(managed_tasks.load_managed_task(task_path).get("owner_collected_at"))
             self.assertEqual(executions.read_text(encoding="utf-8").splitlines(), ["run"])
         finally:
             if coordinator.poll() is None:

@@ -20,6 +20,8 @@ import unittest
 from unittest import mock
 
 from agent_atc import cli
+from agent_atc.engine import dispatch
+from agent_atc.engine import tasks as managed_tasks
 from agent_atc.harness.codex import app_server
 from agent_atc.owners import host
 from agent_atc.store import layout
@@ -74,7 +76,7 @@ class RealLaunchdTests(unittest.TestCase):
             with mock.patch.object(host, "current_boot_id", return_value=None):
                 self.assertEqual(cli.run(args), 0)
             task_path = next(layout.managed_tasks_root(root).glob("*/task.json"))
-            task = cli.load_managed_task(task_path)
+            task = managed_tasks.load_managed_task(task_path)
             task_owner = backend.owner_name(task["id"], 1, root)
             coordinator_owner = backend.owner_name("test-coordinator", 1, root)
             coordinator = directory / "coordinator.py"
@@ -84,10 +86,12 @@ class RealLaunchdTests(unittest.TestCase):
                 from pathlib import Path
                 sys.path.insert(0, {source!r})
                 from agent_atc import cli
+                from agent_atc.engine import dispatch
+                from agent_atc.engine import tasks as managed_tasks
                 from agent_atc.harness.codex import app_server
                 from agent_atc.owners import host
                 from agent_atc.store import layout
-                cli.recover_managed_tasks(Path(sys.argv[1]))
+                managed_tasks.recover_managed_tasks(Path(sys.argv[1]))
                 time.sleep(40)
                 """))
             try:
@@ -96,7 +100,7 @@ class RealLaunchdTests(unittest.TestCase):
                 self.wait_until(started.exists, "launchd task did not start")
                 self.remove_job(coordinator_owner)
                 self.assertEqual(backend.probe(task_owner), OwnerState.ALIVE)
-                cli.recover_managed_tasks(root)
+                managed_tasks.recover_managed_tasks(root)
                 self.assertEqual(executions.read_text().splitlines(), ["executed"])
                 self.assertEqual(diagnostics.runtime_issues(root), [])
                 release.touch()
@@ -105,13 +109,13 @@ class RealLaunchdTests(unittest.TestCase):
                 self.wait_until(lambda: backend.probe(task_owner) == OwnerState.ABSENT, "task owner did not exit")
                 self.assertEqual(json.loads(layout.managed_result_path(root, task["id"]).read_text())["exit_code"], 7)
                 self.assertIn("finished after coordinator exit", Path(task["log_path"]).read_text())
-                cli.recover_managed_tasks(root)
-                cli.recover_managed_tasks(root)
-                self.assertTrue(cli.load_managed_task(task_path).get("owner_collected_at"))
+                managed_tasks.recover_managed_tasks(root)
+                managed_tasks.recover_managed_tasks(root)
+                self.assertTrue(managed_tasks.load_managed_task(task_path).get("owner_collected_at"))
                 self.assertEqual(macos.job_status(task_owner), (OwnerState.ABSENT, None, False))
                 self.assertEqual(executions.read_text().splitlines(), ["executed"])
                 self.assertEqual(len(list((root / "pending").glob("*.json"))), 1)
-                self.assertEqual(cli.load_request(callback_path)["target"], {"kind": "session", "value": "fixture-no-real-agent"})
+                self.assertEqual(dispatch.load_request(callback_path)["target"], {"kind": "session", "value": "fixture-no-real-agent"})
             finally:
                 self.remove_job(task_owner)
                 self.remove_job(coordinator_owner)

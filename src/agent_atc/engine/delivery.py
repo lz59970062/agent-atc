@@ -25,6 +25,7 @@ from ..store import layout
 from ..store import records as queue_store
 from ..system import commands
 from .. import cli
+from . import dispatch
 from . import reminders as reminder_policy
 from ..harness.codex import app_server
 
@@ -73,13 +74,13 @@ def agent_environment(agent: str) -> dict[str, str]:
 
 
 def resume_command(request: dict[str, object]) -> list[str]:
-    agent = cli.request_agent(request)
+    agent = dispatch.request_agent(request)
     return get_agent(agent).resume_command(request, agent_environment(agent))
 
 
 def resume_cwd(request: dict[str, object]) -> str:
     """Claude looks sessions up by their starting directory, not the task's."""
-    if cli.request_agent(request) == "claude":
+    if dispatch.request_agent(request) == "claude":
         session_cwd = claude_code.resume_cwd(request, os.environ)
         if session_cwd:
             return session_cwd
@@ -112,7 +113,7 @@ def callback_target_key(request: dict[str, object]) -> str | None:
     kind = target.get("kind")
     value = target.get("value")
     if kind == "session" and isinstance(value, str) and value:
-        if cli.request_agent(request) == "pi":
+        if dispatch.request_agent(request) == "pi":
             value = pi_callback.canonical_session(value)
         return f"session:{value}"
     if kind == "last":
@@ -256,7 +257,7 @@ def reconcile_acknowledged_retained_leases(root: Path) -> None:
             if not layout.ack_path(root, request_id).exists() and not layout.request_path(root, "canceled", request_id).exists():
                 continue
             try:
-                request = cli.load_request(path)
+                request = dispatch.load_request(path)
                 release_retained_target_lease(root, request)
             except (OSError, RuntimeError) as exc:
                 print(
@@ -415,7 +416,7 @@ def start_desktop_app_server_turn(payload: dict[str, object]) -> app_server.Desk
         return None
     if request.get("callback_mode") == "manual":
         raise app_server.CallbackTransportBlocked("manual callback mode does not launch an Agent")
-    if cli.request_agent(request) != "codex":
+    if dispatch.request_agent(request) != "codex":
         return None  # The Desktop App Server delivery path is Codex-only.
     try:
         socket_path = app_server.desktop_app_server_socket(request)
@@ -633,7 +634,7 @@ def delivery_worker_main() -> int:
             result = wait_for_remote_delivery(payload, desktop_delivery, timeout)
         else:
             request = payload.get("request")
-            if isinstance(request, dict) and cli.request_agent(request) == "pi":
+            if isinstance(request, dict) and dispatch.request_agent(request) == "pi":
                 payload["prompt"] = prompt
                 pi_delivery = pi_callback.prepare_delivery(payload)
                 if not pi_delivery.online:
@@ -884,7 +885,7 @@ def process_one(root: Path, args: argparse.Namespace) -> bool:
         return True
 
     try:
-        request = cli.load_request(running)
+        request = dispatch.load_request(running)
         request_id = str(request.get("id", running.stem))
         if layout.ack_path(root, request_id).exists():
             queue_store.move_request(running, root / "done")
@@ -939,7 +940,7 @@ def process_one(root: Path, args: argparse.Namespace) -> bool:
             request["delivery_state"] = "blocked"
             request["last_error"] = "callback transport blocked; repair the original session connection, then use atc retry --id " + request_id
         if result.returncode == 125 and not acked:
-            delivery_name = "Pi" if cli.request_agent(request) == "pi" else "Desktop"
+            delivery_name = "Pi" if dispatch.request_agent(request) == "pi" else "Desktop"
             request["last_error"] = delivery_name + " callback outcome is unknown; automatic retry suppressed to prevent duplicate delivery"
             request["retain_target_lease"] = True
             destination_dir = root / "failed"
@@ -1016,7 +1017,7 @@ def recover_running(root: Path) -> None:
         if queue_store.delivery_lock_is_held(root, path.stem):
             continue
         try:
-            request = cli.load_request(path)
+            request = dispatch.load_request(path)
             request_id = str(request.get("id", path.stem))
             destination = root / ("done" if layout.ack_path(root, request_id).exists() else "pending")
             queue_store.move_request(path, destination)

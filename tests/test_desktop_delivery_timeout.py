@@ -19,6 +19,7 @@ import unittest
 from unittest import mock
 
 from agent_atc import cli
+from agent_atc.engine import dispatch
 from agent_atc.engine import delivery as delivery_engine
 from agent_atc.harness.codex import app_server
 from agent_atc.store import records as queue_store
@@ -56,6 +57,7 @@ class DesktopDeliveryTimeoutTests(unittest.TestCase):
             import argparse,json,os,sys,time
             from pathlib import Path
             from agent_atc import cli
+            from agent_atc.engine import dispatch
             from agent_atc.engine import delivery as delivery_engine
             from agent_atc.harness.codex import app_server
             from agent_atc.store import records as queue_store
@@ -142,7 +144,7 @@ class DesktopDeliveryTimeoutTests(unittest.TestCase):
         ):
             self.assertTrue(delivery_engine.process_one(self.root, args))
             self.assertFalse(delivery_engine.process_one(self.root, args))
-        failed = cli.load_request(layout.request_path(self.root, "failed", self.request["id"]))
+        failed = dispatch.load_request(layout.request_path(self.root, "failed", self.request["id"]))
         self.assertTrue(failed["retain_target_lease"])
         self.assertEqual(failed["attempts"], 1)
         self.assertFalse(layout.request_path(self.root, "pending", self.request["id"]).exists())

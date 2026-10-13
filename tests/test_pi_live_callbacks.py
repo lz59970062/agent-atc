@@ -11,6 +11,8 @@ import time
 import unittest
 
 from agent_atc import callback_transport, cli
+from agent_atc.engine import dispatch
+from agent_atc.engine import tasks as managed_tasks
 from agent_atc.engine import delivery as delivery_engine
 from agent_atc.harness.codex import app_server
 from agent_atc.store import records as queue_store
@@ -29,7 +31,7 @@ def build_bound(tmp_path):
                                   'cwd': str(tmp_path), 'timestamp': '2026-10-04T00:00:00.000Z'}) + '\n')
     args = argparse.Namespace(agent='pi', session=str(session), last=False, cwd=str(tmp_path),
                               task='fixture', callback_mode='cli')
-    request = cli.make_request(args, 'Wake the same Pi')
+    request = dispatch.make_request(args, 'Wake the same Pi')
     request['id'] = 'fixture'
     queue = tmp_path / 'queue'; queue_store.ensure_daemon_dirs(queue)
     directory = bridge.channel_dir(str(session), Path(request['pi_channel_root']))
@@ -66,24 +68,24 @@ class PiLiveCallbackTests(unittest.TestCase):
         request, _, _, queue, _ = self.bound
         args = argparse.Namespace(agent='pi', session=request['target']['value'], last=False,
                                   cwd=request['cwd'], task='fixture', callback_mode='cli')
-        steer = cli.make_request(args, 'Steer with completed results')
+        steer = dispatch.make_request(args, 'Steer with completed results')
         assert steer['version'] == 4 and steer['pi_delivery'] == 'steer'
         steer['id'] = 'fixture'
         path = queue/'pending/fixture.json'
         queue_store.write_request(path, steer)
-        assert cli.load_request(path)['pi_delivery'] == 'steer'
+        assert dispatch.load_request(path)['pi_delivery'] == 'steer'
         task = dict(steer, version=5, queue_dir=str(queue), execution_backend='screen',
                     screen_session='atc-fixture', state='completed', command='/bin/true',
                     wrapped_command=['/bin/true'], log_path=str(self.directory/'task.log'))
         task_path = self.directory/'fixture/task.json'
         queue_store.write_request(task_path, task)
-        loaded = cli.load_managed_task(task_path)
+        loaded = managed_tasks.load_managed_task(task_path)
         with mock.patch.dict(os.environ, {bridge.PROFILE_ENV: str(self.directory/'other-profile')}):
-            restored = cli.managed_callback_request(loaded, 'Saved result')
+            restored = managed_tasks.managed_callback_request(loaded, 'Saved result')
         assert restored['version'] == 4 and restored['pi_delivery'] == 'steer'
         task_path.write_text(json.dumps(dict(task, pi_delivery='invalid')))
         with self.assertRaisesRegex(ValueError, 'Pi delivery'):
-            cli.load_managed_task(task_path)
+            managed_tasks.load_managed_task(task_path)
 
     def test_legacy_follow_up_and_invalid_delivery(self):
         request, _, _, queue, _ = self.bound
@@ -92,11 +94,11 @@ class PiLiveCallbackTests(unittest.TestCase):
         legacy['version'] = 3
         path = queue/'pending/fixture.json'
         queue_store.write_request(path, legacy)
-        assert cli.load_request(path)['version'] == 3
+        assert dispatch.load_request(path)['version'] == 3
         assert bridge.inspect_route(legacy)['status'] == 'owner_registered'
         queue_store.write_request(path, dict(request, pi_delivery='invalid'))
         with self.assertRaisesRegex(ValueError, 'Pi delivery'):
-            cli.load_request(path)
+            dispatch.load_request(path)
         args = argparse.Namespace(agent='codex', callback_mode='cli')
         assert 'pi_delivery' not in callback_transport.selection(args)
 
@@ -106,7 +108,7 @@ class PiLiveCallbackTests(unittest.TestCase):
         args = argparse.Namespace(queue_dir=str(queue), id='fixture', callback_mode='cli')
         with mock.patch.dict(os.environ, {bridge.PROFILE_ENV: str(self.directory/'other-profile')}):
             assert cli.retry_callback(args) == 0
-        restored = cli.load_request(queue/'pending/fixture.json')
+        restored = dispatch.load_request(queue/'pending/fixture.json')
         assert restored['version'] == 4 and restored['pi_delivery'] == 'steer'
         for key in bridge.ROUTE_FIELDS:
             assert restored[key] == request[key]
@@ -167,14 +169,14 @@ class PiLiveCallbackTests(unittest.TestCase):
 
     def queue_published(self):
         request, owner, directory, queue, payload = self.bound
-        request = cli.prepare_request_for_queue(queue, request, payload['prompt'])
+        request = dispatch.prepare_request_for_queue(queue, request, payload['prompt'])
         queue_store.write_request(queue / 'pending' / 'fixture.json', request)
         args = argparse.Namespace(resume_timeout=3600, retries=3, retry_delay=0, retry_backoff=1)
         started = time.monotonic()
         assert delivery_engine.process_one(queue, args)
         # The daemon returns as soon as the live mailbox has the callback.
         assert time.monotonic() - started < 15
-        published = cli.load_request(queue / 'pending' / 'fixture.json')
+        published = dispatch.load_request(queue / 'pending' / 'fixture.json')
         assert published['attempts'] == 0 and published['last_deferred_reason'] == bridge.PUBLISHED_REASON
         assert isinstance(published['pi_published_at'], float)
         return published, owner, directory, queue
@@ -185,7 +187,7 @@ class PiLiveCallbackTests(unittest.TestCase):
         assert delivery_engine.select_pending(queue, time.time() + 7200) is None  # Held for this session only.
         other = argparse.Namespace(agent='codex', session='other-thread', last=False, cwd=str(self.directory),
                                    task='other', callback_mode='cli')
-        other_request = cli.make_request(other, 'Wake another session')
+        other_request = dispatch.make_request(other, 'Wake another session')
         other_request['id'] = 'other'
         queue_store.write_request(queue / 'pending' / 'other.json', other_request)
         # Another session's callback is not stuck behind the unacknowledged Pi one.
@@ -209,7 +211,7 @@ class PiLiveCallbackTests(unittest.TestCase):
                 else:
                     timeout = 0.001
                 bridge.reconcile_publications(queue, timeout)
-                failed = cli.load_request(queue / 'failed' / 'fixture.json')
+                failed = dispatch.load_request(queue / 'failed' / 'fixture.json')
                 assert failed['retain_target_lease'] is True
                 assert 'had not admitted it yet' in failed['last_error'], failed['last_error']
                 assert delivery_engine.retained_target_lease_is_held(request)  # Never replayed automatically.
@@ -393,4 +395,4 @@ class PiLiveCallbackTests(unittest.TestCase):
         values={'ATC_PI_RESERVATION':'owner','ATC_PI_RECOVERY':'1',
                 'ATC_PI_CALLBACK_ACK_PATH':'/ack','ATC_PI_CALLBACK_CANCEL_PATH':'/cancel',
                 'PI_CODING_AGENT_DIR':'/keep/profile','PATH':'/keep/path'}
-        assert cli.child_agent_environment(values)=={'PI_CODING_AGENT_DIR':'/keep/profile','PATH':'/keep/path'}
+        assert managed_tasks.child_agent_environment(values)=={'PI_CODING_AGENT_DIR':'/keep/profile','PATH':'/keep/path'}

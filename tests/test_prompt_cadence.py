@@ -12,6 +12,7 @@ import unittest
 from unittest import mock
 
 from agent_atc import cli
+from agent_atc.engine import dispatch
 from agent_atc.engine import delivery as delivery_engine
 from agent_atc.engine import reminders as reminder_policy
 from agent_atc.store import layout
@@ -262,8 +263,8 @@ class PromptCadenceTests(unittest.TestCase):
         message = "Please inspect the result and any relevant artifacts.\nRecovery: inspect checkpoints.\nTemplate: author tests only."
         args = argparse.Namespace(agent="codex", task="retain-data", cwd="/tmp/work", command="false",
                                   exit_code=7, message=message)
-        prompt = cli.build_prompt(args, duration=12.5)
-        request = cli.prepare_request_for_queue(self.root, self.request("prepare-only"), prompt)
+        prompt = dispatch.build_prompt(args, duration=12.5)
+        request = dispatch.prepare_request_for_queue(self.root, self.request("prepare-only"), prompt)
         compact = request["prompt_compact"]
         self.assertLess(len(compact), len(request["prompt"]))
         for retained in (message, "retain-data", "/tmp/work", "false", "7", "12.5", "parent",

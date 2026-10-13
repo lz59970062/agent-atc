@@ -40,6 +40,7 @@ def bridge_file(profile: Path) -> Path:
 
 def selection(args: argparse.Namespace) -> dict[str, str]:
     from . import cli
+    from .engine import dispatch
     from .harness.codex import app_server
     from .store import layout
 
@@ -52,13 +53,13 @@ def selection(args: argparse.Namespace) -> dict[str, str]:
     origin = os.environ.get("CODEX_INTERNAL_ORIGINATOR_OVERRIDE", "").strip().casefold()
     desktop = origin == "codex desktop"
     if mode == "auto":
-        mode = "desktop" if cli.resolve_agent(args) == "codex" and desktop else "cli"
-    if mode == "desktop" and cli.resolve_agent(args) != "codex":
+        mode = "desktop" if dispatch.resolve_agent(args) == "codex" and desktop else "cli"
+    if mode == "desktop" and dispatch.resolve_agent(args) != "codex":
         raise ValueError("Desktop callback mode currently supports Codex only")
     route = {"callback_mode": mode, "callback_origin": "desktop" if desktop else "other"}
     if mode == "desktop":
         route["callback_bridge_file"] = str(bridge_file(layout.codex_home()))
-    if cli.resolve_agent(args) == "pi":
+    if dispatch.resolve_agent(args) == "pi":
         from .harness.pi import channel as pi_callback
         route.update(pi_callback.route_fields())
     return route
@@ -66,6 +67,7 @@ def selection(args: argparse.Namespace) -> dict[str, str]:
 
 def inspect_route(request: dict[str, object], *, timeout: float = 2) -> dict[str, object]:
     from . import cli
+    from .engine import dispatch
     from .harness.codex import app_server
     from .store import layout
 
@@ -74,10 +76,10 @@ def inspect_route(request: dict[str, object], *, timeout: float = 2) -> dict[str
     if mode == "manual":
         return dict(report, status="manual", reason="automatic_delivery_disabled",
                     action="Inspect saved results in the bound session and ACK when received.")
-    if cli.request_agent(request) == "pi":
+    if dispatch.request_agent(request) == "pi":
         from .harness.pi import channel as pi_callback
         return dict(report, **pi_callback.inspect_route(request))
-    if cli.request_agent(request) != "codex":
+    if dispatch.request_agent(request) != "codex":
         return dict(report, transport="cli_resume", reason="session_delivery_not_probed")
     connection = None
     try:
@@ -119,14 +121,15 @@ def inspect_route(request: dict[str, object], *, timeout: float = 2) -> dict[str
 
 def preflight(args: argparse.Namespace) -> bool:
     from . import cli
+    from .engine import dispatch
     from .harness.codex import app_server
     from .store import layout
 
     try:
         route = selection(args)
         args._callback_route = route
-        target, _ = cli.bind_target(args)
-        report = inspect_route({**route, "agent": cli.resolve_agent(args), "target": target})
+        target, _ = dispatch.bind_target(args)
+        report = inspect_route({**route, "agent": dispatch.resolve_agent(args), "target": target})
     except (OSError, ValueError) as error:
         report = {"status": "blocked", "reason": "invalid_callback_configuration", "action": str(error)}
     args._callback_capability = report

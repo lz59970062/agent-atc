@@ -15,6 +15,7 @@ from unittest import mock
 
 from agent_atc.harness.claude import channel as claude_channel, session as claude_code
 from agent_atc import cli
+from agent_atc.engine import dispatch
 from agent_atc.engine import delivery as delivery_engine
 from agent_atc.store import records as queue_store
 from agent_atc.store import layout
@@ -74,10 +75,10 @@ class ChannelServerTests(unittest.TestCase):
             agent=agent, session=session, last=False, task="train model", cwd=str(self.directory),
             command="python train.py", exit_code=0, message=None, queue_dir=str(self.root), _callback_id=ident,
         )
-        prompt = cli.build_prompt(args, duration=12.0)
-        request = cli.make_request(args, prompt)
+        prompt = dispatch.build_prompt(args, duration=12.0)
+        request = dispatch.make_request(args, prompt)
         with contextlib.redirect_stderr(io.StringIO()):
-            self.assertEqual(cli.enqueue_existing_request(self.root, request, prompt), 0)
+            self.assertEqual(dispatch.enqueue_existing_request(self.root, request, prompt), 0)
         return layout.request_path(self.root, "pending", ident)
 
     def server(self, *, enabled: bool = True, ack_grace: float = 3600.0) -> claude_channel.ChannelServer:

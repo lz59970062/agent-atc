@@ -21,6 +21,11 @@ from pathlib import Path
 from unittest import mock
 
 from agent_atc import cli
+from agent_atc.engine import dispatch
+from agent_atc.engine import goals
+from agent_atc.engine import recovery
+from agent_atc.engine import tasks as managed_tasks
+from agent_atc.engine import worker as task_worker
 from agent_atc.engine import delivery as delivery_engine
 from agent_atc.engine import reminders as reminder_policy
 from agent_atc.harness.codex import app_server
@@ -55,7 +60,7 @@ def executable_python_fixture(script: Path) -> Path:
 def patch_fixture_commands(test: unittest.TestCase) -> None:
     if os.name != "nt":
         return
-    for owner, name in ((cli, "agent_wrapped_command"), (delivery_engine, "resume_command")):
+    for owner, name in ((managed_tasks, "agent_wrapped_command"), (delivery_engine, "resume_command")):
         original = getattr(owner, name)
 
         def fixture_command(*args, _original=original, **kwargs):
@@ -133,7 +138,7 @@ class CliTests(unittest.TestCase):
             args = self._run_args(tmp, root, [sys.executable, "-c", "pass"])
 
             with (
-                mock.patch.object(cli, "screen_binary", return_value="/usr/bin/screen"),
+                mock.patch.object(managed_tasks, "screen_binary", return_value="/usr/bin/screen"),
                 mock.patch.object(cli.subprocess, "run") as wrapped,
             ):
                 self.assertEqual(cli.run(args), 0)
@@ -141,7 +146,7 @@ class CliTests(unittest.TestCase):
             wrapped.assert_not_called()
             manifests = list(layout.managed_tasks_root(root).glob("*/task.json"))
             self.assertEqual(len(manifests), 1)
-            task = cli.load_managed_task(manifests[0])
+            task = managed_tasks.load_managed_task(manifests[0])
             self.assertEqual(task["state"], "submitted")
             self.assertEqual(task["wrapped_command"], args.wrapped_command)
             self.assertEqual(task["id"], task["screen_session"].removeprefix("atc-"))
@@ -153,7 +158,7 @@ class CliTests(unittest.TestCase):
             root = Path(tmp) / "queue"
             args = self._run_args(tmp, root, [sys.executable, "-c", "pass"])
 
-            with mock.patch.object(cli, "screen_binary", return_value=None):
+            with mock.patch.object(managed_tasks, "screen_binary", return_value=None):
                 self.assertEqual(cli.run(args), 125)
 
             self.assertFalse(layout.managed_tasks_root(root).exists())
@@ -165,7 +170,7 @@ class CliTests(unittest.TestCase):
             args.exit_code = 0
 
             with (
-                mock.patch.object(cli, "screen_binary", return_value=None),
+                mock.patch.object(managed_tasks, "screen_binary", return_value=None),
                 mock.patch.object(cli.subprocess, "run") as direct_resume,
             ):
                 self.assertEqual(cli.done(args), 0)
@@ -173,7 +178,7 @@ class CliTests(unittest.TestCase):
             direct_resume.assert_not_called()
             callbacks = list((root / "pending").glob("*.json"))
             self.assertEqual(len(callbacks), 1)
-            callback = cli.load_request(callbacks[0])
+            callback = dispatch.load_request(callbacks[0])
             self.assertEqual(callback["target"], {"kind": "session", "value": "test-thread"})
             self.assertEqual(callbacks[0].stem, callback["id"])
 
@@ -185,7 +190,7 @@ class CliTests(unittest.TestCase):
             output = io.StringIO()
 
             with (
-                mock.patch.object(cli, "screen_binary", return_value=None),
+                mock.patch.object(managed_tasks, "screen_binary", return_value=None),
                 mock.patch.object(cli.subprocess, "run") as wrapped,
                 mock.patch("sys.stdout", output),
             ):
@@ -226,7 +231,7 @@ class CliTests(unittest.TestCase):
             root = Path(tmp) / "queue"
             args = self._agent_args(tmp, root, "codex", "Fix the confirmed parser defect.")
             with (
-                mock.patch.object(cli, "screen_binary", return_value="/usr/bin/screen"),
+                mock.patch.object(managed_tasks, "screen_binary", return_value="/usr/bin/screen"),
                 mock.patch.dict(
                     os.environ,
                     {"ATC_CODEX_BIN": "/opt/codex/bin/codex"},
@@ -236,7 +241,7 @@ class CliTests(unittest.TestCase):
                 self.assertEqual(cli.agent(args), 0)
 
             task_path = next(layout.managed_tasks_root(root).glob("*/task.json"))
-            task = cli.load_managed_task(task_path)
+            task = managed_tasks.load_managed_task(task_path)
             prompt_path = Path(str(task["agent_prompt_path"]))
             result_path = Path(str(task["agent_result_path"]))
             self.assertEqual(task["task_kind"], "agent")
@@ -271,7 +276,7 @@ class CliTests(unittest.TestCase):
             fake_codex = self._fake_child_agent(Path(tmp))
             args = self._agent_args(tmp, root, "codex", "Implement the parser fix and run tests.")
             with (
-                mock.patch.object(cli, "screen_binary", return_value="/usr/bin/screen"),
+                mock.patch.object(managed_tasks, "screen_binary", return_value="/usr/bin/screen"),
                 mock.patch.dict(
                     os.environ,
                     {
@@ -287,14 +292,14 @@ class CliTests(unittest.TestCase):
                 self.assertEqual(cli.agent(args), 0)
 
             task_path = next(layout.managed_tasks_root(root).glob("*/task.json"))
-            task = cli.load_managed_task(task_path)
+            task = managed_tasks.load_managed_task(task_path)
             task["state"] = "launching"
-            cli.write_managed_task(root, task)
+            managed_tasks.write_managed_task(root, task)
             worker = argparse.Namespace(task_file=str(task_path), token=task["token"])
             with mock.patch.dict(os.environ, {"STY": "screen-session"}, clear=True):
-                self.assertEqual(cli.run_screen_worker(worker), 0)
+                self.assertEqual(task_worker.run_screen_worker(worker), 0)
 
-            task = cli.load_managed_task(task_path)
+            task = managed_tasks.load_managed_task(task_path)
             result_path = Path(str(task["agent_result_path"]))
             result = json.loads(result_path.read_text(encoding="utf-8"))
             self.assertEqual(result["prompt"], "Implement the parser fix and run tests.")
@@ -303,7 +308,7 @@ class CliTests(unittest.TestCase):
             self.assertIsNone(result["claude_session_id"])
             self.assertIsNone(result["claudecode"])
             assert_private_file(self, result_path)
-            callback = cli.load_request(root / "pending" / f"{task['id']}.json")
+            callback = dispatch.load_request(root / "pending" / f"{task['id']}.json")
             self.assertEqual(callback["agent_worker"], "codex")
             self.assertIn("Child agent: Codex", Path(callback["prompt_details_path"]).read_text())
             self.assertIn(result_path.name, callback["prompt"])
@@ -325,13 +330,13 @@ class CliTests(unittest.TestCase):
                 "ATC_TEST_SENTINEL": "submission-environment",
             }
             with (
-                mock.patch.object(cli, "screen_binary", return_value="/usr/bin/screen"),
+                mock.patch.object(managed_tasks, "screen_binary", return_value="/usr/bin/screen"),
                 mock.patch.dict(os.environ, submit_environment, clear=False),
             ):
                 self.assertEqual(cli.agent(args), 0)
 
             task_path = next(layout.managed_tasks_root(root).glob("*/task.json"))
-            task = cli.load_managed_task(task_path)
+            task = managed_tasks.load_managed_task(task_path)
             environment_path = Path(str(task["environment_path"]))
             assert_private_file(self, environment_path)
             self.assertNotIn("--bare", task["wrapped_command"])
@@ -348,7 +353,7 @@ class CliTests(unittest.TestCase):
                 ],
             )
             task["state"] = "launching"
-            cli.write_managed_task(root, task)
+            managed_tasks.write_managed_task(root, task)
             worker = argparse.Namespace(task_file=str(task_path), token=task["token"])
             output = io.StringIO()
             with (
@@ -359,9 +364,9 @@ class CliTests(unittest.TestCase):
                 ),
                 mock.patch("sys.stdout", output),
             ):
-                self.assertEqual(cli.run_screen_worker(worker), 0)
+                self.assertEqual(task_worker.run_screen_worker(worker), 0)
 
-            task = cli.load_managed_task(task_path)
+            task = managed_tasks.load_managed_task(task_path)
             result_path = Path(str(task["agent_result_path"]))
             result = json.loads(result_path.read_text(encoding="utf-8"))
             self.assertEqual(result["prompt"], "Audit the parser and return evidence.")
@@ -375,7 +380,7 @@ class CliTests(unittest.TestCase):
             assert_private_file(self, result_path)
             self.assertFalse(environment_path.exists())
             self.assertNotIn("secret-sentinel-value", output.getvalue())
-            callback = cli.load_request(root / "pending" / f"{task['id']}.json")
+            callback = dispatch.load_request(root / "pending" / f"{task['id']}.json")
             self.assertEqual(callback["agent"], "codex")
             self.assertEqual(callback["agent_worker"], "claude")
             details = Path(callback["prompt_details_path"]).read_text()
@@ -415,7 +420,7 @@ class CliTests(unittest.TestCase):
                 "argv",
                 ["atc", "_screen-worker", "--task-file", "/tmp/task.json", "--token=-abc"],
             ),
-            mock.patch.object(cli, "run_screen_worker", return_value=0) as worker,
+            mock.patch.object(task_worker, "run_screen_worker", return_value=0) as worker,
         ):
             self.assertEqual(cli.main(), 0)
 
@@ -426,34 +431,34 @@ class CliTests(unittest.TestCase):
             root = Path(tmp) / "queue"
             args = self._run_args(tmp, root, [sys.executable, "-c", "pass"])
             with (
-                mock.patch.object(cli, "screen_binary", return_value="/usr/bin/screen"),
+                mock.patch.object(managed_tasks, "screen_binary", return_value="/usr/bin/screen"),
                 mock.patch.object(cli.secrets, "token_urlsafe", return_value="-abc"),
             ):
                 self.assertEqual(cli.run(args), 0)
 
             task_path = next(layout.managed_tasks_root(root).glob("*/task.json"))
-            self.assertEqual(cli.load_managed_task(task_path)["token"], "atc_-abc")
+            self.assertEqual(managed_tasks.load_managed_task(task_path)["token"], "atc_-abc")
 
     def test_daemon_launches_submitted_task_through_screen(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "queue"
             args = self._run_args(tmp, root, [sys.executable, "-c", "pass"])
-            with mock.patch.object(cli, "screen_binary", return_value="/usr/bin/screen"):
+            with mock.patch.object(managed_tasks, "screen_binary", return_value="/usr/bin/screen"):
                 self.assertEqual(cli.run(args), 0)
             task_path = next(layout.managed_tasks_root(root).glob("*/task.json"))
-            task = cli.load_managed_task(task_path)
+            task = managed_tasks.load_managed_task(task_path)
             task["token"] = "-abc"
-            cli.write_managed_task(root, task)
+            managed_tasks.write_managed_task(root, task)
 
             completed = subprocess.CompletedProcess(["screen"], 0)
             with (
-                mock.patch.object(cli, "screen_binary", return_value="/usr/bin/screen"),
-                mock.patch.object(cli, "screen_owner_state", return_value=cli.OwnerState.ABSENT),
+                mock.patch.object(managed_tasks, "screen_binary", return_value="/usr/bin/screen"),
+                mock.patch.object(managed_tasks, "screen_owner_state", return_value=cli.OwnerState.ABSENT),
                 mock.patch("agent_atc.owners.screen.screen_binary", return_value="/usr/bin/screen"),
                 mock.patch.object(atc_runtime, "console_script_path", return_value="/usr/bin/atc"),
                 mock.patch.object(cli.subprocess, "run", return_value=completed) as launch,
             ):
-                self.assertEqual(cli.recover_managed_tasks(root), 1)
+                self.assertEqual(managed_tasks.recover_managed_tasks(root), 1)
 
             command = launch.call_args.args[0]
             self.assertEqual(command[0], "/usr/bin/screen")
@@ -462,7 +467,7 @@ class CliTests(unittest.TestCase):
             self.assertIn("_screen-worker", command)
             self.assertIn("--token=-abc", command)
             self.assertNotIn("--token", command)
-            task = cli.load_managed_task(task_path)
+            task = managed_tasks.load_managed_task(task_path)
             self.assertEqual(task["state"], "launching")
             self.assertEqual(task["launch_attempt_count"], 1)
 
@@ -470,23 +475,23 @@ class CliTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "queue"
             args = self._run_args(tmp, root, [sys.executable, "-c", "pass"])
-            with mock.patch.object(cli, "screen_binary", return_value="/usr/bin/screen"):
+            with mock.patch.object(managed_tasks, "screen_binary", return_value="/usr/bin/screen"):
                 self.assertEqual(cli.run(args), 0)
             task_path = next(layout.managed_tasks_root(root).glob("*/task.json"))
 
             completed = subprocess.CompletedProcess(["screen"], 0)
             with (
-                mock.patch.object(cli, "screen_binary", return_value="/usr/bin/screen"),
-                mock.patch.object(cli, "screen_owner_state", return_value=cli.OwnerState.ABSENT),
+                mock.patch.object(managed_tasks, "screen_binary", return_value="/usr/bin/screen"),
+                mock.patch.object(managed_tasks, "screen_owner_state", return_value=cli.OwnerState.ABSENT),
                 mock.patch("agent_atc.owners.screen.screen_binary", return_value="/usr/bin/screen"),
                 mock.patch.object(cli.subprocess, "run", return_value=completed) as launch,
-                mock.patch.object(cli, "MANAGED_WORKER_HANDSHAKE_SECONDS", 60.0),
+                mock.patch.object(managed_tasks, "MANAGED_WORKER_HANDSHAKE_SECONDS", 60.0),
             ):
-                self.assertEqual(cli.recover_managed_tasks(root), 1)
-                self.assertEqual(cli.recover_managed_tasks(root), 0)
+                self.assertEqual(managed_tasks.recover_managed_tasks(root), 1)
+                self.assertEqual(managed_tasks.recover_managed_tasks(root), 0)
 
             self.assertEqual(launch.call_count, 1)
-            task = cli.load_managed_task(task_path)
+            task = managed_tasks.load_managed_task(task_path)
             self.assertEqual(task["state"], "launching")
             self.assertEqual(task["launch_attempt_count"], 1)
 
@@ -494,33 +499,33 @@ class CliTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "queue"
             args = self._run_args(tmp, root, [sys.executable, "-c", "pass"])
-            with mock.patch.object(cli, "screen_binary", return_value="/usr/bin/screen"):
+            with mock.patch.object(managed_tasks, "screen_binary", return_value="/usr/bin/screen"):
                 self.assertEqual(cli.run(args), 0)
             task_path = next(layout.managed_tasks_root(root).glob("*/task.json"))
 
             completed = subprocess.CompletedProcess(["screen"], 0)
             with (
-                mock.patch.object(cli, "screen_binary", return_value="/usr/bin/screen"),
-                mock.patch.object(cli, "screen_owner_state", return_value=cli.OwnerState.ABSENT),
+                mock.patch.object(managed_tasks, "screen_binary", return_value="/usr/bin/screen"),
+                mock.patch.object(managed_tasks, "screen_owner_state", return_value=cli.OwnerState.ABSENT),
                 mock.patch("agent_atc.owners.screen.screen_binary", return_value="/usr/bin/screen"),
                 mock.patch.object(cli.subprocess, "run", return_value=completed) as launch,
-                mock.patch.object(cli, "MANAGED_WORKER_HANDSHAKE_SECONDS", 0.0),
-                mock.patch.object(cli, "MANAGED_LAUNCH_MAX_ATTEMPTS", 2),
+                mock.patch.object(managed_tasks, "MANAGED_WORKER_HANDSHAKE_SECONDS", 0.0),
+                mock.patch.object(managed_tasks, "MANAGED_LAUNCH_MAX_ATTEMPTS", 2),
             ):
-                self.assertEqual(cli.recover_managed_tasks(root), 1)
-                self.assertEqual(cli.recover_managed_tasks(root), 1)
+                self.assertEqual(managed_tasks.recover_managed_tasks(root), 1)
+                self.assertEqual(managed_tasks.recover_managed_tasks(root), 1)
 
-                task = cli.load_managed_task(task_path)
+                task = managed_tasks.load_managed_task(task_path)
                 self.assertEqual(task["state"], "submitted")
                 task["next_launch_at"] = 0.0
-                cli.write_managed_task(root, task)
+                managed_tasks.write_managed_task(root, task)
 
-                self.assertEqual(cli.recover_managed_tasks(root), 1)
-                self.assertEqual(cli.recover_managed_tasks(root), 1)
-                self.assertEqual(cli.recover_managed_tasks(root), 0)
+                self.assertEqual(managed_tasks.recover_managed_tasks(root), 1)
+                self.assertEqual(managed_tasks.recover_managed_tasks(root), 1)
+                self.assertEqual(managed_tasks.recover_managed_tasks(root), 0)
 
             self.assertEqual(launch.call_count, 2)
-            task = cli.load_managed_task(task_path)
+            task = managed_tasks.load_managed_task(task_path)
             self.assertEqual(task["state"], "launch_failed")
             self.assertEqual(task["launch_attempt_count"], 2)
             self.assertIn("worker_start_handshake_failed_after_2_attempts", task["recovery_reason"])
@@ -528,7 +533,7 @@ class CliTests(unittest.TestCase):
             self.assertFalse(Path(str(task["environment_path"])).exists())
             callbacks = list((root / "pending").glob("*.json"))
             self.assertEqual(len(callbacks), 1)
-            callback = cli.load_request(callbacks[0])
+            callback = dispatch.load_request(callbacks[0])
             self.assertEqual(callback["managed_task_state"], "launch_failed")
             self.assertIn("not automatically restarted", callback["prompt"])
 
@@ -536,10 +541,10 @@ class CliTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "queue"
             args = self._run_args(tmp, root, [sys.executable, "-c", "pass"])
-            with mock.patch.object(cli, "screen_binary", return_value="/usr/bin/screen"):
+            with mock.patch.object(managed_tasks, "screen_binary", return_value="/usr/bin/screen"):
                 self.assertEqual(cli.run(args), 0)
             task_path = next(layout.managed_tasks_root(root).glob("*/task.json"))
-            task = cli.load_managed_task(task_path)
+            task = managed_tasks.load_managed_task(task_path)
             task.update(
                 {
                     "state": "launching",
@@ -548,18 +553,18 @@ class CliTests(unittest.TestCase):
                 }
             )
             task.pop("launch_attempt_count", None)
-            cli.write_managed_task(root, task)
+            managed_tasks.write_managed_task(root, task)
 
             with (
                 mock.patch.object(host, "current_machine_id", return_value=str(task["machine_id"])),
-                mock.patch.object(cli, "screen_owner_state", return_value=cli.OwnerState.ABSENT),
+                mock.patch.object(managed_tasks, "screen_owner_state", return_value=cli.OwnerState.ABSENT),
                 mock.patch.object(cli.subprocess, "run") as relaunch,
             ):
-                self.assertEqual(cli.recover_managed_tasks(root), 1)
-                self.assertEqual(cli.recover_managed_tasks(root), 0)
+                self.assertEqual(managed_tasks.recover_managed_tasks(root), 1)
+                self.assertEqual(managed_tasks.recover_managed_tasks(root), 0)
 
             relaunch.assert_not_called()
-            task = cli.load_managed_task(task_path)
+            task = managed_tasks.load_managed_task(task_path)
             self.assertEqual(task["state"], "launch_failed")
             self.assertIn("legacy_attempt_count_unknown", task["recovery_reason"])
             self.assertNotIn("token", task)
@@ -569,16 +574,16 @@ class CliTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "queue"
             run_args = self._run_args(tmp, root, [sys.executable, "-c", "pass"])
-            with mock.patch.object(cli, "screen_binary", return_value="/usr/bin/screen"):
+            with mock.patch.object(managed_tasks, "screen_binary", return_value="/usr/bin/screen"):
                 self.assertEqual(cli.run(run_args), 0)
             task_path = next(layout.managed_tasks_root(root).glob("*/task.json"))
-            task = cli.load_managed_task(task_path)
+            task = managed_tasks.load_managed_task(task_path)
             task["state"] = "launching"
-            cli.write_managed_task(root, task)
+            managed_tasks.write_managed_task(root, task)
             worker = argparse.Namespace(task_file=str(task_path), token=task["token"])
 
             def complete(command: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
-                running = cli.load_managed_task(task_path)
+                running = managed_tasks.load_managed_task(task_path)
                 self.assertEqual(running["state"], "running")
                 self.assertIn("worker_ready_at", running)
                 return subprocess.CompletedProcess(command, 7)
@@ -587,14 +592,14 @@ class CliTests(unittest.TestCase):
                 mock.patch.dict(os.environ, {"STY": "screen-session"}, clear=True),
                 mock.patch.object(cli.subprocess, "run", side_effect=complete),
             ):
-                self.assertEqual(cli.run_screen_worker(worker), 7)
+                self.assertEqual(task_worker.run_screen_worker(worker), 7)
 
-            task = cli.load_managed_task(task_path)
+            task = managed_tasks.load_managed_task(task_path)
             self.assertEqual(task["state"], "completed")
             self.assertEqual(task["exit_code"], 7)
             self.assertNotIn("token", task)
             self.assertFalse(Path(str(task["environment_path"])).exists())
-            callback = cli.load_request(root / "pending" / f"{task['id']}.json")
+            callback = dispatch.load_request(root / "pending" / f"{task['id']}.json")
             self.assertEqual(callback["id"], task["id"])
             self.assertEqual(callback["exit_code"], 7)
             self.assertIn(f"Task log: {task['log_path']}", Path(callback["prompt_details_path"]).read_text())
@@ -606,25 +611,25 @@ class CliTests(unittest.TestCase):
             root = Path(tmp) / "queue"
             run_args = self._run_args(tmp, root, [sys.executable, "-c", "pass"])
             run_args.agent = "claude"
-            with mock.patch.object(cli, "screen_binary", return_value="/usr/bin/screen"):
+            with mock.patch.object(managed_tasks, "screen_binary", return_value="/usr/bin/screen"):
                 self.assertEqual(cli.run(run_args), 0)
             task_path = next(layout.managed_tasks_root(root).glob("*/task.json"))
-            task = cli.load_managed_task(task_path)
+            task = managed_tasks.load_managed_task(task_path)
             task.update({"state": "running", "boot_id": "old-boot", "agent": "claude"})
-            cli.write_managed_task(root, task)
+            managed_tasks.write_managed_task(root, task)
 
             with (
                 mock.patch.object(host, "current_boot_id", return_value="new-boot"),
                 mock.patch.object(host, "current_machine_id", return_value=str(task["machine_id"])),
-                mock.patch.object(cli, "screen_owner_state", return_value=cli.OwnerState.ABSENT),
+                mock.patch.object(managed_tasks, "screen_owner_state", return_value=cli.OwnerState.ABSENT),
                 mock.patch.object(cli.subprocess, "run") as restart,
             ):
-                self.assertEqual(cli.recover_managed_tasks(root), 1)
+                self.assertEqual(managed_tasks.recover_managed_tasks(root), 1)
 
             restart.assert_not_called()
-            task = cli.load_managed_task(task_path)
+            task = managed_tasks.load_managed_task(task_path)
             self.assertEqual(task["recovery_reason"], "interrupted_by_host_reboot")
-            callback = cli.load_request(root / "pending" / f"{task['id']}.json")
+            callback = dispatch.load_request(root / "pending" / f"{task['id']}.json")
             self.assertEqual(callback["agent"], "claude")
             self.assertEqual(callback["target"], {"kind": "session", "value": "test-thread"})
             self.assertIn("not automatically restarted", callback["prompt"])
@@ -635,19 +640,19 @@ class CliTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "queue"
             run_args = self._run_args(tmp, root, [sys.executable, "-c", "pass"])
-            with mock.patch.object(cli, "screen_binary", return_value="/usr/bin/screen"):
+            with mock.patch.object(managed_tasks, "screen_binary", return_value="/usr/bin/screen"):
                 self.assertEqual(cli.run(run_args), 0)
             task_path = next(layout.managed_tasks_root(root).glob("*/task.json"))
-            task = cli.load_managed_task(task_path)
+            task = managed_tasks.load_managed_task(task_path)
             task.update({"state": "running", "boot_id": host.current_boot_id()})
-            cli.write_managed_task(root, task)
+            managed_tasks.write_managed_task(root, task)
 
             with (
                 mock.patch.object(host, "current_machine_id", return_value=str(task["machine_id"])),
-                mock.patch.object(cli, "screen_owner_state", return_value=cli.OwnerState.ALIVE),
+                mock.patch.object(managed_tasks, "screen_owner_state", return_value=cli.OwnerState.ALIVE),
                 mock.patch.object(cli.subprocess, "run") as relaunch,
             ):
-                self.assertEqual(cli.recover_managed_tasks(root), 0)
+                self.assertEqual(managed_tasks.recover_managed_tasks(root), 0)
 
             relaunch.assert_not_called()
             self.assertFalse((root / "pending" / f"{task['id']}.json").exists())
@@ -656,7 +661,7 @@ class CliTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "queue"
             run_args = self._run_args(tmp, root, [sys.executable, "-c", "pass"])
-            with mock.patch.object(cli, "screen_binary", return_value="/usr/bin/screen"):
+            with mock.patch.object(managed_tasks, "screen_binary", return_value="/usr/bin/screen"):
                 self.assertEqual(cli.run(run_args), 0)
             task_path = next(layout.managed_tasks_root(root).glob("*/task.json"))
 
@@ -664,10 +669,10 @@ class CliTests(unittest.TestCase):
                 mock.patch.object(host, "current_machine_id", return_value="different-machine"),
                 mock.patch.object(cli.subprocess, "run") as launch,
             ):
-                self.assertEqual(cli.recover_managed_tasks(root), 1)
+                self.assertEqual(managed_tasks.recover_managed_tasks(root), 1)
 
             launch.assert_not_called()
-            task = cli.load_managed_task(task_path)
+            task = managed_tasks.load_managed_task(task_path)
             self.assertEqual(task["state"], "foreign_host")
             self.assertEqual(task["recovery_reason"], "cross_host_recovery_unsupported")
             self.assertFalse((root / "pending" / f"{task['id']}.json").exists())
@@ -689,33 +694,33 @@ class CliTests(unittest.TestCase):
             self.assertEqual(cli.goal_start(start), 0)
             run_args = self._run_args(tmp, root, [sys.executable, "-c", "pass"])
             run_args.goal_id = "stage-goal"
-            with mock.patch.object(cli, "screen_binary", return_value="/usr/bin/screen"):
+            with mock.patch.object(managed_tasks, "screen_binary", return_value="/usr/bin/screen"):
                 self.assertEqual(cli.run(run_args), 0)
             task_path = next(layout.managed_tasks_root(root).glob("*/task.json"))
-            task = cli.load_managed_task(task_path)
+            task = managed_tasks.load_managed_task(task_path)
             task.update({"state": "running", "boot_id": "old-boot"})
-            cli.write_managed_task(root, task)
+            managed_tasks.write_managed_task(root, task)
 
             with (
                 mock.patch.object(host, "current_boot_id", return_value="new-boot"),
                 mock.patch.object(host, "current_machine_id", return_value=str(task["machine_id"])),
-                mock.patch.object(cli, "screen_owner_state", return_value=cli.OwnerState.ABSENT),
+                mock.patch.object(managed_tasks, "screen_owner_state", return_value=cli.OwnerState.ABSENT),
             ):
-                self.assertEqual(cli.recover_managed_tasks(root), 1)
+                self.assertEqual(managed_tasks.recover_managed_tasks(root), 1)
 
-            callback = cli.load_request(root / "pending" / f"{task['id']}.json")
+            callback = dispatch.load_request(root / "pending" / f"{task['id']}.json")
             self.assertEqual(callback["goal_id"], "stage-goal")
             self.assertEqual(
                 cli.ack(argparse.Namespace(queue_dir=str(root), id=task["id"], message="recovery inspected")),
                 0,
             )
-            goal = cli.load_goal(root, "stage-goal")
+            goal = goals.load_goal(root, "stage-goal")
             self.assertEqual(goal["state"], "active")
             reminder_time = float(callback["created_at"]) + 2.0
             with mock.patch.object(cli.time, "time", return_value=reminder_time):
-                self.assertTrue(cli.process_goal_reminders(root))
+                self.assertTrue(goals.process_goal_reminders(root))
             reminders = [
-                cli.load_request(path)
+                dispatch.load_request(path)
                 for path in (root / "pending").glob("*.json")
                 if path.stem != task["id"]
             ]
@@ -726,18 +731,18 @@ class CliTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "queue"
             args = self._run_args(tmp, root, [sys.executable, "-c", "pass"])
-            request = cli.make_active_request(args, time.time())
+            request = recovery.make_active_request(args, time.time())
             request["launch_phase"] = "launch_committed"
             request_id = str(request["id"])
             lock = queue_store.acquire_owner_lock(root, request_id, blocking=True)
             self.assertIsNotNone(lock)
             queue_store.write_request(layout.request_path(root, layout.ACTIVE_STATE, request_id), request)
 
-            self.assertEqual(cli.recover_active(root), 0)
+            self.assertEqual(recovery.recover_active(root), 0)
             self.assertTrue(layout.request_path(root, layout.ACTIVE_STATE, request_id).exists())
 
             queue_store.release_owner_lock(lock, remove=False)
-            self.assertEqual(cli.recover_active(root), 1)
+            self.assertEqual(recovery.recover_active(root), 1)
             recovered = json.loads(layout.request_path(root, "pending", request_id).read_text(encoding="utf-8"))
             self.assertEqual(recovered["outcome"], "unknown")
             details = Path(recovered["prompt_details_path"]).read_text()
@@ -767,11 +772,11 @@ class CliTests(unittest.TestCase):
             args = self._run_args(tmp, root, [sys.executable, "-c", "pass"])
 
             with (
-                mock.patch.object(cli, "screen_binary", return_value="/usr/bin/screen"),
+                mock.patch.object(managed_tasks, "screen_binary", return_value="/usr/bin/screen"),
                 mock.patch.object(queue_store, "write_request", side_effect=OSError("disk unavailable")),
                 mock.patch.object(cli.subprocess, "run") as wrapped,
             ):
-                self.assertEqual(cli.submit_managed_run(args), 125)
+                self.assertEqual(dispatch.submit_managed_run(args), 125)
 
             wrapped.assert_not_called()
 
@@ -779,23 +784,23 @@ class CliTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "queue"
             args = self._run_args(tmp, root, ["missing-command"])
-            with mock.patch.object(cli, "screen_binary", return_value="/usr/bin/screen"):
-                self.assertEqual(cli.submit_managed_run(args), 0)
+            with mock.patch.object(managed_tasks, "screen_binary", return_value="/usr/bin/screen"):
+                self.assertEqual(dispatch.submit_managed_run(args), 0)
             task_path = next(layout.managed_tasks_root(root).glob("*/task.json"))
-            task = cli.load_managed_task(task_path)
+            task = managed_tasks.load_managed_task(task_path)
             task["state"] = "launching"
-            cli.write_managed_task(root, task)
+            managed_tasks.write_managed_task(root, task)
             worker = argparse.Namespace(task_file=str(task_path), token=task["token"])
 
             with (
                 mock.patch.dict(os.environ, {"STY": "screen-session"}, clear=True),
                 mock.patch.object(cli.subprocess, "run", side_effect=OSError("exec failed")),
             ):
-                self.assertEqual(cli.run_screen_worker(worker), 127)
+                self.assertEqual(task_worker.run_screen_worker(worker), 127)
 
-            task = cli.load_managed_task(task_path)
+            task = managed_tasks.load_managed_task(task_path)
             self.assertEqual(task["state"], "interrupted")
-            callback = cli.load_request(root / "pending" / f"{task['id']}.json")
+            callback = dispatch.load_request(root / "pending" / f"{task['id']}.json")
             self.assertEqual(callback["outcome"], "unknown")
             self.assertIn("wrapped_command_launch_failed", callback["prompt"])
 
@@ -805,7 +810,7 @@ class CliTests(unittest.TestCase):
             args = self._run_args(tmp, root, [sys.executable, "-c", "raise SystemExit(9)"])
             args.command = shlex.join(args.wrapped_command)
             args.exit_code = 9
-            request = cli.make_active_request(args, time.time() - 3.0)
+            request = recovery.make_active_request(args, time.time() - 3.0)
             request.update(
                 {
                     "launch_phase": "launch_committed",
@@ -814,11 +819,11 @@ class CliTests(unittest.TestCase):
                     "completed_at": time.time(),
                 }
             )
-            cli.prepare_request_for_queue(root, request, cli.build_prompt(args, 3.0))
+            dispatch.prepare_request_for_queue(root, request, dispatch.build_prompt(args, 3.0))
             request_id = str(request["id"])
             queue_store.write_request(layout.request_path(root, layout.ACTIVE_STATE, request_id), request)
 
-            self.assertEqual(cli.recover_active(root), 1)
+            self.assertEqual(recovery.recover_active(root), 1)
             recovered = json.loads(layout.request_path(root, "pending", request_id).read_text(encoding="utf-8"))
             self.assertEqual(recovered["outcome"], "completed")
             self.assertEqual(recovered["exit_code"], 9)
@@ -829,11 +834,11 @@ class CliTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "queue"
             args = self._run_args(tmp, root, [sys.executable, "-c", "pass"])
-            request = cli.make_active_request(args, time.time())
+            request = recovery.make_active_request(args, time.time())
             request_id = str(request["id"])
             queue_store.write_request(layout.request_path(root, layout.ACTIVE_STATE, request_id), request)
 
-            self.assertEqual(cli.recover_active(root), 0)
+            self.assertEqual(recovery.recover_active(root), 0)
             self.assertFalse(layout.request_path(root, layout.ACTIVE_STATE, request_id).exists())
             self.assertFalse(layout.request_path(root, "pending", request_id).exists())
 
@@ -848,7 +853,7 @@ class CliTests(unittest.TestCase):
         )
 
         with self._env_without_claude(CODEX_THREAD_ID="thread-from-env"):
-            request = cli.make_request(args, "wake up")
+            request = dispatch.make_request(args, "wake up")
 
         self.assertEqual(request["target"], {"kind": "session", "value": "thread-from-env"})
         self.assertEqual(request["target_source"], "CODEX_THREAD_ID")
@@ -865,7 +870,7 @@ class CliTests(unittest.TestCase):
 
         with mock.patch.dict(os.environ, {}, clear=True):
             with self.assertRaisesRegex(SystemExit, "CODEX_THREAD_ID is unset"):
-                cli.make_request(args, "wake up")
+                dispatch.make_request(args, "wake up")
 
     def test_explicit_session_overrides_environment(self) -> None:
         args = argparse.Namespace(
@@ -878,7 +883,7 @@ class CliTests(unittest.TestCase):
         )
 
         with mock.patch.dict(os.environ, {"CODEX_THREAD_ID": "thread-from-env"}, clear=False):
-            request = cli.make_request(args, "wake up")
+            request = dispatch.make_request(args, "wake up")
 
         self.assertEqual(request["target"], {"kind": "session", "value": "explicit-thread"})
         self.assertEqual(request["target_source"], "--session")
@@ -894,9 +899,9 @@ class CliTests(unittest.TestCase):
         )
 
         with self._env_without_claude(CODEX_THREAD_ID="launch-thread"):
-            cli.bind_target(args)
+            dispatch.bind_target(args)
         with self._env_without_claude(CODEX_THREAD_ID="later-thread"):
-            request = cli.make_request(args, "wake up")
+            request = dispatch.make_request(args, "wake up")
 
         self.assertEqual(request["target"], {"kind": "session", "value": "launch-thread"})
         self.assertEqual(request["target_source"], "CODEX_THREAD_ID")
@@ -932,7 +937,7 @@ class CliTests(unittest.TestCase):
                 sandbox_mode="workspace-write",
             )
 
-            self.assertEqual(cli.enqueue_request(args, cli.build_prompt(args)), 0)
+            self.assertEqual(dispatch.enqueue_request(args, dispatch.build_prompt(args)), 0)
             queued = list((Path(tmp) / "pending").glob("*.json"))
             self.assertEqual(len(queued), 1)
             request = json.loads(queued[0].read_text(encoding="utf-8"))
@@ -966,15 +971,15 @@ class CliTests(unittest.TestCase):
         env["CLAUDECODE"] = "1"
         env["CLAUDE_CODE_SESSION_ID"] = "claude-session-1"
         with mock.patch.dict(os.environ, env, clear=True):
-            self.assertEqual(cli.resolve_agent(), "claude")
+            self.assertEqual(dispatch.resolve_agent(), "claude")
 
     def test_resolve_agent_prefers_explicit_flag(self) -> None:
         args = argparse.Namespace(agent="claude")
         with self._env_without_claude(CODEX_THREAD_ID="codex-thread"):
-            self.assertEqual(cli.resolve_agent(args), "claude")
+            self.assertEqual(dispatch.resolve_agent(args), "claude")
         args = argparse.Namespace(agent="codex")
         with mock.patch.dict(os.environ, {"CLAUDECODE": "1", "CLAUDE_CODE_SESSION_ID": "s"}, clear=False):
-            self.assertEqual(cli.resolve_agent(args), "codex")
+            self.assertEqual(dispatch.resolve_agent(args), "codex")
 
     def test_make_request_binds_claude_session_id_by_default(self) -> None:
         args = argparse.Namespace(
@@ -992,7 +997,7 @@ class CliTests(unittest.TestCase):
         env["CLAUDECODE"] = "1"
         env["CLAUDE_CODE_SESSION_ID"] = "claude-session-1"
         with mock.patch.dict(os.environ, env, clear=True):
-            request = cli.make_request(args, "wake up")
+            request = dispatch.make_request(args, "wake up")
 
         self.assertEqual(request["agent"], "claude")
         self.assertEqual(request["target"], {"kind": "session", "value": "claude-session-1"})
@@ -1047,9 +1052,9 @@ class CliTests(unittest.TestCase):
             message=None,
             agent="claude",
         )
-        prompt = cli.build_prompt(args)
+        prompt = dispatch.build_prompt(args)
         self.assertIn("called back into Claude Code", prompt)
-        ack_text = cli.build_acknowledgement_text("atc ack --queue-dir /q --id abc", agent="claude")
+        ack_text = dispatch.build_acknowledgement_text("atc ack --queue-dir /q --id abc", agent="claude")
         self.assertIn("Claude Code headless", ack_text)
         self.assertIn("atc ack --queue-dir /q --id abc", ack_text)
 
@@ -1324,7 +1329,7 @@ class CliTests(unittest.TestCase):
             queue_store.ensure_daemon_dirs(root)
             queue_store.move_request(layout.request_path(root, "pending", "deferred-lease-ack"), root / "failed")
             failed_path = layout.request_path(root, "failed", "deferred-lease-ack")
-            failed = cli.load_request(failed_path)
+            failed = dispatch.load_request(failed_path)
             failed["retain_target_lease"] = True
             queue_store.write_request(failed_path, failed)
             args = argparse.Namespace(queue_dir=str(root), id="deferred-lease-ack", message=None)
@@ -1356,7 +1361,7 @@ class CliTests(unittest.TestCase):
                 layout.request_path(root, "pending", "late-failed-ack"),
                 root / "failed",
             )
-            failed = cli.load_request(layout.request_path(root, "failed", "late-failed-ack"))
+            failed = dispatch.load_request(layout.request_path(root, "failed", "late-failed-ack"))
             failed["retain_target_lease"] = True
             queue_store.write_request(layout.request_path(root, "failed", "late-failed-ack"), failed)
             args = argparse.Namespace(queue_dir=str(root), id="late-failed-ack", message="late delivery completed")
@@ -1377,7 +1382,7 @@ class CliTests(unittest.TestCase):
             self._write_request(root_a, "late-failed-ack", tmp, target=target)
             queue_store.ensure_daemon_dirs(root_a)
             queue_store.move_request(layout.request_path(root_a, "pending", "late-failed-ack"), root_a / "failed")
-            failed = cli.load_request(layout.request_path(root_a, "failed", "late-failed-ack"))
+            failed = dispatch.load_request(layout.request_path(root_a, "failed", "late-failed-ack"))
             failed["retain_target_lease"] = True
             queue_store.write_request(layout.request_path(root_a, "failed", "late-failed-ack"), failed)
             self._write_request(root_b, "same-session", tmp, target=target)
@@ -1397,7 +1402,7 @@ class CliTests(unittest.TestCase):
             self._write_request(root_a, "reconciled", tmp, target=target)
             queue_store.ensure_daemon_dirs(root_a)
             queue_store.move_request(layout.request_path(root_a, "pending", "reconciled"), root_a / "done")
-            completed = cli.load_request(layout.request_path(root_a, "done", "reconciled"))
+            completed = dispatch.load_request(layout.request_path(root_a, "done", "reconciled"))
             self._write_request(root_b, "same-session", tmp, target=target)
 
             with mock.patch.dict(os.environ, {layout.TARGET_LOCK_DIR_ENV: str(Path(tmp) / "target-locks")}, clear=False):
@@ -1411,7 +1416,7 @@ class CliTests(unittest.TestCase):
             root = Path(tmp) / "queue"
             target = {"kind": "session", "value": "reconcile-thread"}
             self._write_request(root, "reconciled", tmp, target=target)
-            request = cli.load_request(layout.request_path(root, "pending", "reconciled"))
+            request = dispatch.load_request(layout.request_path(root, "pending", "reconciled"))
 
             with mock.patch.dict(os.environ, {layout.TARGET_LOCK_DIR_ENV: str(Path(tmp) / "target-locks")}, clear=False):
                 delivery_engine.retain_target_lease(root, request)
@@ -1431,7 +1436,7 @@ class CliTests(unittest.TestCase):
             self._write_request(root, "timeout-ack", tmp, target=target)
             queue_store.ensure_daemon_dirs(root)
             queue_store.move_request(layout.request_path(root, "pending", "timeout-ack"), root / "running")
-            request = cli.load_request(layout.request_path(root, "running", "timeout-ack"))
+            request = dispatch.load_request(layout.request_path(root, "running", "timeout-ack"))
             args = argparse.Namespace(queue_dir=str(root), id="timeout-ack", message=None)
 
             with mock.patch.dict(os.environ, {layout.TARGET_LOCK_DIR_ENV: str(Path(tmp) / "target-locks")}, clear=False):
@@ -1450,7 +1455,7 @@ class CliTests(unittest.TestCase):
 
             def move_with_late_ack(source: Path, destination: Path) -> Path:
                 if source.parent.name == "running" and destination == root / "failed":
-                    delivery_engine.retain_target_lease(root, cli.load_request(source))
+                    delivery_engine.retain_target_lease(root, dispatch.load_request(source))
                     queue_store.write_request(
                         layout.ack_path(root, request_id),
                         {"id": request_id, "marked_at": time.time()},
@@ -1464,7 +1469,7 @@ class CliTests(unittest.TestCase):
                 mock.patch.object(queue_store, "move_request", side_effect=move_with_late_ack),
             ):
                 self.assertTrue(delivery_engine.process_one(root, args))
-                request = cli.load_request(layout.request_path(root, "done", request_id))
+                request = dispatch.load_request(layout.request_path(root, "done", request_id))
                 self.assertFalse(delivery_engine.retained_target_lease_is_held(request))
 
             self.assertTrue(layout.ack_path(root, request_id).exists())
@@ -1509,7 +1514,7 @@ class CliTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "queue"
             self._write_request(root, "ack-race", tmp, target={"kind": "session", "value": "race-session"})
-            request = cli.load_request(layout.request_path(root, "pending", "ack-race"))
+            request = dispatch.load_request(layout.request_path(root, "pending", "ack-race"))
             args = argparse.Namespace(resume_timeout=10.0)
             original_acquire = queue_store.acquire_owner_lock
 
@@ -1557,7 +1562,7 @@ class CliTests(unittest.TestCase):
             root_b = Path(tmp) / "queue-b"
             target = {"kind": "session", "value": "shared-session"}
             self._write_request(root_a, "owner", tmp, target=target)
-            owner = cli.load_request(layout.request_path(root_a, "pending", "owner"))
+            owner = dispatch.load_request(layout.request_path(root_a, "pending", "owner"))
             self._write_request(root_b, "a-same", tmp, target=target)
             self._write_request(
                 root_b,
@@ -1587,7 +1592,7 @@ class CliTests(unittest.TestCase):
             root_b = Path(tmp) / "queue-b"
             target = {"kind": "session", "value": "race-session"}
             self._write_request(root_a, "owner", tmp, target=target)
-            owner = cli.load_request(layout.request_path(root_a, "pending", "owner"))
+            owner = dispatch.load_request(layout.request_path(root_a, "pending", "owner"))
             self._write_request(root_b, "contender", tmp, target=target)
             args = argparse.Namespace(retries=3, retry_delay=0.0, retry_backoff=2.0, resume_timeout=10.0)
 
@@ -1674,7 +1679,7 @@ class CliTests(unittest.TestCase):
             ):
                 self.assertTrue(delivery_engine.process_one(root_a, args))
                 self._write_request(root_b, "same-session", tmp, target=target)
-                contender = cli.load_request(layout.request_path(root_b, "pending", "same-session"))
+                contender = dispatch.load_request(layout.request_path(root_b, "pending", "same-session"))
                 self.assertTrue(delivery_engine.target_lock_is_held(contender))
                 self.assertIsNone(delivery_engine.select_pending(root_b, time.time()))
 
@@ -1830,7 +1835,7 @@ class CliTests(unittest.TestCase):
 
         with (
             mock.patch.object(sys, "platform", "linux"),
-            mock.patch.object(cli, "screen_binary", return_value="/usr/bin/screen"),
+            mock.patch.object(managed_tasks, "screen_binary", return_value="/usr/bin/screen"),
             mock.patch.object(cli, "install_skill", return_value=0) as install_skill,
             mock.patch.object(reminder_policy, "ensure_callback_hook_file") as ensure_callback_hook_file,
             mock.patch.object(cli, "report_claude_agent_readiness") as report_claude_agent_readiness,
@@ -1938,7 +1943,7 @@ class CliTests(unittest.TestCase):
     def test_setup_refuses_before_installing_when_screen_is_missing(self) -> None:
         args = argparse.Namespace()
         with (
-            mock.patch.object(cli, "screen_binary", return_value=None),
+            mock.patch.object(managed_tasks, "screen_binary", return_value=None),
             mock.patch.object(cli, "install_skill") as install_skill,
             mock.patch.object(cli, "install_systemd") as install_systemd,
         ):
@@ -2299,7 +2304,7 @@ class CliTests(unittest.TestCase):
             root = Path(tmp) / "queue"
             self._write_request(root, "cancel-me", tmp)
 
-            self.assertTrue(cli.cancel_one(root, "cancel-me", "not needed"))
+            self.assertTrue(recovery.cancel_one(root, "cancel-me", "not needed"))
 
             self.assertFalse((root / "pending" / "cancel-me.json").exists())
             canceled = root / "canceled" / "cancel-me.json"
@@ -2329,7 +2334,7 @@ class CliTests(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            self.assertEqual(cli.cancel_all(root), 2)
+            self.assertEqual(recovery.cancel_all(root), 2)
 
             self.assertFalse((root / "pending" / "pending-one.json").exists())
             self.assertFalse((root / "running" / "running-one.json").exists())
@@ -2394,17 +2399,17 @@ class CliTests(unittest.TestCase):
                 cli.goal_check(argparse.Namespace(queue_dir=str(root), id="terminal-goal")),
                 0,
             )
-            plan_digest = cli.load_goal(root, "terminal-goal")["last_plan_check_sha256"]
+            plan_digest = goals.load_goal(root, "terminal-goal")["last_plan_check_sha256"]
             ack_args = argparse.Namespace(
                 queue_dir=str(root), id="terminal-goal", state="completed", message="done",
-                condition=None, email_to=None, email_after=cli.DEFAULT_BLOCKED_EMAIL_SECONDS,
+                condition=None, email_to=None, email_after=goals.DEFAULT_BLOCKED_EMAIL_SECONDS,
                 plan_sha256=plan_digest,
             )
             self.assertEqual(cli.goal_ack(ack_args), 0)
 
-            cli.update_goal_from_callback(root, {"goal_id": "terminal-goal", "created_at": time.time()})
+            goals.update_goal_from_callback(root, {"goal_id": "terminal-goal", "created_at": time.time()})
             self.assertEqual(
-                cli.enqueue_existing_request(
+                dispatch.enqueue_existing_request(
                     root,
                     {
                         "version": 1,
@@ -2421,10 +2426,10 @@ class CliTests(unittest.TestCase):
                 1,
             )
 
-            goal = cli.load_goal(root, "terminal-goal")
+            goal = goals.load_goal(root, "terminal-goal")
             self.assertEqual(goal["state"], "completed")
             self.assertFalse((root / "pending" / "terminal-callback.json").exists())
-            self.assertFalse(cli.process_goal_reminders(root))
+            self.assertFalse(goals.process_goal_reminders(root))
             self.assertEqual(
                 cli.goal_resume(argparse.Namespace(queue_dir=str(root), id="terminal-goal")),
                 1,
@@ -2478,10 +2483,10 @@ class CliTests(unittest.TestCase):
             )
             self.assertEqual(cli.goal_start(start_args), 0)
             self.assertEqual(cli.goal_check(argparse.Namespace(queue_dir=str(root), id="mutable-goal")), 0)
-            first_digest = cli.load_goal(root, "mutable-goal")["last_plan_check_sha256"]
+            first_digest = goals.load_goal(root, "mutable-goal")["last_plan_check_sha256"]
             incomplete_ack = argparse.Namespace(
                 queue_dir=str(root), id="mutable-goal", state="completed", message=None,
-                condition=None, email_to=None, email_after=cli.DEFAULT_BLOCKED_EMAIL_SECONDS,
+                condition=None, email_to=None, email_after=goals.DEFAULT_BLOCKED_EMAIL_SECONDS,
                 plan_sha256=first_digest,
             )
             self.assertEqual(cli.goal_ack(incomplete_ack), 1)
@@ -2498,10 +2503,10 @@ class CliTests(unittest.TestCase):
             write_plan(3, "Release and publish version 0.6.2", "completed", "completed")
             self.assertEqual(cli.goal_ack(incomplete_ack), 1)
             self.assertEqual(cli.goal_check(argparse.Namespace(queue_dir=str(root), id="mutable-goal")), 0)
-            final_digest = cli.load_goal(root, "mutable-goal")["last_plan_check_sha256"]
+            final_digest = goals.load_goal(root, "mutable-goal")["last_plan_check_sha256"]
             incomplete_ack.plan_sha256 = final_digest
             self.assertEqual(cli.goal_ack(incomplete_ack), 0)
-            goal = cli.load_goal(root, "mutable-goal")
+            goal = goals.load_goal(root, "mutable-goal")
             self.assertEqual(goal["state"], "completed")
             self.assertEqual(goal["completion_plan_revision"], 3)
 
@@ -2538,7 +2543,7 @@ class CliTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "queue"
             queue_store.ensure_daemon_dirs(root)
-            cli.write_goal(
+            goals.write_goal(
                 root,
                 {
                     "version": 1,
@@ -2557,18 +2562,18 @@ class CliTests(unittest.TestCase):
                 queue_dir=str(root), id="legacy-goal", plan_file=str(plan_path)
             )
             self.assertEqual(cli.goal_set_plan(args), 0)
-            goal = cli.load_goal(root, "legacy-goal")
+            goal = goals.load_goal(root, "legacy-goal")
             self.assertEqual(goal["plan_file"], str(plan_path.resolve()))
             self.assertNotIn("last_plan_check_sha256", goal)
 
             no_check_ack = argparse.Namespace(
                 queue_dir=str(root), id="legacy-goal", state="completed", message=None,
-                condition=None, email_to=None, email_after=cli.DEFAULT_BLOCKED_EMAIL_SECONDS,
+                condition=None, email_to=None, email_after=goals.DEFAULT_BLOCKED_EMAIL_SECONDS,
                 plan_sha256=goal["plan_sha256_when_attached"],
             )
             self.assertEqual(cli.goal_ack(no_check_ack), 1)
             self.assertEqual(cli.goal_check(argparse.Namespace(queue_dir=str(root), id="legacy-goal")), 0)
-            no_check_ack.plan_sha256 = cli.load_goal(root, "legacy-goal")["last_plan_check_sha256"]
+            no_check_ack.plan_sha256 = goals.load_goal(root, "legacy-goal")["last_plan_check_sha256"]
             self.assertEqual(cli.goal_ack(no_check_ack), 0)
 
     def test_goal_reminder_is_deduplicated_and_external_callback_resets_idle_timer(self) -> None:
@@ -2579,15 +2584,15 @@ class CliTests(unittest.TestCase):
                 cwd=tmp, task="train model", plan_file=str(self._goal_plan(tmp)), idle_seconds=1.0,
             )
             self.assertEqual(cli.goal_start(start_args), 0)
-            goal = cli.load_goal(root, "reminder-goal")
+            goal = goals.load_goal(root, "reminder-goal")
             goal["last_external_callback_at"] = time.time() - 2.0
-            cli.write_goal(root, goal)
+            goals.write_goal(root, goal)
 
-            self.assertTrue(cli.process_goal_reminders(root))
-            self.assertFalse(cli.process_goal_reminders(root))
+            self.assertTrue(goals.process_goal_reminders(root))
+            self.assertFalse(goals.process_goal_reminders(root))
             pending = list((root / "pending").glob("*.json"))
             self.assertEqual(len(pending), 1)
-            reminder = cli.load_request(pending[0])
+            reminder = dispatch.load_request(pending[0])
             self.assertTrue(reminder["goal_reminder"])
             self.assertIn(atc_runtime.control_command("goal", "ack", "--queue-dir", str(root), "--id", "reminder-goal"), reminder["prompt"])
             self.assertIn(atc_runtime.control_command("goal", "check", "--queue-dir", str(root), "--id", "reminder-goal"), reminder["prompt"])
@@ -2596,14 +2601,14 @@ class CliTests(unittest.TestCase):
             self.assertIn("Remaining path:", reminder["prompt"])
 
             queue_store.move_request(pending[0], root / "done")
-            goal = cli.load_goal(root, "reminder-goal")
+            goal = goals.load_goal(root, "reminder-goal")
             goal["last_reminder_at"] = time.time() - 2.0
-            cli.write_goal(root, goal)
-            self.assertTrue(cli.process_goal_reminders(root))
+            goals.write_goal(root, goal)
+            self.assertTrue(goals.process_goal_reminders(root))
             self.assertEqual(len(list((root / "pending").glob("*.json"))), 1)
 
-            cli.update_goal_from_callback(root, {"goal_id": "reminder-goal", "created_at": time.time()})
-            goal = cli.load_goal(root, "reminder-goal")
+            goals.update_goal_from_callback(root, {"goal_id": "reminder-goal", "created_at": time.time()})
+            goal = goals.load_goal(root, "reminder-goal")
             self.assertNotIn("last_reminder_at", goal)
             self.assertGreaterEqual(float(goal["last_external_callback_at"]), time.time() - 1.0)
 
@@ -2615,9 +2620,9 @@ class CliTests(unittest.TestCase):
                 cwd=tmp, task="run recovery", plan_file=str(self._goal_plan(tmp)), idle_seconds=1.0,
             )
             self.assertEqual(cli.goal_start(start_args), 0)
-            goal = cli.load_goal(root, "recovery-goal")
+            goal = goals.load_goal(root, "recovery-goal")
             goal["last_external_callback_at"] = time.time() - 2.0
-            cli.write_goal(root, goal)
+            goals.write_goal(root, goal)
             callback_time = time.time()
             queue_store.write_request(
                 root / "pending" / "crash-window.json",
@@ -2632,8 +2637,8 @@ class CliTests(unittest.TestCase):
                 },
             )
 
-            self.assertFalse(cli.process_goal_reminders(root))
-            goal = cli.load_goal(root, "recovery-goal")
+            self.assertFalse(goals.process_goal_reminders(root))
+            goal = goals.load_goal(root, "recovery-goal")
             self.assertEqual(float(goal["last_external_callback_at"]), callback_time)
             self.assertNotIn("last_reminder_at", goal)
 
@@ -2657,17 +2662,17 @@ class CliTests(unittest.TestCase):
                 condition="need credentials", email_to="owner@example.test", email_after=1.0,
             )
             self.assertEqual(cli.goal_ack(ack_args), 0)
-            goal = cli.load_goal(root, "blocked-goal")
+            goal = goals.load_goal(root, "blocked-goal")
             goal["state_changed_at"] = time.time() - 2.0
-            cli.write_goal(root, goal)
+            goals.write_goal(root, goal)
 
             accepted = subprocess.CompletedProcess(["sendmail"], 0)
             with mock.patch.object(cli.subprocess, "run", return_value=accepted) as sendmail:
-                self.assertTrue(cli.process_blocked_goal_email(root))
-                self.assertFalse(cli.process_blocked_goal_email(root))
+                self.assertTrue(goals.process_blocked_goal_email(root))
+                self.assertFalse(goals.process_blocked_goal_email(root))
 
             self.assertEqual(sendmail.call_count, 1)
-            self.assertEqual(cli.load_goal(root, "blocked-goal")["blocked_email_result"], "accepted")
+            self.assertEqual(goals.load_goal(root, "blocked-goal")["blocked_email_result"], "accepted")
 
     def test_blocked_goal_email_requires_one_recipient_and_stops_after_three_failures(self) -> None:
         with tempfile.TemporaryDirectory() as tmp, mock.patch.dict(
@@ -2689,21 +2694,21 @@ class CliTests(unittest.TestCase):
                 condition="need service", email_to="owner@example.test", email_after=1.0,
             )
             self.assertEqual(cli.goal_ack(ack_args), 0)
-            goal = cli.load_goal(root, "retry-goal")
+            goal = goals.load_goal(root, "retry-goal")
             goal["state_changed_at"] = time.time() - 2.0
-            cli.write_goal(root, goal)
+            goals.write_goal(root, goal)
 
             failed = subprocess.CompletedProcess(["sendmail"], 1)
             with mock.patch.object(cli.subprocess, "run", return_value=failed) as sendmail:
                 for attempt in range(3):
-                    self.assertTrue(cli.process_blocked_goal_email(root))
+                    self.assertTrue(goals.process_blocked_goal_email(root))
                     if attempt < 2:
-                        goal = cli.load_goal(root, "retry-goal")
+                        goal = goals.load_goal(root, "retry-goal")
                         goal["blocked_email_next_attempt_at"] = time.time() - 1.0
-                        cli.write_goal(root, goal)
-                self.assertFalse(cli.process_blocked_goal_email(root))
+                        goals.write_goal(root, goal)
+                self.assertFalse(goals.process_blocked_goal_email(root))
 
-            goal = cli.load_goal(root, "retry-goal")
+            goal = goals.load_goal(root, "retry-goal")
             self.assertEqual(sendmail.call_count, 3)
             self.assertIn("blocked_email_exhausted_at", goal)
 
@@ -3173,7 +3178,7 @@ class CliTests(unittest.TestCase):
             with mock.patch.dict(os.environ, {layout.TARGET_LOCK_DIR_ENV: str(Path(tmp) / "target-locks")}, clear=False):
                 delivery_engine.retain_target_lease(root, request)
                 self.assertTrue(delivery_engine.target_has_live_resume(root, request))
-                self.assertTrue(cli.cancel_one(root, "desktop-unknown", "manual recovery resolved"))
+                self.assertTrue(recovery.cancel_one(root, "desktop-unknown", "manual recovery resolved"))
                 self.assertFalse(delivery_engine.target_has_live_resume(root, request))
 
     def test_manual_desktop_recovery_lease_blocks_same_session_across_queue_roots(self) -> None:
@@ -3196,7 +3201,7 @@ class CliTests(unittest.TestCase):
             with mock.patch.dict(os.environ, {layout.TARGET_LOCK_DIR_ENV: str(Path(tmp) / "target-locks")}, clear=False):
                 delivery_engine.retain_target_lease(root_a, failed)
                 self.assertIsNone(delivery_engine.select_pending(root_b, time.time()))
-                self.assertTrue(cli.cancel_one(root_a, "desktop-unknown", "manual recovery resolved"))
+                self.assertTrue(recovery.cancel_one(root_a, "desktop-unknown", "manual recovery resolved"))
                 self.assertEqual(delivery_engine.select_pending(root_b, time.time()).stem, "same-session")
 
     def test_cancel_releases_timeout_marker_while_parent_still_marks_running(self) -> None:
@@ -3206,11 +3211,11 @@ class CliTests(unittest.TestCase):
             self._write_request(root, "timeout-cancel", tmp, target=target)
             queue_store.ensure_daemon_dirs(root)
             queue_store.move_request(layout.request_path(root, "pending", "timeout-cancel"), root / "running")
-            request = cli.load_request(layout.request_path(root, "running", "timeout-cancel"))
+            request = dispatch.load_request(layout.request_path(root, "running", "timeout-cancel"))
 
             with mock.patch.dict(os.environ, {layout.TARGET_LOCK_DIR_ENV: str(Path(tmp) / "target-locks")}, clear=False):
                 delivery_engine.retain_target_lease(root, request)
-                self.assertTrue(cli.cancel_one(root, "timeout-cancel", "stop after timeout"))
+                self.assertTrue(recovery.cancel_one(root, "timeout-cancel", "stop after timeout"))
                 self.assertFalse(delivery_engine.retained_target_lease_is_held(request))
 
     def _write_request(

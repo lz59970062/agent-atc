@@ -135,6 +135,7 @@ def confirmed_owner_dead(owner: dict) -> bool:
     PID namespaces, and permission/probe failures are never proof of death.
     """
     from ... import cli
+    from ...engine import dispatch
     from ...engine import delivery as delivery_engine
     from ..codex import app_server
     from ...store import records as queue_store
@@ -180,6 +181,7 @@ def confirmed_owner_dead(owner: dict) -> bool:
 
 def valid_live_lease(owner: dict) -> bool:
     from ... import cli
+    from ...engine import dispatch
     from ...engine import delivery as delivery_engine
     from ..codex import app_server
     from ...store import records as queue_store
@@ -200,6 +202,7 @@ def require_delivery_support(request: dict, owner: dict) -> None:
 
 def inspect_route(request: dict) -> dict:
     from ... import cli
+    from ...engine import dispatch
     from ...engine import delivery as delivery_engine
     from ..codex import app_server
     from ...store import records as queue_store
@@ -259,6 +262,7 @@ class PiDelivery:
                     if owner.get("owner_nonce") == self.nonce and owner.get("state") == "reserved":
                         storage.write_request(self.directory / "owner.json", self.previous_owner)
                         from ... import cli
+                        from ...engine import dispatch
                         from ...engine import delivery as delivery_engine
                         from ..codex import app_server
                         from ...store import records as queue_store
@@ -310,6 +314,7 @@ def publication_outcome(root: Path, request: dict, timeout: float, now: float) -
     outcome unknown, which is never replayed automatically.
     """
     from ... import cli
+    from ...engine import dispatch
     from ...engine import delivery as delivery_engine
     from ..codex import app_server
     from ...store import records as queue_store
@@ -335,6 +340,7 @@ def publication_outcome(root: Path, request: dict, timeout: float, now: float) -
 def reconcile_publications(root: Path, timeout: float) -> None:
     """Daemon hook: settle Pi callbacks whose live owner can no longer ACK them."""
     from ... import cli
+    from ...engine import dispatch
     from ...engine import delivery as delivery_engine
     from ..codex import app_server
     from ...store import records as queue_store
@@ -343,11 +349,11 @@ def reconcile_publications(root: Path, timeout: float) -> None:
     now = time.time()
     for path in sorted((root / "pending").glob("*.json")):
         try:
-            request = cli.load_request(path)
+            request = dispatch.load_request(path)
         except (OSError, ValueError):
             continue
         request_id = str(request.get("id", path.stem))
-        if (cli.request_agent(request) != "pi" or "pi_published_at" not in request
+        if (dispatch.request_agent(request) != "pi" or "pi_published_at" not in request
                 or layout.ack_path(root, request_id).exists() or queue_store.is_canceled(root, request_id)):
             continue
         reason = publication_outcome(root, request, timeout, now)
@@ -385,6 +391,7 @@ def extension_path() -> Path:
 
 def _reservation(directory: Path, session: str, profile: str) -> dict:
     from ... import cli
+    from ...engine import dispatch
     from ...engine import delivery as delivery_engine
     from ..codex import app_server
     from ...store import records as queue_store
@@ -401,6 +408,7 @@ def _reservation(directory: Path, session: str, profile: str) -> dict:
 
 def prepare_delivery(payload: dict) -> PiDelivery:
     from ... import cli
+    from ...engine import dispatch
     from ...engine import delivery as delivery_engine
     from ..codex import app_server
     from ...store import records as queue_store
@@ -494,6 +502,7 @@ def install_extension(args: argparse.Namespace) -> int:
     ensure_private_directory(profile / "agent-atc" / "channels")
     print(f"Installed Pi callback extension: {target}")
     from ... import cli
+    from ...engine import dispatch
     from ...engine import delivery as delivery_engine
     from ..codex import app_server
     from ...store import records as queue_store
@@ -519,6 +528,7 @@ def _fresh_session(profile: Path, cwd: Path) -> str:
 
 def _verify_owner_identity(directory: Path, nonce: str) -> bool:
     from ... import cli
+    from ...engine import dispatch
     from ...engine import delivery as delivery_engine
     from ..codex import app_server
     from ...store import records as queue_store
@@ -551,6 +561,7 @@ def record_spawn(directory: Path, nonce: str, process) -> None:
     verifies the actual Node owner instead, and absence of evidence blocks recovery.
     """
     from ... import cli
+    from ...engine import dispatch
     from ...engine import delivery as delivery_engine
     from ..codex import app_server
     from ...store import records as queue_store
@@ -564,6 +575,7 @@ def record_spawn(directory: Path, nonce: str, process) -> None:
 
 def managed_pi(args: argparse.Namespace) -> int:
     from ... import cli
+    from ...engine import dispatch
     from ...engine import delivery as delivery_engine
     from ..codex import app_server
     from ...store import records as queue_store

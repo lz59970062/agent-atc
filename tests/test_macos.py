@@ -15,6 +15,8 @@ import unittest
 from unittest import mock
 
 from agent_atc import cli
+from agent_atc.engine import tasks as managed_tasks
+from agent_atc.engine import worker as task_worker
 from agent_atc.owners import host
 from agent_atc.store import records as queue_store
 from agent_atc.store import layout
@@ -48,17 +50,17 @@ class MacOSContracts(unittest.TestCase):
 
     def test_native_selection_and_explicit_wrong_platform_fail_closed(self):
         with mock.patch.object(LaunchdBackend, "available", return_value=True):
-            self.assertEqual(cli.select_execution_backend(self.arguments()), "launchd")
+            self.assertEqual(managed_tasks.select_execution_backend(self.arguments()), "launchd")
             self.assertEqual(cli.select_daemon_service(self.arguments()), "launchd")
         with mock.patch.object(LaunchdBackend, "available", return_value=False), mock.patch.object(
-            cli, "screen_binary", return_value="/usr/bin/screen"
+            managed_tasks, "screen_binary", return_value="/usr/bin/screen"
         ):
-            self.assertEqual(cli.select_execution_backend(self.arguments()), "screen")
+            self.assertEqual(managed_tasks.select_execution_backend(self.arguments()), "screen")
             self.assertEqual(cli.select_daemon_service(self.arguments()), "standalone")
             with self.assertRaises(ValueError):
-                cli.select_execution_backend(self.arguments(backend="launchd"))
+                managed_tasks.select_execution_backend(self.arguments(backend="launchd"))
         with self.assertRaises(ValueError):
-            cli.select_execution_backend(self.arguments(backend="systemd"))
+            managed_tasks.select_execution_backend(self.arguments(backend="systemd"))
         self.assertTrue(diagnostics.environment_profile()["supported"])
 
     def test_owner_names_bind_queue_task_and_attempt(self):
@@ -143,21 +145,21 @@ class MacOSContracts(unittest.TestCase):
                        {"launch_boot_id": "previous"}, {"launch_boot_id": None},
                        {"machine_id": "foreign"}, {"execution_owner": "atc.other"}, {}):
             with self.subTest(change=change), mock.patch.object(LaunchdBackend, "admits_worker", return_value=True), mock.patch.object(
-                cli, "run_managed_worker_locked", return_value=7
+                task_worker, "run_managed_worker_locked", return_value=7
             ) as command, contextlib.redirect_stderr(io.StringIO()):
-                cli.write_managed_task(self.queue, dict(task, **change))
-                self.assertEqual(cli.run_task_worker(args), 125 if change else 7)
+                managed_tasks.write_managed_task(self.queue, dict(task, **change))
+                self.assertEqual(task_worker.run_task_worker(args), 125 if change else 7)
                 self.assertEqual(command.call_count, 0 if change else 1)
 
     def test_launch_boot_detects_reboot_even_when_submitter_could_not_read_boot(self):
         task = {"version": 2, "id": "abcd1234", "queue_dir": str(self.queue),
                 "execution_backend": "launchd", "machine_id": "host", "submission_boot_id": None,
                 "launch_boot_id": "previous-boot", "state": "launching", "agent": "codex"}
-        cli.write_managed_task(self.queue, task)
-        with mock.patch.object(cli, "mark_managed_task_interrupted", return_value=True) as interrupt, mock.patch.object(
+        managed_tasks.write_managed_task(self.queue, task)
+        with mock.patch.object(managed_tasks, "mark_managed_task_interrupted", return_value=True) as interrupt, mock.patch.object(
             LaunchdBackend, "launch"
         ) as launch, mock.patch.object(LaunchdBackend, "probe") as probe:
-            cli.recover_managed_tasks(self.queue)
+            managed_tasks.recover_managed_tasks(self.queue)
         self.assertEqual(interrupt.call_args.args[2], "not_started_before_host_reboot")
         launch.assert_not_called()
         probe.assert_not_called()
@@ -169,14 +171,14 @@ class MacOSContracts(unittest.TestCase):
                 "state": "submitted", "environment_path": str(self.directory / "env.json"),
                 "cwd": str(self.directory), "log_path": str(self.directory / "log"), "agent": "codex"}
         Path(task["environment_path"]).write_text("{}")
-        cli.write_managed_task(self.queue, task)
+        managed_tasks.write_managed_task(self.queue, task)
         with mock.patch.object(LaunchdBackend, "launch", side_effect=LaunchError("unknown", uncertain=True)) as launch, mock.patch.object(
             LaunchdBackend, "probe", return_value=OwnerState.UNKNOWN
         ):
-            cli.recover_managed_tasks(self.queue)
-            cli.recover_managed_tasks(self.queue)
+            managed_tasks.recover_managed_tasks(self.queue)
+            managed_tasks.recover_managed_tasks(self.queue)
             launch.assert_called_once()
-        current = cli.load_managed_task(layout.managed_task_path(self.queue, "abcd1234"))
+        current = managed_tasks.load_managed_task(layout.managed_task_path(self.queue, "abcd1234"))
         self.assertTrue(current["launch_uncertain"])
         self.assertEqual(current["state"], "launching")
 

@@ -18,6 +18,8 @@ import unittest
 from pathlib import Path
 
 from agent_atc import cli
+from agent_atc.engine import dispatch
+from agent_atc.engine import tasks as managed_tasks
 from agent_atc.store import layout
 from agent_atc.owners import OwnerState, SystemdUserBackend
 
@@ -86,7 +88,7 @@ class RealSystemdIsolationTests(unittest.TestCase):
             )
             self.assertEqual(cli.run(args), 0)
             task_path = next(layout.managed_tasks_root(root).glob("*/task.json"))
-            task = cli.load_managed_task(task_path)
+            task = managed_tasks.load_managed_task(task_path)
             task_owner = backend.owner_name(str(task["id"]), 1, root)
             coordinator_owner = backend.owner_name("test-coordinator", 1, root)
             ready = directory / "coordinator-ready"
@@ -98,8 +100,10 @@ class RealSystemdIsolationTests(unittest.TestCase):
                 from pathlib import Path
                 sys.path.insert(0, {source!r})
                 from agent_atc import cli
+                from agent_atc.engine import dispatch
+                from agent_atc.engine import tasks as managed_tasks
                 from agent_atc.store import layout
-                cli.recover_managed_tasks(Path(sys.argv[1]))
+                managed_tasks.recover_managed_tasks(Path(sys.argv[1]))
                 Path(sys.argv[2]).write_text("launched")
                 time.sleep(60)
                 """), encoding="utf-8")
@@ -119,7 +123,7 @@ class RealSystemdIsolationTests(unittest.TestCase):
                 self.stop_units(coordinator_owner)
                 self.assertEqual(backend.probe(task_owner), OwnerState.ALIVE)
                 self.assertFalse(output.exists())
-                cli.recover_managed_tasks(root)
+                managed_tasks.recover_managed_tasks(root)
                 self.assertEqual(executions.read_text().splitlines(), ["executed"])
 
                 release.write_text("finish", encoding="utf-8")
@@ -128,11 +132,11 @@ class RealSystemdIsolationTests(unittest.TestCase):
                 result = json.loads(layout.managed_result_path(root, str(task["id"])).read_text())
                 self.assertEqual(result["exit_code"], 7)
                 self.assertEqual(output.read_text(), "finished after coordinator stopped")
-                self.assertEqual(cli.load_managed_task(task_path)["state"], "completed")
-                cli.recover_managed_tasks(root)
+                self.assertEqual(managed_tasks.load_managed_task(task_path)["state"], "completed")
+                managed_tasks.recover_managed_tasks(root)
                 self.assertEqual(executions.read_text().splitlines(), ["executed"])
                 self.assertEqual(len(list((root / "pending").glob("*.json"))), 1)
-                callback = cli.load_request(callback_path)
+                callback = dispatch.load_request(callback_path)
                 self.assertEqual(callback["target"], {"kind": "session", "value": "fixture-no-real-agent-session"})
                 self.assertEqual(callback["exit_code"], 7)
                 self.assertTrue(Path(callback["prompt_details_path"]).is_file())

@@ -13,6 +13,8 @@ from pathlib import Path
 from unittest import mock
 
 from agent_atc import cli
+from agent_atc.engine import tasks as managed_tasks
+from agent_atc.engine import worker as task_worker
 from agent_atc.engine import delivery as delivery_engine
 from agent_atc.store import records as queue_store
 from agent_atc.store import layout
@@ -65,8 +67,8 @@ class DiagnosticBoundaryTests(unittest.TestCase):
         for argv, handler in (
             (["ack", "--id", "fixture"], (cli, "ack")),
             (["cancel", "--id", "fixture"], (cli, "cancel")),
-            (["_screen-worker", "--task-file", "/fixture/task.json", "--token=fixture"], (cli, "run_screen_worker")),
-            (["_task-worker", "--task-file", "/fixture/task.json", "--attempt", "1"], (cli, "run_task_worker")),
+            (["_screen-worker", "--task-file", "/fixture/task.json", "--token=fixture"], (task_worker, "run_screen_worker")),
+            (["_task-worker", "--task-file", "/fixture/task.json", "--attempt", "1"], (task_worker, "run_task_worker")),
             (["_delivery-worker"], (delivery_engine, "delivery_worker_main")),
         ):
             with self.subTest(argv=argv), mock.patch.object(sys, "argv", ["atc", *argv]), mock.patch.object(
@@ -132,7 +134,7 @@ class HealthReportTests(unittest.TestCase):
 
     def test_ready_is_silent_implicitly_and_does_not_claim_authentication_or_delivery(self):
         args = self.arguments()
-        with mock.patch.object(cli, "select_execution_backend") as select, mock.patch.object(cli.subprocess, "run") as external:
+        with mock.patch.object(managed_tasks, "select_execution_backend") as select, mock.patch.object(cli.subprocess, "run") as external:
             report = diagnostics.inspect(args)
             with contextlib.redirect_stdout(io.StringIO()) as output, contextlib.redirect_stderr(io.StringIO()) as errors:
                 diagnostics.emit_if_needed(args)
@@ -183,7 +185,7 @@ class HealthReportTests(unittest.TestCase):
     def test_real_run_admission_is_reported_as_persisted_without_resubmitting(self):
         argv = ["atc", "run", "--queue-dir", str(self.queue), "--backend", "screen",
                 "--agent", "codex", "--session", "original-bound-session", "--", "/bin/true"]
-        with mock.patch.object(sys, "argv", argv), mock.patch.object(cli, "screen_binary", return_value="/fixture/screen"), mock.patch.object(
+        with mock.patch.object(sys, "argv", argv), mock.patch.object(managed_tasks, "screen_binary", return_value="/fixture/screen"), mock.patch.object(
             diagnostics, "coordinator_issue", return_value={"code": "daemon_not_running", "action": "Start coordinator."}
         ), mock.patch.object(cli.subprocess, "Popen") as child, contextlib.redirect_stderr(io.StringIO()) as errors:
             self.assertEqual(cli.main(), 0)
@@ -200,7 +202,7 @@ class HealthReportTests(unittest.TestCase):
         argv = ["atc", "done", "--queue-dir", str(self.queue), "--agent", "codex",
                 "--session", "original-bound-session", "--exit-code", "7"]
         with mock.patch.object(sys, "argv", argv), mock.patch.object(
-            cli, "select_execution_backend", side_effect=AssertionError("done must not select a task backend")
+            managed_tasks, "select_execution_backend", side_effect=AssertionError("done must not select a task backend")
         ), mock.patch.object(diagnostics, "coordinator_issue", return_value={
             "code": "daemon_not_running", "action": "Start coordinator."
         }), contextlib.redirect_stderr(io.StringIO()) as errors:
@@ -216,7 +218,7 @@ class HealthReportTests(unittest.TestCase):
     def test_real_validation_failure_emits_not_submitted_without_creating_task(self):
         argv = ["atc", "run", "--queue-dir", str(self.queue), "--backend", "screen",
                 "--agent", "codex", "--session", "original-bound-session"]
-        with mock.patch.object(sys, "argv", argv), mock.patch.object(cli, "screen_binary", return_value="/fixture/screen"), mock.patch.object(
+        with mock.patch.object(sys, "argv", argv), mock.patch.object(managed_tasks, "screen_binary", return_value="/fixture/screen"), mock.patch.object(
             diagnostics, "coordinator_issue", return_value={"code": "daemon_not_running", "action": "Start coordinator."}
         ), contextlib.redirect_stderr(io.StringIO()) as errors, self.assertRaises(SystemExit):
             cli.main()
@@ -227,7 +229,7 @@ class HealthReportTests(unittest.TestCase):
     def test_done_reports_callback_prerequisites_without_requiring_execution_backend(self):
         args = self.arguments(mode="done", backend="systemd", _health_work={"state": "callback_queued", "id": "done-1234"})
         del args._health_backend
-        with mock.patch.object(cli, "select_execution_backend", side_effect=AssertionError("done must not select backend")) as select:
+        with mock.patch.object(managed_tasks, "select_execution_backend", side_effect=AssertionError("done must not select backend")) as select:
             report = diagnostics.inspect(args)
         select.assert_not_called()
         self.assertEqual(report["status"], "ready")
@@ -251,7 +253,7 @@ class HealthReportTests(unittest.TestCase):
 
     def test_failed_backend_admission_is_not_reprobed_or_exposed_and_broken_screen_is_not_ready(self):
         args = self.arguments(_health_backend_error="SECRET_BACKEND_FAILURE")
-        with mock.patch.object(cli, "select_execution_backend", side_effect=AssertionError("cached failure must not repeat")) as select:
+        with mock.patch.object(managed_tasks, "select_execution_backend", side_effect=AssertionError("cached failure must not repeat")) as select:
             report = diagnostics.inspect(args)
         select.assert_not_called()
         self.assertIn("backend_unavailable", self.issue_codes(report))

@@ -19,6 +19,7 @@ from unittest import mock
 
 from agent_atc.core import envelope as callbacks
 from agent_atc import cli
+from agent_atc.engine import dispatch
 from agent_atc.engine import reminders as reminder_policy
 from agent_atc import runtime as atc_runtime
 from agent_atc.store import layout
@@ -42,19 +43,19 @@ class CompactCallbackTests(unittest.TestCase):
         )
         arguments.update(overrides)
         args = argparse.Namespace(**arguments)
-        prompt = cli.build_prompt(args, duration=125.5)
-        request = cli.make_request(args, prompt, duration=125.5)
+        prompt = dispatch.build_prompt(args, duration=125.5)
+        request = dispatch.make_request(args, prompt, duration=125.5)
         return request, prompt
 
     def prepare(self, ident: str, **overrides: object) -> dict[str, object]:
         request, prompt = self.make_callback(ident, **overrides)
-        return cli.prepare_request_for_queue(self.root, request, prompt)
+        return dispatch.prepare_request_for_queue(self.root, request, prompt)
 
     def test_new_default_sends_short_status_and_keeps_exact_full_evidence(self) -> None:
         command = "python train.py --configuration " + "very-long-argument=" * 700
         message = "HANDOFF: inspect held-out failures.\n" + "evidence detail " * 900
         request, full = self.make_callback("compact-result", command=command, message=message)
-        prepared = cli.prepare_request_for_queue(self.root, request, full)
+        prepared = dispatch.prepare_request_for_queue(self.root, request, full)
         self.assertEqual(prepared["prompt_format"], "compact-v1")
         compact = prepared["prompt_compact"]
         self.assertLess(len(compact), 1200)
@@ -95,7 +96,7 @@ class CompactCallbackTests(unittest.TestCase):
             with self.subTest(seconds=seconds):
                 request, prompt = self.make_callback("runtime-unknown")
                 request["duration_seconds"] = seconds
-                prepared = cli.prepare_request_for_queue(self.root, request, prompt)
+                prepared = dispatch.prepare_request_for_queue(self.root, request, prompt)
                 self.assertNotIn("Duration:", prepared["prompt_compact"])
 
     def test_ack_line_can_be_executed_with_spaces_and_quotes_without_wrong_queue(self) -> None:
@@ -125,7 +126,7 @@ class CompactCallbackTests(unittest.TestCase):
             message="The task was not automatically restarted. Inspect checkpoints before recreating work.",
         )
         request.update(outcome="unknown", recovery_reason="worker_disappeared_before_completion")
-        prepared = cli.prepare_request_for_queue(self.root, request, full)
+        prepared = dispatch.prepare_request_for_queue(self.root, request, full)
         self.assertIn("unknown", prepared["prompt_compact"].lower())
         self.assertNotIn("exit=0", prepared["prompt_compact"].lower())
         self.assertIn("read", prepared["prompt_compact"].lower())
@@ -136,14 +137,14 @@ class CompactCallbackTests(unittest.TestCase):
     def test_explicit_full_format_remains_available(self) -> None:
         message = "USER REQUESTED FULL EVIDENCE " * 100
         request, full = self.make_callback("full-request", message=message, callback_format="full")
-        prepared = cli.prepare_request_for_queue(self.root, request, full)
+        prepared = dispatch.prepare_request_for_queue(self.root, request, full)
         self.assertNotEqual(prepared.get("prompt_format"), "compact-v1")
         self.assertIn(message, prepared["prompt"])
 
     def test_legacy_request_is_not_silently_reinterpreted_or_loses_handoff(self) -> None:
         request, full = self.make_callback("legacy", message="LEGACY HANDOFF: examine output carefully")
         request.pop("prompt_format", None)
-        prepared = cli.prepare_request_for_queue(self.root, request, full)
+        prepared = dispatch.prepare_request_for_queue(self.root, request, full)
         self.assertIn("LEGACY HANDOFF: examine output carefully", prepared["prompt"])
         self.assertIn("LEGACY HANDOFF: examine output carefully", prepared["prompt_compact"])
         self.assertIn("bound-original-session", prepared["prompt_compact"])

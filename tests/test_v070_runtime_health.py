@@ -10,6 +10,8 @@ from pathlib import Path
 from unittest import mock
 
 from agent_atc import cli
+from agent_atc.engine import dispatch
+from agent_atc.engine import tasks as managed_tasks
 from agent_atc.engine import delivery as delivery_engine
 from agent_atc.owners import host
 from agent_atc.store import records as queue_store
@@ -71,10 +73,10 @@ class HealthArtifacts:
 
     def observe_tasks(self, owner=OwnerState.ABSENT):
         before = self.snapshot()
-        with mock.patch.object(cli, "managed_owner_state", return_value=owner) as probe, mock.patch.object(
-            cli, "launch_managed_task"
-        ) as launch, mock.patch.object(cli, "queue_managed_task_callback") as queue, mock.patch.object(
-            cli, "write_managed_task"
+        with mock.patch.object(managed_tasks, "managed_owner_state", return_value=owner) as probe, mock.patch.object(
+            managed_tasks, "launch_managed_task"
+        ) as launch, mock.patch.object(managed_tasks, "queue_managed_task_callback") as queue, mock.patch.object(
+            managed_tasks, "write_managed_task"
         ) as write:
             issues = diagnostics.runtime_issues(self.root)
         launch.assert_not_called()
@@ -109,7 +111,7 @@ class RuntimeHealthTests(HealthArtifacts, unittest.TestCase):
 
     def test_both_frozen_backends_are_probed_without_reselection(self):
         expected = [self.task("screen-work", "screen"), self.task("native-work", "systemd-user")]
-        with mock.patch.object(cli, "select_execution_backend") as select:
+        with mock.patch.object(managed_tasks, "select_execution_backend") as select:
             issues, probe = self.observe_tasks(OwnerState.ALIVE)
         self.assertEqual(issues, [])
         select.assert_not_called()
@@ -133,7 +135,7 @@ class RuntimeHealthTests(HealthArtifacts, unittest.TestCase):
                 uncertain = self.task("a-uncertain", backend)
                 healthy = self.task("b-healthy", backend)
                 before = self.snapshot()
-                with mock.patch.object(cli, "managed_owner_state", side_effect=[OwnerState.UNKNOWN, OwnerState.ALIVE]) as probe:
+                with mock.patch.object(managed_tasks, "managed_owner_state", side_effect=[OwnerState.UNKNOWN, OwnerState.ALIVE]) as probe:
                     issues = diagnostics.runtime_issues(self.root)
                 self.assertEqual(probe.call_args_list, [mock.call(uncertain), mock.call(healthy)])
                 self.assertEqual(len(issues), 1)
@@ -190,9 +192,9 @@ class RuntimeHealthTests(HealthArtifacts, unittest.TestCase):
                     self.result(task)
                     return owner
 
-                with mock.patch.object(cli, "managed_owner_state", side_effect=finish_during_probe) as probe, mock.patch.object(
-                    cli, "queue_managed_task_callback"
-                ) as queue, mock.patch.object(cli, "launch_managed_task") as launch:
+                with mock.patch.object(managed_tasks, "managed_owner_state", side_effect=finish_during_probe) as probe, mock.patch.object(
+                    managed_tasks, "queue_managed_task_callback"
+                ) as queue, mock.patch.object(managed_tasks, "launch_managed_task") as launch:
                     self.assertEqual(diagnostics.runtime_issues(self.root), [])
                 probe.assert_called_once()
                 queue.assert_not_called()
@@ -206,7 +208,7 @@ class RuntimeHealthTests(HealthArtifacts, unittest.TestCase):
             self.write_json(layout.managed_task_path(self.root, task["id"]), task)
             return OwnerState.ABSENT
 
-        with mock.patch.object(cli, "managed_owner_state", side_effect=finish_during_probe):
+        with mock.patch.object(managed_tasks, "managed_owner_state", side_effect=finish_during_probe):
             self.assertEqual(diagnostics.runtime_issues(self.root), [])
 
     def test_result_without_callback_requires_handoff_only_after_grace(self):
@@ -250,7 +252,7 @@ class RuntimeHealthTests(HealthArtifacts, unittest.TestCase):
         ), mock.patch.object(diagnostics.ScreenBackend, "available", return_value=True), mock.patch.object(
             diagnostics.shutil, "which", return_value="/fixture/codex"
         ), mock.patch.object(layout, "codex_home", return_value=self.directory), mock.patch.object(
-            cli, "managed_owner_state", return_value=OwnerState.ABSENT
+            managed_tasks, "managed_owner_state", return_value=OwnerState.ABSENT
         ):
             report = diagnostics.inspect(args)
         self.assertEqual(report["status"], "needs_configuration")
@@ -311,14 +313,14 @@ class DeliveryHealthTests(HealthArtifacts, unittest.TestCase):
 
     def test_ack_racing_failed_record_read_suppresses_obsolete_alert(self):
         self.callback("racing", "failed", retain_target_lease=True)
-        original_load = cli.load_request
+        original_load = dispatch.load_request
 
         def acknowledge_during_read(path):
             record = original_load(path)
             self.callback("racing", "acks")
             return record
 
-        with mock.patch.object(cli, "load_request", side_effect=acknowledge_during_read):
+        with mock.patch.object(dispatch, "load_request", side_effect=acknowledge_during_read):
             self.assertEqual(diagnostics.delivery_issues(self.root), [])
 
 
@@ -342,7 +344,7 @@ class EnvironmentHealthTests(unittest.TestCase):
                 probes = [stack.enter_context(mock.patch.object(module, name)) for module, name in (
                     (diagnostics, "queue_writable"), (diagnostics, "coordinator_issue"),
                     (diagnostics, "runtime_issues"), (diagnostics, "delivery_issues"),
-                    (cli, "select_execution_backend"), (cli, "running_in_container"),
+                    (managed_tasks, "select_execution_backend"), (cli, "running_in_container"),
                     (host, "current_machine_id"), (host, "current_boot_id"), (diagnostics.shutil, "which"),
                 )]
                 report = diagnostics.inspect(args)

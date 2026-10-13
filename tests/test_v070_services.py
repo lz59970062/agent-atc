@@ -11,6 +11,7 @@ from pathlib import Path
 from unittest import mock
 
 from agent_atc import cli
+from agent_atc.engine import tasks as managed_tasks
 from agent_atc.engine import reminders as reminder_policy
 from agent_atc.store import layout
 from agent_atc.owners import SystemdUserBackend
@@ -41,7 +42,7 @@ class DaemonServiceSelectionTests(unittest.TestCase):
         spies = {}
         with contextlib.ExitStack() as stack:
             spies["select_execution_backend"] = stack.enter_context(mock.patch.object(
-                cli, "select_execution_backend", return_value="screen", side_effect=backend_error
+                managed_tasks, "select_execution_backend", return_value="screen", side_effect=backend_error
             ))
             stack.enter_context(mock.patch.object(SystemdUserBackend, "available", return_value=manager_available))
             stack.enter_context(mock.patch.object(cli, "running_in_container", return_value=True))
@@ -138,7 +139,7 @@ class DaemonServiceSelectionTests(unittest.TestCase):
 
     def test_ordinary_setup_still_refuses_missing_task_backend_before_installation(self) -> None:
         args = self.arguments("standalone")
-        with mock.patch.object(cli, "select_execution_backend", side_effect=ValueError("no task backend")), mock.patch.object(
+        with mock.patch.object(managed_tasks, "select_execution_backend", side_effect=ValueError("no task backend")), mock.patch.object(
             cli, "install_skill"
         ) as install, mock.patch.object(cli, "start_standalone_daemon") as start, contextlib.redirect_stderr(io.StringIO()):
             self.assertEqual(cli.setup(args), 2)
@@ -147,7 +148,7 @@ class DaemonServiceSelectionTests(unittest.TestCase):
 
     def test_auto_manager_failure_falls_back_without_taking_over_container_supervisor(self) -> None:
         args = self.arguments("auto")
-        with mock.patch.object(cli, "select_execution_backend", return_value="screen"), mock.patch.object(
+        with mock.patch.object(managed_tasks, "select_execution_backend", return_value="screen"), mock.patch.object(
             SystemdUserBackend, "available", return_value=True
         ), mock.patch.object(cli, "running_in_container", return_value=True), mock.patch.object(
             cli.shutil, "which", side_effect=lambda name: "/usr/bin/" + name

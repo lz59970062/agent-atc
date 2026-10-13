@@ -13,6 +13,7 @@ import unittest
 from unittest import mock
 
 from agent_atc import cli
+from agent_atc.engine import tasks as managed_tasks
 from agent_atc.engine import delivery as delivery_engine
 from agent_atc.store import records as queue_store
 from agent_atc.store import layout
@@ -180,7 +181,7 @@ class WindowsServiceTests(unittest.TestCase):
             ), mock.patch.object(delivery_engine, "reap_background_resumes"), mock.patch.object(
                 cli, "daemon_has_live_delivery_workers", side_effect=[True, False]
             ) as alive, mock.patch.object(delivery_engine, "recover_running"), mock.patch.object(
-                cli, "recover_managed_tasks"
+                managed_tasks, "recover_managed_tasks"
             ) as tasks, mock.patch.object(delivery_engine, "process_one") as deliveries, mock.patch.object(
                 cli.time, "sleep"
             ) as sleep, mock.patch.object(cli.os, "execv") as execute:

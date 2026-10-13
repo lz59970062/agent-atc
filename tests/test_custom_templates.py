@@ -11,6 +11,8 @@ import unittest
 from unittest import mock
 
 from agent_atc import cli
+from agent_atc.engine import tasks as managed_tasks
+from agent_atc.engine import worker as task_worker
 from test_cli import executable_python_fixture, patch_fixture_commands
 
 
@@ -42,7 +44,7 @@ class CustomTemplateTests(unittest.TestCase):
                 "--agent", "claude", "--session", "custom-parent", "--task", "review contract",
                 *options, "--", requirements]
         with mock.patch.object(sys, "argv", argv), \
-                mock.patch.object(cli, "screen_binary", return_value="/usr/bin/screen"), \
+                mock.patch.object(managed_tasks, "screen_binary", return_value="/usr/bin/screen"), \
                 contextlib.redirect_stdout(output), contextlib.redirect_stderr(output):
             code = cli.main()
         return code, output.getvalue()
@@ -139,7 +141,7 @@ class CustomTemplateTests(unittest.TestCase):
         self.assertEqual(task["agent_template_source"], str(path.resolve()))
         self.assertIsNone(task.get("child_model"))
         task.update(state="completed", outcome="completed", exit_code=0)
-        prompt = cli.managed_task_prompt(task, outcome="completed")
+        prompt = managed_tasks.managed_task_prompt(task, outcome="completed")
         self.assertIn("Read the summary.", prompt)
         self.assertNotIn("NOT a test execution result", prompt)
         self.assertNotIn("execute the tests", prompt)
@@ -201,10 +203,10 @@ class CustomTemplateTests(unittest.TestCase):
         frozen_prompt = Path(task["agent_prompt_path"]).read_text()
         path.write_text("version: 9\nprompt: REPLACEMENT\nhandoff: REPLACEMENT\n")
         task["state"] = "launching"
-        cli.write_managed_task(self.queue, task)
+        managed_tasks.write_managed_task(self.queue, task)
         task_path = self.queue / "tasks" / task["id"] / "task.json"
         with mock.patch.dict(os.environ, {"STY": "test-screen"}, clear=True):
-            self.assertEqual(cli.run_screen_worker(argparse.Namespace(task_file=str(task_path), token=task["token"])), 0)
+            self.assertEqual(task_worker.run_screen_worker(argparse.Namespace(task_file=str(task_path), token=task["token"])), 0)
         received = json.loads(capture.read_text())
         self.assertEqual(received["prompt"], frozen_prompt)
         self.assertIn("original-model", received["argv"])

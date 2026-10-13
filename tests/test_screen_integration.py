@@ -20,6 +20,8 @@ from pathlib import Path
 from unittest import mock
 
 from agent_atc import cli
+from agent_atc.engine import dispatch
+from agent_atc.engine import tasks as managed_tasks
 from agent_atc.store import records as queue_store
 from agent_atc.store import layout
 from agent_atc.install import diagnostics
@@ -157,7 +159,7 @@ class RealStandaloneScreenTests(unittest.TestCase):
                 self.assertFalse(SystemdUserBackend().available())
                 self.assertEqual(cli.run(args), 0)
             task_path = next(layout.managed_tasks_root(root).glob("*/task.json"))
-            task = cli.load_managed_task(task_path)
+            task = managed_tasks.load_managed_task(task_path)
             self.assertEqual(task["execution_backend"], "screen")
             ready = directory / "coordinator-ready"
             coordinator = directory / "coordinator.py"
@@ -168,9 +170,11 @@ class RealStandaloneScreenTests(unittest.TestCase):
                 from pathlib import Path
                 sys.path.insert(0, {source!r})
                 from agent_atc import cli
+                from agent_atc.engine import dispatch
+                from agent_atc.engine import tasks as managed_tasks
                 from agent_atc.store import records as queue_store
                 from agent_atc.store import layout
-                cli.recover_managed_tasks(Path(sys.argv[1]))
+                managed_tasks.recover_managed_tasks(Path(sys.argv[1]))
                 Path(sys.argv[2]).write_text("launched")
                 time.sleep(60)
                 """), encoding="utf-8")
@@ -188,9 +192,9 @@ class RealStandaloneScreenTests(unittest.TestCase):
                     process.wait(timeout=5)
                     os.kill(int(started.read_text()), 0)
                     with mock.patch.dict(os.environ, environment, clear=True):
-                        self.assertTrue(cli.screen_session_exists(task["screen_session"]))
+                        self.assertTrue(managed_tasks.screen_session_exists(task["screen_session"]))
                         self.assertEqual(diagnostics.runtime_issues(root), [])
-                        cli.recover_managed_tasks(root)
+                        managed_tasks.recover_managed_tasks(root)
                     self.assertEqual(executions.read_text().splitlines(), ["executed"])
                     self.assertFalse(output.exists())
 
@@ -202,14 +206,14 @@ class RealStandaloneScreenTests(unittest.TestCase):
                     self.assertEqual(output.read_text(), "finished after standalone coordinator was killed")
                     with mock.patch.dict(os.environ, environment, clear=True):
                         self.wait_until(
-                            lambda: cli.screen_owner_state(task["screen_session"]) == cli.OwnerState.ABSENT,
+                            lambda: managed_tasks.screen_owner_state(task["screen_session"]) == cli.OwnerState.ABSENT,
                             "completed screen owner did not exit",
                         )
                         self.assertEqual(diagnostics.runtime_issues(root), [])
-                        cli.recover_managed_tasks(root)
+                        managed_tasks.recover_managed_tasks(root)
                     self.assertEqual(executions.read_text().splitlines(), ["executed"])
                     self.assertEqual(len(list((root / "pending").glob("*.json"))), 1)
-                    callback = cli.load_request(callback_path)
+                    callback = dispatch.load_request(callback_path)
                     self.assertEqual(callback["exit_code"], 7)
                     self.assertEqual(callback["target"], {"kind": "session", "value": "fixture-no-real-agent-session"})
                     self.assertTrue(Path(callback["prompt_details_path"]).is_file())

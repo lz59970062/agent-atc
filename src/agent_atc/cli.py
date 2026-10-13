@@ -72,34 +72,17 @@ from .system import commands
 from .engine import delivery as delivery_engine
 from .engine import reminders as reminder_policy
 from .harness.codex import app_server
+from .engine import dispatch
+from .engine import goals
+from .engine import recovery
+from .engine import tasks as managed_tasks
+from .engine import worker as task_worker
 
-MANAGED_WORKER_TOKEN_PREFIX = "atc_"
-MANAGED_WORKER_HANDSHAKE_SECONDS = 1.0
-MANAGED_LAUNCH_MAX_ATTEMPTS = 3
-MANAGED_LAUNCH_RETRY_DELAY = 1.0
-MANAGED_LAUNCH_RETRY_BACKOFF = 2.0
-DEFAULT_GOAL_IDLE_SECONDS = 3 * 60 * 60
-DEFAULT_BLOCKED_EMAIL_SECONDS = 12 * 60 * 60
 DEFAULT_SUPERVISOR_CONF_DIR = "/etc/supervisor/conf.d"
 RELOAD_PROTOCOL_VERSION = 1
-GOAL_PATH_STATUSES = ("pending", "in_progress", "blocked", "completed")
-AGENT_DISPLAY_NAMES = {name: get_agent(name).display_name for name in AGENT_NAMES}
-AGENT_THREAD_ID_ENVS = {name: get_agent(name).session_id_env for name in AGENT_NAMES}
 SHELL_HOOK_BEGIN = "# >>> agent-atc pending status >>>"
 SHELL_HOOK_END = "# <<< agent-atc pending status <<<"
-SCREEN_BIN_ENV = "ATC_SCREEN_BIN"
-AGENT_PROMPT_FILE_NAME = "agent-prompt.txt"
-AGENT_RESULT_FILE_NAME = "agent-result.txt"
-AGENT_SYSTEM_PROMPT_FILE_NAME = "agent-system-prompt.md"
-CHILD_AGENT_PARENT_ENV_NAMES = tuple(
-    dict.fromkeys(env_name for name in CHILD_AGENT_NAMES for env_name in get_child_agent(name).parent_env_names)
-)
 PROXY_ENV_FILE_ENV = "ATC_PROXY_ENV_FILE"
-STANDARD_CALLBACK_GUIDANCE = "\n".join([
-    "Please inspect the result and any relevant artifacts.",
-    "Decide whether the original goal is complete, blocked, or needs another action.",
-    "Continue if the next step is clear and safe; otherwise ask the user one concise question.",
-])
 PROXY_ENV_NAMES = (
     "HTTP_PROXY",
     "HTTPS_PROXY",
@@ -110,62 +93,6 @@ PROXY_ENV_NAMES = (
     "all_proxy",
     "no_proxy",
 )
-
-
-def build_prompt(
-    args: argparse.Namespace,
-    duration: float | None = None,
-    acknowledgement: str | None = None,
-) -> str:
-    lines = [
-        "[atc]",
-        f"A long-running task explicitly called back into {agent_display_name(resolve_agent(args))}.",
-        f"Callback time: {datetime.now().astimezone().isoformat(timespec='seconds')}",
-        f"Task: {args.task}",
-        f"Working directory: {args.cwd}",
-    ]
-    if args.command:
-        lines.append(f"Command: {args.command}")
-    if duration is not None:
-        lines.append(f"Duration: {duration:.1f}s")
-    if args.exit_code is not None:
-        lines.append(f"Exit code: {args.exit_code}")
-    if args.message:
-        lines.extend(["", "Callback message:", args.message])
-
-    lines.extend(["", STANDARD_CALLBACK_GUIDANCE])
-    if acknowledgement:
-        lines.extend(["", build_acknowledgement_text(acknowledgement, agent=resolve_agent(args))])
-    return "\n".join(lines)
-
-
-def resolve_agent(args: argparse.Namespace | None = None) -> str:
-    """Choose the callback adapter once, using explicit selection first."""
-    if args is not None:
-        cached = getattr(args, "_callback_agent", None)
-        if isinstance(cached, str) and cached in AGENT_NAMES:
-            return cached
-        explicit = getattr(args, "agent", None)
-        if explicit:
-            if explicit not in AGENT_NAMES:
-                raise SystemExit(f"Unknown agent {explicit!r}; expected one of: {', '.join(AGENT_NAMES)}")
-            args._callback_agent = explicit
-            return explicit
-    agent = AGENTS.detect(os.environ)
-    if args is not None:
-        args._callback_agent = agent
-    return agent
-
-
-def agent_display_name(agent: str) -> str:
-    return get_agent(agent).display_name if agent in AGENT_NAMES else agent
-
-
-def request_agent(request: dict[str, object]) -> str:
-    agent = request.get("agent", "codex")
-    if not isinstance(agent, str):
-        raise ValueError(f"unsupported request agent: {agent!r}")
-    return get_agent(agent).name
 
 
 def systemd_user_dir() -> Path:
@@ -231,7 +158,7 @@ def report_claude_agent_readiness(args: argparse.Namespace) -> None:
         )
         return
     try:
-        environment = child_agent_environment(dict(os.environ))
+        environment = managed_tasks.child_agent_environment(dict(os.environ))
         result = subprocess.run(
             commands.process_command([command, "auth", "status", "--json"], environment),
             check=False,
@@ -270,7 +197,7 @@ def systemd_service_text(args: argparse.Namespace) -> str:
     codex_bin = codex_bin_path(args)
     claude_bin = claude_bin_path(args)
     pi_bin = pi_bin_path(args)
-    screen_bin = screen_binary() or "screen"
+    screen_bin = managed_tasks.screen_binary() or "screen"
     path = args.path or os.environ.get("PATH", "")
     return "\n".join(
         [
@@ -293,7 +220,7 @@ def systemd_service_text(args: argparse.Namespace) -> str:
             f"Environment={systemd_quote(f'ATC_CODEX_BIN={codex_bin}')}",
             f"Environment={systemd_quote(f'{CLAUDE_BIN_ENV}={claude_bin}')}",
             f"Environment={systemd_quote(f'{PI_BIN_ENV}={pi_bin}')}",
-            f"Environment={systemd_quote(f'{SCREEN_BIN_ENV}={screen_bin}')}",
+            f"Environment={systemd_quote(f'{managed_tasks.SCREEN_BIN_ENV}={screen_bin}')}",
             f"Environment={systemd_quote(f'{app_server.DESKTOP_APP_SERVER_ENV}=1')}",
             f"Environment={systemd_quote(f'{PROXY_ENV_FILE_ENV}={layout.service_proxy_env_path()}')}",
             f"Environment={systemd_quote(f'{layout.ATC_HOME_ENV}={layout.daemon_state_dir().resolve()}')}",
@@ -373,758 +300,6 @@ def supervisor_config_text(args: argparse.Namespace) -> str:
             "",
         ]
     )
-
-
-def resolve_target(args: argparse.Namespace) -> tuple[dict[str, str], str]:
-    if args.session:
-        value = pi_callback.canonical_session(args.session) if resolve_agent(args) == "pi" else args.session
-        return {"kind": "session", "value": value}, "--session"
-    if args.last:
-        if resolve_agent(args) == "pi":
-            raise ValueError("Pi callbacks require an absolute session file; --last is not supported")
-        return {"kind": "last"}, "--last"
-
-    agent = resolve_agent(args)
-    env_name = get_agent(agent).session_id_env
-    session = os.environ.get(env_name, "").strip()
-    if session:
-        if agent == "pi":
-            session = pi_callback.canonical_session(session)
-        return {"kind": "session", "value": session}, env_name
-
-    raise SystemExit(
-        f"Cannot determine the callback session: {env_name} is unset. "
-        f"Run from {agent_display_name(agent)} or pass --session <id>; use --last only as an explicit unsafe fallback."
-    )
-
-
-def bind_target(args: argparse.Namespace) -> tuple[dict[str, str], str]:
-    cached_target = getattr(args, "_callback_target", None)
-    cached_source = getattr(args, "_callback_target_source", None)
-    if isinstance(cached_target, dict) and isinstance(cached_source, str):
-        return cached_target, cached_source
-
-    target, source = resolve_target(args)
-    args._callback_target = target
-    args._callback_target_source = source
-    if target["kind"] == "session":
-        print(
-            f"atc: callback bound to session {target['value']} via {source}",
-            file=sys.stderr,
-        )
-    else:
-        print(
-            "atc: warning: --last is not session-safe and may wake an unrelated active thread",
-            file=sys.stderr,
-        )
-    return target, source
-
-
-def routing_text(request: dict[str, object]) -> str:
-    target = request["target"]
-    source = request["target_source"]
-    if isinstance(target, dict) and target.get("kind") == "session":
-        return "\n".join(
-            [
-                "Callback routing:",
-                f"- Bound session: {target['value']}",
-                f"- Binding source: {source}",
-                "- Resume only this session; never redirect this callback to --last or another active thread.",
-            ]
-        )
-    return "\n".join(
-        [
-            "Callback routing warning:",
-            f"- Target: most recently active {agent_display_name(request_agent(request))} session (--last)",
-            "- This unsafe fallback was explicitly requested and may reach an unrelated thread.",
-        ]
-    )
-
-
-def attach_routing_text(prompt: str, request: dict[str, object]) -> str:
-    return f"{prompt}\n\n{routing_text(request)}"
-
-
-def make_request(
-    args: argparse.Namespace, prompt: str, *, duration: float | None = None,
-) -> dict[str, object]:
-    target, target_source = bind_target(args)
-    agent = resolve_agent(args)
-    request = {
-        "version": 1,
-        "id": getattr(args, "_callback_id", None) or uuid.uuid4().hex,
-        "created_at": time.time(),
-        "cwd": args.cwd,
-        "agent": agent,
-        "target": target,
-        "target_source": target_source,
-        "prompt": prompt,
-        "prompt_format": callbacks.FORMAT if getattr(args, "callback_format", "compact") == "compact" else "full",
-        "task": getattr(args, "task", "Task update"),
-        "exit_code": getattr(args, "exit_code", None),
-        "message": getattr(args, "message", None),
-        "approvals_reviewer": getattr(args, "approvals_reviewer", None) or DEFAULT_APPROVALS_REVIEWER,
-        "approval_policy": getattr(args, "approval_policy", None) or DEFAULT_APPROVAL_POLICY,
-        "sandbox_mode": getattr(args, "sandbox_mode", None) or DEFAULT_SANDBOX_MODE,
-    }
-    if duration is not None:
-        request["duration_seconds"] = duration
-    request.update(callback_transport.selection(args))
-    if request.get("callback_mode"):
-        request["version"] = 3 if agent == "pi" else 2  # Older daemons must reject new route semantics.
-        if agent == "pi" and request.get("pi_delivery") == "steer":
-            request["version"] = 4
-    if agent == "claude":
-        request["permission_mode"] = getattr(args, "permission_mode", None) or os.environ.get(
-            CLAUDE_PERMISSION_MODE_ENV, DEFAULT_CLAUDE_PERMISSION_MODE
-        )
-    goal_id = getattr(args, "goal_id", None)
-    if goal_id:
-        request["goal_id"] = goal_id
-    return request
-
-
-def prepare_request_for_queue(root: Path, request: dict[str, object], prompt: str) -> dict[str, object]:
-    request_id = str(request["id"])
-    request["queue_dir"] = str(root)
-    request["lifecycle_state"] = "pending"
-    acknowledgement = atc_runtime.control_command("ack", "--queue-dir", str(root), "--id", request_id)
-    routed_prompt = attach_routing_text(prompt, request)
-    request["prompt"] = f"{routed_prompt}\n\n{build_acknowledgement_text(acknowledgement, agent=request_agent(request))}"
-    if request.get("prompt_format") == callbacks.FORMAT:
-        # Keep complete evidence locally; neither retries nor rendering counters
-        # need to repeat command lines and boilerplate in the model context.
-        if not re.fullmatch(r"[A-Za-z0-9_-]+", request_id):
-            raise ValueError("callback id must be a safe filename")
-        details_path = root.absolute() / "details" / f"{request_id}.md"
-        queue_store.write_private_text(details_path, str(request["prompt"]))
-        request["prompt_details_path"] = str(details_path)
-        compact = callbacks.render(request, details_path, acknowledgement)
-        request["prompt_compact"] = compact
-        request["prompt"] = compact + "\n" + callbacks.REMINDER
-        return request
-    # Only remove the known generated wrapper, never task-specific messages,
-    # template handoffs, recovery instructions, or routing constraints.
-    compact = prompt
-    for agent in AGENT_NAMES:
-        prefix = f"[atc]\nA long-running task explicitly called back into {agent_display_name(agent)}.\n"
-        if compact.startswith(prefix):
-            compact = "[atc]\n" + compact[len(prefix):]
-            suffix = "\n\n" + STANDARD_CALLBACK_GUIDANCE
-            if compact.endswith(suffix):
-                compact = compact[:-len(suffix)]
-            break
-    request["prompt_compact"] = (
-        f"{attach_routing_text(compact, request)}\n\n"
-        f"Callback acknowledgement (after inspecting the result):\n{acknowledgement}"
-    )
-    return request
-
-
-def enqueue_existing_request(root: Path, request: dict[str, object], prompt: str) -> int:
-    request_id = str(request["id"])
-    target = layout.request_path(root, "pending", request_id)
-    goal_lock: tuple[object, Path] | None = None
-    try:
-        queue_store.ensure_daemon_dirs(root)
-        request = prepare_request_for_queue(root, request, prompt)
-        goal_id = request.get("goal_id")
-        goal: dict[str, object] | None = None
-        if not request.get("goal_reminder") and goal_id is not None:
-            if not isinstance(goal_id, str):
-                raise ValueError("callback goal id must be a string")
-            layout.goal_path(root, goal_id)
-            goal_lock = queue_store.acquire_owner_lock(root, layout.goal_lock_id(goal_id), blocking=True)
-            goal = load_goal(root, goal_id)
-            if goal.get("state") != "active":
-                raise ValueError(f"goal {goal_id} is not active")
-        queue_store.write_request(target, request)
-        if goal is not None:
-            goal["last_external_callback_at"] = float(request.get("created_at", time.time()))
-            goal.pop("last_reminder_at", None)
-            write_goal(root, goal)
-    except (OSError, ValueError, json.JSONDecodeError) as exc:
-        print(f"atc: warning: failed to enqueue callback: {exc}", file=sys.stderr)
-        return 1
-    finally:
-        if goal_lock is not None:
-            queue_store.release_owner_lock(goal_lock, remove=False)
-
-    print(f"atc: queued callback {request_id} in {root}", file=sys.stderr)
-    return 0
-
-
-def enqueue_request(args: argparse.Namespace, prompt: str) -> int:
-    root = layout.queue_dir(args)
-    request = make_request(args, prompt)
-    # A persistence error can occur after publication. Diagnostics must not tell
-    # the caller to blindly submit a duplicate callback in that case.
-    args._health_work = {"state": "unknown", "id": str(request["id"])}
-    result = enqueue_existing_request(root, request, prompt)
-    if result == 0:
-        args._health_work = {"state": "callback_queued", "id": str(request["id"])}
-    return result
-
-
-def queue_callback(args: argparse.Namespace, prompt: str) -> int:
-    """Persist callback delivery; only the daemon may resume an agent."""
-    if not args.dry_run:
-        return enqueue_request(args, prompt)
-    request = make_request(args, prompt)
-    routed_prompt = attach_routing_text(prompt, request)
-    print(routed_prompt)
-    return 0
-
-
-def load_goal(root: Path, goal_id: str) -> dict[str, object]:
-    path = layout.goal_path(root, goal_id)
-    data = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(data, dict) or data.get("id") != goal_id:
-        raise ValueError(f"invalid goal record {goal_id}")
-    return data
-
-
-def write_goal(root: Path, goal: dict[str, object]) -> None:
-    goal_id = goal.get("id")
-    if not isinstance(goal_id, str):
-        raise ValueError("goal requires an id")
-    queue_store.write_request(layout.goal_path(root, goal_id), goal)
-
-
-def read_goal_plan_file(path: Path) -> tuple[dict[str, object], str, str]:
-    try:
-        if not path.is_file():
-            raise ValueError(f"goal plan is not a regular file: {path}")
-        content = path.read_text(encoding="utf-8")
-    except UnicodeDecodeError as exc:
-        raise ValueError(f"goal plan must be UTF-8 YAML: {path}") from exc
-    except OSError as exc:
-        raise ValueError(f"cannot read goal plan {path}: {exc}") from exc
-    if not content.strip():
-        raise ValueError(f"goal plan must not be empty: {path}")
-    try:
-        data = yaml.safe_load(content)
-    except yaml.YAMLError as exc:
-        raise ValueError(f"invalid goal plan YAML {path}: {exc}") from exc
-    if not isinstance(data, dict):
-        raise ValueError("goal plan must be a YAML mapping")
-    if data.get("version") != 1:
-        raise ValueError("goal plan version must be 1")
-    revision = data.get("revision")
-    if isinstance(revision, bool) or not isinstance(revision, int) or revision < 1:
-        raise ValueError("goal plan requires a positive integer 'revision'")
-    if not isinstance(data.get("goal"), str) or not str(data["goal"]).strip():
-        raise ValueError("goal plan requires a non-empty 'goal' string")
-    amendments = data.get("amendments", [])
-    if not isinstance(amendments, list) or not all(isinstance(item, dict) for item in amendments):
-        raise ValueError("goal plan 'amendments' must be a list of mappings when present")
-    steps = data.get("path")
-    if not isinstance(steps, list) or not steps:
-        raise ValueError("goal plan requires a non-empty ordered 'path' list")
-
-    seen_ids: set[str] = set()
-    first_unfinished: int | None = None
-    active_indices: list[int] = []
-    for index, step in enumerate(steps):
-        if not isinstance(step, dict):
-            raise ValueError(f"goal path item {index + 1} must be a mapping")
-        step_id = step.get("id")
-        if not isinstance(step_id, str) or not step_id.strip():
-            raise ValueError(f"goal path item {index + 1} requires a non-empty 'id'")
-        if step_id in seen_ids:
-            raise ValueError(f"duplicate goal path id: {step_id}")
-        seen_ids.add(step_id)
-        title = step.get("title")
-        if not isinstance(title, str) or not title.strip():
-            raise ValueError(f"goal path item {step_id} requires a non-empty 'title'")
-        status = step.get("status")
-        if status not in GOAL_PATH_STATUSES:
-            raise ValueError(
-                f"goal path item {step_id} has invalid status; expected one of: "
-                f"{', '.join(GOAL_PATH_STATUSES)}"
-            )
-        if status != "completed" and first_unfinished is None:
-            first_unfinished = index
-        if first_unfinished is not None and index > first_unfinished and status == "completed":
-            raise ValueError(
-                f"goal path item {step_id} is completed after an unfinished item; "
-                "completed items must form a continuous prefix"
-            )
-        if status in ("in_progress", "blocked"):
-            active_indices.append(index)
-    if len(active_indices) > 1:
-        raise ValueError("goal path may contain at most one in_progress or blocked item")
-    if active_indices and active_indices[0] != first_unfinished:
-        raise ValueError("the in_progress or blocked item must be the first unfinished path item")
-
-    digest = hashlib.sha256(content.encode("utf-8")).hexdigest()
-    return data, content, digest
-
-
-def resolve_goal_plan_file(cwd: str, value: str | None) -> tuple[Path, dict[str, object], str]:
-    if not value or not value.strip():
-        raise ValueError("--plan-file is required")
-    candidate = Path(value).expanduser()
-    if not candidate.is_absolute():
-        candidate = Path(cwd) / candidate
-    try:
-        resolved = candidate.resolve(strict=True)
-    except OSError as exc:
-        raise ValueError(f"cannot resolve goal plan {candidate}: {exc}") from exc
-    plan, _, digest = read_goal_plan_file(resolved)
-    return resolved, plan, digest
-
-
-def goal_plan_snapshot(goal: dict[str, object]) -> tuple[Path, dict[str, object], str, str]:
-    value = goal.get("plan_file")
-    if not isinstance(value, str) or not value:
-        raise ValueError(
-            "goal has no YAML plan; create a new goal with --plan-file before completing it"
-        )
-    path = Path(value)
-    plan, content, digest = read_goal_plan_file(path)
-    return path, plan, content, digest
-
-
-def goal_plan_progress(plan: dict[str, object]) -> tuple[int, int, dict[str, object] | None, list[dict[str, object]]]:
-    steps = plan["path"]
-    assert isinstance(steps, list)
-    typed_steps = [step for step in steps if isinstance(step, dict)]
-    completed = sum(step.get("status") == "completed" for step in typed_steps)
-    remaining = [step for step in typed_steps if step.get("status") != "completed"]
-    current = remaining[0] if remaining else None
-    return completed, len(typed_steps), current, remaining
-
-
-def clear_blocked_goal_email(goal: dict[str, object]) -> None:
-    for field in (
-        "blocked_email_to",
-        "blocked_email_after_seconds",
-        "blocked_email_attempted_at",
-        "blocked_email_attempts",
-        "blocked_email_next_attempt_at",
-        "blocked_email_result",
-        "blocked_email_exhausted_at",
-    ):
-        goal.pop(field, None)
-
-
-def is_single_email_recipient(value: str) -> bool:
-    return bool(re.fullmatch(r"[^\s@,;<>]+@[^\s@,;<>]+", value))
-
-
-def queued_goal_reminder_exists(root: Path, goal_id: str) -> bool:
-    for state in (layout.ACTIVE_STATE, "pending", "running"):
-        for path in (root / state).glob("*.json"):
-            try:
-                request = load_request(path)
-            except (OSError, ValueError, json.JSONDecodeError):
-                continue
-            if request.get("goal_id") == goal_id and request.get("goal_reminder"):
-                return True
-    return False
-
-
-def latest_queued_goal_callback_at(root: Path, goal_id: str) -> float | None:
-    latest: float | None = None
-    for state in (layout.ACTIVE_STATE, "pending", "running", "done", "failed", "canceled"):
-        for path in (root / state).glob("*.json"):
-            try:
-                request = load_request(path)
-                created_at = float(request["created_at"])
-            except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError):
-                continue
-            if request.get("goal_id") == goal_id and not request.get("goal_reminder"):
-                latest = created_at if latest is None else max(latest, created_at)
-    return latest
-
-
-def update_goal_from_callback(root: Path, request: dict[str, object]) -> None:
-    if request.get("goal_reminder"):
-        return
-    goal_id = request.get("goal_id")
-    if not isinstance(goal_id, str):
-        return
-    lock = queue_store.acquire_owner_lock(root, layout.goal_lock_id(goal_id), blocking=True)
-    try:
-        goal = load_goal(root, goal_id)
-        if goal.get("state") != "active":
-            return
-        goal["last_external_callback_at"] = float(request.get("created_at", time.time()))
-        goal.pop("last_reminder_at", None)
-        write_goal(root, goal)
-    finally:
-        queue_store.release_owner_lock(lock, remove=False)
-
-
-def load_request(path: Path) -> dict[str, object]:
-    data = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(data, dict):
-        raise ValueError("request must be a JSON object")
-    if data.get("version") not in (1, 2, 3, 4):
-        raise ValueError("unsupported request version")
-    if data.get("version") in (2, 3, 4) and data.get("callback_mode") not in ("cli", "desktop", "manual"):
-        raise ValueError("version 2 callback requires an explicit mode")
-    if not isinstance(data.get("id"), str) or data["id"] != path.stem:
-        raise ValueError("request id must match its filename")
-    if not isinstance(data.get("cwd"), str):
-        raise ValueError("request cwd must be a string")
-    if not isinstance(data.get("prompt"), str):
-        raise ValueError("request prompt must be a string")
-    if data.get("version") in (3, 4):
-        if request_agent(data) != "pi":
-            raise ValueError("version 3 callback requires a frozen Pi route")
-        pi_callback.validate_route(data)
-    if data.get("version") == 4 and data.get("pi_delivery") != "steer":
-        raise ValueError("version 4 callback requires explicit Pi steer delivery")
-    delivery_engine.resume_command(data)
-    return data
-
-
-def build_acknowledgement_text(command: str, agent: str = "codex") -> str:
-    if agent == "claude":
-        delivery_note = (
-            "This resume runs Claude Code headless with automatic permission handling "
-            "and grants the callback queue directory as an additional working directory."
-        )
-    elif agent == "pi":
-        delivery_note = (
-            "This callback is delivered to the original PI Agent process through its native message API. "
-            "Only ATC-managed sessions can recover in print mode after the entire original process exits."
-        )
-    else:
-        delivery_note = (
-            "This resume is configured to make the callback queue writable and to use "
-            "automatic approval review when the Codex CLI supports it."
-        )
-    return "\n".join(
-        [
-            "Callback acknowledgement:",
-            "After you have successfully resumed this callback and inspected the relevant result,",
-            "mark the callback as received by running this command:",
-            command,
-            delivery_note,
-            ("Once a Pi callback is published, an uncertain outcome requires manual inspection; automatic replay is suppressed."
-             if agent == "pi" else "The wakeup daemon will retry this callback until the acknowledgement marker exists or retries are exhausted."),
-        ]
-    )
-
-
-def active_prompt(args: argparse.Namespace) -> str:
-    command = args.command or " ".join(args.wrapped_command)
-    return "\n".join(
-        [
-            "[atc-active]",
-            f"Task: {args.task}",
-            f"Working directory: {args.cwd}",
-            f"Command: {command}",
-            "State: armed before task launch; this record is not dispatchable.",
-        ]
-    )
-
-
-def make_active_request(args: argparse.Namespace, started_at: float) -> dict[str, object]:
-    request = make_request(args, active_prompt(args))
-    request.update(
-        {
-            "queue_dir": str(layout.queue_dir(args)),
-            "lifecycle_state": layout.ACTIVE_STATE,
-            "task": args.task,
-            "command": args.command or " ".join(args.wrapped_command),
-            "started_at": started_at,
-            "wrapper_pid": os.getpid(),
-            "boot_id": host.current_boot_id(),
-            "launch_phase": "prelaunch",
-        }
-    )
-    return request
-
-
-def discard_unlaunched_active(root: Path, request_id: str) -> None:
-    path = layout.request_path(root, layout.ACTIVE_STATE, request_id)
-    try:
-        path.unlink()
-    except FileNotFoundError:
-        return
-    except OSError as exc:
-        print(f"atc: warning: could not remove unlaunched callback {request_id}: {exc}", file=sys.stderr)
-        return
-    try:
-        queue_store.fsync_directory(path.parent)
-    except OSError as exc:
-        print(
-            f"atc: warning: removed unlaunched active callback {request_id} "
-            f"but could not sync its directory: {exc}",
-            file=sys.stderr,
-        )
-
-
-def best_effort_disarm(
-    root: Path,
-    request_id: str,
-    lock: tuple[object, Path] | None,
-) -> None:
-    try:
-        discard_unlaunched_active(root, request_id)
-    except Exception as exc:
-        print(f"atc: warning: pre-arm record cleanup failed: {exc}", file=sys.stderr)
-    try:
-        queue_store.release_owner_lock(lock, remove=True)
-    except Exception as exc:
-        print(f"atc: warning: pre-arm lock cleanup failed: {exc}", file=sys.stderr)
-
-
-def transition_active_to_pending(root: Path, request: dict[str, object], prompt: str) -> int:
-    request_id = str(request["id"])
-    source = layout.request_path(root, layout.ACTIVE_STATE, request_id)
-    if queue_store.is_canceled(root, request_id):
-        queue_store.remove_live_request_copies(root, request_id)
-        print(f"atc: callback {request_id} was canceled; suppressing finalization", file=sys.stderr)
-        return 0
-    if not source.exists():
-        if queue_store.request_already_transitioned(root, request_id):
-            return 0
-        print(
-            f"atc: warning: active callback {request_id} disappeared before finalization",
-            file=sys.stderr,
-        )
-        return 1
-    prepare_request_for_queue(root, request, prompt)
-    if queue_store.is_canceled(root, request_id):
-        queue_store.remove_live_request_copies(root, request_id)
-        return 0
-    queue_store.write_request(source, request)
-    if queue_store.is_canceled(root, request_id):
-        queue_store.remove_live_request_copies(root, request_id)
-        return 0
-    try:
-        queue_store.move_request(source, root / "pending")
-    except FileNotFoundError:
-        if queue_store.is_canceled(root, request_id) or queue_store.request_already_transitioned(root, request_id):
-            if queue_store.is_canceled(root, request_id):
-                queue_store.remove_live_request_copies(root, request_id)
-            return 0
-        raise
-    if queue_store.is_canceled(root, request_id):
-        queue_store.remove_live_request_copies(root, request_id)
-        return 0
-    print(f"atc: queued callback {request_id} in {root}", file=sys.stderr)
-    return 0
-
-
-def recovery_prompt(request: dict[str, object], now: float) -> str:
-    started_at = request.get("started_at")
-    duration = now - float(started_at) if isinstance(started_at, (int, float)) else None
-    recovered_args = argparse.Namespace(
-        task=str(request.get("task") or request_task(request)),
-        cwd=str(request["cwd"]),
-        command=str(request.get("command") or ""),
-        exit_code=None,
-        agent=request_agent(request),
-        message=(
-            "The long-task wrapper disappeared before recording task completion. "
-            "The task outcome and exit status are unknown, and the wrapped child may still be running. "
-            "Inspect process state and artifacts before retrying or launching the next stage."
-        ),
-    )
-    return build_prompt(recovered_args, duration)
-
-
-def recover_active(root: Path) -> int:
-    queue_store.ensure_daemon_dirs(root)
-    recovered = 0
-    for path in sorted((root / layout.ACTIVE_STATE).glob("*.json")):
-        request_id = path.stem
-        lock = queue_store.acquire_owner_lock(root, request_id, blocking=False)
-        if lock is None:
-            continue
-        remove_lock = False
-        try:
-            if not path.exists():
-                continue
-            if queue_store.is_canceled(root, request_id):
-                queue_store.remove_live_request_copies(root, request_id)
-                remove_lock = True
-                continue
-            request = load_request(path)
-            if request.get("launch_phase") == "prelaunch":
-                discard_unlaunched_active(root, request_id)
-                remove_lock = True
-                print(
-                    f"atc: discarded callback {request_id}; wrapped task was not launch-committed",
-                    file=sys.stderr,
-                )
-                continue
-            if request.get("outcome") == "completed" and isinstance(request.get("exit_code"), int):
-                queue_store.move_request(path, root / "pending")
-                recovered += 1
-                remove_lock = True
-                print(
-                    f"atc: recovered completed callback {request_id} with its recorded exit code",
-                    file=sys.stderr,
-                )
-                continue
-            request["lifecycle_state"] = "recovered_unknown"
-            request["recovered_at"] = time.time()
-            request["recovery_reason"] = "wrapper_owner_lock_released_before_completion"
-            request["outcome"] = "unknown"
-            prompt = recovery_prompt(request, float(request["recovered_at"]))
-            if transition_active_to_pending(root, request, prompt) == 0:
-                recovered += 1
-                remove_lock = True
-                print(
-                    f"atc: recovered orphaned active callback {request_id} with unknown outcome",
-                    file=sys.stderr,
-                )
-        except Exception as exc:
-            print(
-                f"atc: warning: failed to recover active callback {request_id}: {exc}",
-                file=sys.stderr,
-            )
-        finally:
-            queue_store.release_owner_lock(lock, remove=remove_lock)
-    return recovered
-
-
-def cancel_one(root: Path, request_id: str, message: str | None = None) -> bool:
-    queue_store.ensure_daemon_dirs(root)
-    canceled = layout.request_path(root, "canceled", request_id)
-    if canceled.exists():
-        queue_store.remove_live_request_copies(root, request_id)
-        print(f"atc: callback {request_id} is already canceled in {root}", file=sys.stderr)
-        return True
-
-    for state in (layout.ACTIVE_STATE, "pending", "running", "failed"):
-        source = layout.request_path(root, state, request_id)
-        if not source.exists():
-            continue
-        try:
-            data = json.loads(source.read_text(encoding="utf-8"))
-            if not isinstance(data, dict):
-                data = {}
-        except Exception:
-            data = {}
-        data.update(
-            {
-                "id": request_id,
-                "canceled_at": time.time(),
-                "canceled_from": state,
-            }
-        )
-        if message:
-            data["cancel_message"] = message
-        # Publish the tombstone first. The wrapper finalizer and daemon both
-        # honor it, so cancellation wins even if a state transition races us.
-        queue_store.write_request(canceled, data)
-        queue_store.remove_live_request_copies(root, request_id)
-        try:
-            delivery_engine.release_retained_target_lease(root, data)
-        except (OSError, RuntimeError) as exc:
-            print(
-                f"atc: warning: could not release retained target lease for "
-                f"{request_id}: {exc}",
-                file=sys.stderr,
-            )
-        print(f"atc: canceled callback {request_id} from {state} in {root}", file=sys.stderr)
-        return True
-
-    print(f"atc: warning: active callback {request_id} not found in {root}", file=sys.stderr)
-    return False
-
-
-def cancel_all(root: Path, message: str | None = None) -> int:
-    queue_store.ensure_daemon_dirs(root)
-    request_ids: set[str] = set()
-    for state in (layout.ACTIVE_STATE, "pending", "running", "failed"):
-        request_ids.update(path.stem for path in (root / state).glob("*.json"))
-    canceled = 0
-    for request_id in sorted(request_ids):
-        if cancel_one(root, request_id, message):
-            canceled += 1
-    print(f"atc: canceled {canceled} active callback(s) in {root}", file=sys.stderr)
-    return canceled
-
-
-def process_goal_reminders(root: Path) -> bool:
-    now = time.time()
-    for path in sorted((root / "goals").glob("*.json")):
-        lock: tuple[object, Path] | None = None
-        try:
-            goal_id = path.stem
-            lock = queue_store.acquire_owner_lock(root, layout.goal_lock_id(goal_id), blocking=True)
-            goal = load_goal(root, goal_id)
-            if goal.get("state") != "active":
-                continue
-            last_callback = float(goal["last_external_callback_at"])
-            observed_callback = latest_queued_goal_callback_at(root, goal_id)
-            if observed_callback is not None and observed_callback > last_callback:
-                goal["last_external_callback_at"] = observed_callback
-                goal.pop("last_reminder_at", None)
-                write_goal(root, goal)
-                last_callback = observed_callback
-            idle_seconds = float(goal.get("idle_seconds", DEFAULT_GOAL_IDLE_SECONDS))
-            if now - last_callback < idle_seconds:
-                continue
-            last_reminder = goal.get("last_reminder_at")
-            if last_reminder is not None and now - float(last_reminder) < idle_seconds:
-                continue
-            if queued_goal_reminder_exists(root, goal_id):
-                goal["last_reminder_at"] = now
-                write_goal(root, goal)
-                return True
-            request = {
-                "version": 1, "id": uuid.uuid4().hex, "created_at": now, "cwd": goal["cwd"],
-                "agent": goal.get("agent", "codex"),
-                "target": goal["target"], "target_source": goal.get("target_source", "goal"),
-                "goal_id": goal_id, "goal_reminder": True, "prompt": "",
-            }
-            goal_ack_command = atc_runtime.control_command("goal", "ack", "--queue-dir", str(root), "--id", goal_id)
-            goal_check_command = atc_runtime.control_command("goal", "check", "--queue-dir", str(root), "--id", goal_id)
-            try:
-                plan_path, plan, _, _ = goal_plan_snapshot(goal)
-                completed, total, current, remaining = goal_plan_progress(plan)
-                current_text = (
-                    "none; final path item completed"
-                    if current is None
-                    else f"{current['id']} [{current['status']}] - {current['title']}"
-                )
-                remaining_text = (
-                    "none"
-                    if not remaining
-                    else "; ".join(
-                        f"{step['id']} [{step['status']}] - {step['title']}" for step in remaining
-                    )
-                )
-                plan_text = (
-                    f"Current YAML goal: {plan['goal']}\nPlan revision: {plan['revision']}\n"
-                    f"YAML goal plan: {plan_path}\nProgress: {completed}/{total}\n"
-                    f"Current item: {current_text}\nRemaining path: {remaining_text}\n"
-                )
-            except ValueError as exc:
-                plan_text = (
-                    f"YAML goal plan: {goal.get('plan_file', '(missing)')}\n"
-                    f"Plan needs repair before progress can continue: {exc}\n"
-                )
-            prompt = (f"[goal-inactivity-reminder]\nGoal record: {goal.get('task', goal_id)}\n"
-                      f"{plan_text}"
-                      f"No new callback has been queued for {idle_seconds / 3600:.0f} hour(s). "
-                      f"Run {goal_check_command} to inspect the ordered goal path, current item, and remaining items. "
-                      "Update that YAML after each path item. Compare the actual work and artifacts with the plan. "
-                      f"Only after the final path item is confirmed completed, run: {goal_ack_command} "
-                      "--state completed --plan-sha256 <sha256 printed by goal check>. "
-                      "If conditions are not ready, run: "
-                      f"{goal_ack_command} --state blocked_conditions --condition \"specific missing prerequisite\". "
-                      "Otherwise continue the goal and schedule the next callback.")
-            if enqueue_existing_request(root, request, prompt) != 0:
-                return True
-            goal["last_reminder_at"] = now
-            write_goal(root, goal)
-            return True
-        except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError) as exc:
-            print(f"atc: warning: could not process goal reminder {path.name}: {exc}", file=sys.stderr)
-        finally:
-            queue_store.release_owner_lock(lock, remove=False)
-    return False
 
 
 def daemon_reexec_command(args: argparse.Namespace) -> list[str]:
@@ -1214,16 +389,16 @@ def daemon(args: argparse.Namespace) -> int:
             delivery_engine.recover_running(root)
             delivery_engine.reconcile_acknowledged_retained_leases(root)
             pi_callback.reconcile_publications(root, max(1.0, float(getattr(args, "resume_timeout", delivery_engine.DEFAULT_RESUME_TIMEOUT))))
-            managed_work = recover_managed_tasks(root)
-            recover_active(root)
+            managed_work = managed_tasks.recover_managed_tasks(root)
+            recovery.recover_active(root)
             if managed_work:
                 processed += managed_work
                 if args.max_items is not None and processed >= args.max_items:
                     return 0
                 continue
-            if process_goal_reminders(root):
+            if goals.process_goal_reminders(root):
                 continue
-            if process_blocked_goal_email(root):
+            if goals.process_blocked_goal_email(root):
                 continue
             did_work = delivery_engine.process_one(root, args)
             if did_work:
@@ -1244,966 +419,8 @@ def daemon(args: argparse.Namespace) -> int:
 
 
 def done(args: argparse.Namespace) -> int:
-    callback_code = queue_callback(args, build_prompt(args))
+    callback_code = dispatch.queue_callback(args, dispatch.build_prompt(args))
     return callback_code if args.strict else 0
-
-
-def screen_binary() -> str | None:
-    configured = os.environ.get(SCREEN_BIN_ENV)
-    return shutil.which(configured) if configured else shutil.which("screen")
-
-
-def screen_required_error() -> str:
-    installation = ("`brew install screen`" if sys.platform == "darwin"
-                    else "`sudo apt install screen` or `sudo dnf install screen`")
-    return (
-        "GNU screen is required for durable task ownership but was not found. "
-        f"Install it first (for example: {installation}) "
-        f"and rerun the command. Override discovery with ${SCREEN_BIN_ENV}."
-    )
-
-
-def write_managed_task(root: Path, task: dict[str, object]) -> None:
-    task_id = task.get("id")
-    if not isinstance(task_id, str):
-        raise ValueError("managed task requires an id")
-    directory = layout.managed_task_dir(root, task_id)
-    queue_store.private_directory(directory)
-    queue_store.write_request(layout.managed_task_path(root, task_id), task)
-
-
-def load_managed_task(path: Path) -> dict[str, object]:
-    task = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(task, dict) or task.get("version") not in (1, 2, 3, 4, 5):
-        raise ValueError("invalid managed task record")
-    if task.get("id") != path.parent.name:
-        raise ValueError("managed task id must match its directory")
-    get_agent(str(task.get("agent", "codex")))
-    if task.get("task_kind") == "agent":
-        get_child_agent(str(task.get("agent_worker", "")))
-    backend = task.get("execution_backend", "screen")
-    if task.get("version") in (2, 3, 4, 5) and "execution_backend" not in task:
-        raise ValueError("native task records require an execution backend")
-    if task.get("version") in (3, 4, 5) and task.get("callback_mode") not in ("cli", "desktop", "manual"):
-        raise ValueError("version 3 task requires an explicit callback mode")
-    if task.get("version") in (4, 5):
-        if request_agent(task) != "pi":
-            raise ValueError("version 4 task requires a frozen Pi parent route")
-        pi_callback.validate_route(task)
-    if task.get("version") == 5 and task.get("pi_delivery") != "steer":
-        raise ValueError("version 5 task requires explicit Pi steer delivery")
-    if backend not in ("screen", "systemd-user", "launchd", "windows-task"):
-        raise ValueError(f"unsupported execution backend: {backend!r}")
-    if not isinstance(task.get("queue_dir"), str):
-        raise ValueError("managed task is missing queue metadata")
-    if backend == "screen" and not isinstance(task.get("screen_session"), str):
-        raise ValueError("managed task is missing screen metadata")
-    return task
-
-
-def managed_callback_exists(root: Path, task_id: str) -> bool:
-    if layout.ack_path(root, task_id).exists():
-        return True
-    return any(
-        layout.request_path(root, state, task_id).exists()
-        for state in (layout.ACTIVE_STATE, "pending", "running", "done", "failed", "canceled")
-    )
-
-
-def screen_owner_state(session: str) -> OwnerState:
-    return ScreenBackend().probe(session)
-
-
-def screen_session_exists(session: str) -> bool:
-    """Legacy observation API; use tri-state probing to authorize launches."""
-    return screen_owner_state(session) == OwnerState.ALIVE
-
-
-def managed_task_namespace(task: dict[str, object]) -> argparse.Namespace:
-    target = task.get("target")
-    return argparse.Namespace(
-        cwd=str(task["cwd"]),
-        task=str(task["task"]),
-        command=str(task["command"]),
-        exit_code=task.get("exit_code"),
-        message=task.get("message"),
-        session=target.get("value") if isinstance(target, dict) and target.get("kind") == "session" else None,
-        last=isinstance(target, dict) and target.get("kind") == "last",
-        agent=str(task.get("agent", "codex")),
-        queue_dir=str(task["queue_dir"]),
-        goal_id=task.get("goal_id"),
-        approvals_reviewer=str(task.get("approvals_reviewer") or DEFAULT_APPROVALS_REVIEWER),
-        approval_policy=str(task.get("approval_policy") or DEFAULT_APPROVAL_POLICY),
-        sandbox_mode=str(task.get("sandbox_mode") or DEFAULT_SANDBOX_MODE),
-        permission_mode=str(task.get("permission_mode") or DEFAULT_CLAUDE_PERMISSION_MODE),
-        strict=bool(task.get("strict", False)),
-        dry_run=False,
-        wrapped_command=[str(part) for part in task["wrapped_command"]],
-        _callback_id=str(task["id"]),
-        _callback_target=target,
-        _callback_target_source=str(task.get("target_source", "managed-task")),
-        _callback_agent=str(task.get("agent", "codex")),
-        callback_format=str(task.get("callback_format", "compact")),
-        _callback_route={k: task[k] for k in callback_transport.ROUTE_FIELDS if k in task},
-    )
-
-
-def managed_task_prompt(
-    task: dict[str, object],
-    *,
-    outcome: str,
-    duration: float | None = None,
-) -> str:
-    args = managed_task_namespace(task)
-    log_path = task.get("log_path")
-    details = [
-        f"Managed task id: {task['id']}",
-        f"Execution backend: {task.get('execution_backend', 'screen')}",
-        f"Owner: {task.get('execution_owner') or task.get('screen_session')}",
-        f"Task log: {log_path}",
-    ]
-    if task.get("task_kind") == "agent":
-        worker = str(task.get("agent_worker", "unknown"))
-        details.extend(
-            [
-                f"Child agent: {get_child_agent(worker).display_name}",
-                f"Agent result: {task.get('agent_result_path')}",
-            ]
-        )
-        if task.get("agent_system_prompt_path"):
-            details.extend([
-                f"System prompt source: {task.get('agent_system_prompt_source')}",
-                f"System prompt snapshot: {task['agent_system_prompt_path']}",
-            ])
-    if task.get("agent_template"):
-        details.extend([
-            f"Agent template: {task['agent_template']} v{task.get('agent_template_version')}",
-            f"Template source: {task.get('agent_template_source') or 'built-in (legacy task)'}",
-            f"Child model: {task.get('child_model') or 'CLI default'}",
-            f"Child reasoning effort: {task.get('child_reasoning_effort') or 'CLI default'}",
-        ])
-    if task.get("agent_template") == "test" and task.get("agent_template_source", "builtin:test") == "builtin:test":
-        details.extend([
-            f"Test author process exit code: {task.get('exit_code', 'unknown')}",
-            "This is a test-authoring handoff, NOT a test execution result. Tests are expected to be unexecuted; verify the report.",
-            "First inspect the child exit status, result report and changed files. If the child failed, the report is empty, or delivery is blocked/partial, diagnose and resolve the incomplete handoff before running tests.",
-            "The parent agent must check requirement coverage and proposed commands, then execute the tests and report actual commands and results.",
-            "Distinguish implementation defects, test defects, environment failures and ambiguous requirements. Never weaken assertions merely to get green results; justify changes against the requirements.",
-        ])
-    if task.get("agent_template_handoff"):
-        details.extend([
-            "Template handoff instructions (saved at submission):",
-            str(task["agent_template_handoff"]),
-            "Check the child exit status and result artifacts before following the handoff. Process completion alone does not establish a successful result.",
-        ])
-    if outcome != "completed":
-        reason = str(task.get("recovery_reason") or outcome)
-        details.extend(
-            [
-                f"Recovery state: {reason}",
-                "The task was not automatically restarted.",
-                "Inspect the local task log, workspace outputs, and checkpoints.",
-                "Then either recreate the task through the standard `atc run` flow, "
-                "supplement its completed status if artifacts prove it finished, or record the exact blocked condition.",
-            ]
-        )
-    original_message = task.get("message")
-    args.message = "\n".join(
-        ([str(original_message), ""] if isinstance(original_message, str) and original_message else []) + details
-    )
-    return build_prompt(args, duration)
-
-
-def managed_callback_request(
-    task: dict[str, object], prompt: str, *, duration: float | None = None,
-) -> dict[str, object]:
-    args = managed_task_namespace(task)
-    request = make_request(args, prompt, duration=duration)
-    request.update(
-        {
-            "managed_task_id": task["id"],
-            "managed_task_state": task["state"],
-            "screen_session": task.get("screen_session"),
-            "log_path": task["log_path"],
-            "outcome": task.get("outcome", "unknown"),
-        }
-    )
-    if isinstance(task.get("exit_code"), int):
-        request["exit_code"] = task["exit_code"]
-    if task.get("recovery_reason"):
-        request["recovery_reason"] = task["recovery_reason"]
-    if task.get("task_kind") == "agent":
-        request["task_kind"] = "agent"
-        request["agent_worker"] = task.get("agent_worker")
-        request["agent_result_path"] = task.get("agent_result_path")
-        for key in ("agent_template", "agent_template_version", "agent_template_source",
-                    "agent_template_handoff", "child_model", "child_reasoning_effort",
-                    "agent_system_prompt_path", "agent_system_prompt_source"):
-            if key in task:
-                request[key] = task[key]
-    return request
-
-
-def queue_managed_task_callback(root: Path, task: dict[str, object]) -> bool:
-    task_id = str(task["id"])
-    if managed_callback_exists(root, task_id):
-        if not task.get("callback_queued"):
-            task["callback_queued"] = True
-            task["callback_observed_at"] = time.time()
-            write_managed_task(root, task)
-        return False
-    completed_at = task.get("completed_at")
-    started_at = task.get("started_at")
-    duration = (
-        float(completed_at) - float(started_at)
-        if isinstance(completed_at, (int, float)) and isinstance(started_at, (int, float))
-        else None
-    )
-    prompt = managed_task_prompt(task, outcome=str(task.get("outcome", "unknown")), duration=duration)
-    request = managed_callback_request(task, prompt, duration=duration)
-    if enqueue_existing_request(root, request, prompt) != 0:
-        return False
-    task["callback_queued"] = True
-    task["callback_queued_at"] = time.time()
-    write_managed_task(root, task)
-    return True
-
-
-def mark_managed_task_interrupted(
-    root: Path,
-    task: dict[str, object],
-    reason: str,
-) -> bool:
-    task["state"] = "interrupted"
-    task["outcome"] = "unknown"
-    task["recovery_reason"] = reason
-    task["interrupted_at"] = time.time()
-    task.pop("exit_code", None)
-    write_managed_task(root, task)
-    return queue_managed_task_callback(root, task)
-
-
-def mark_managed_task_foreign_host(root: Path, task: dict[str, object]) -> None:
-    task["state"] = "foreign_host"
-    task["outcome"] = "unknown"
-    task["recovery_reason"] = "cross_host_recovery_unsupported"
-    task["interrupted_at"] = time.time()
-    task.pop("exit_code", None)
-    write_managed_task(root, task)
-    print(
-        f"atc: task {task['id']} belongs to another host; "
-        "cross-host launch and callback recovery are unsupported",
-        file=sys.stderr,
-    )
-
-
-def managed_launch_attempt_count(task: dict[str, object]) -> int:
-    value = task.get("launch_attempt_count", 0)
-    return value if isinstance(value, int) and value >= 0 else 0
-
-
-def managed_launch_retry_delay(attempt_count: int) -> float:
-    return MANAGED_LAUNCH_RETRY_DELAY * (MANAGED_LAUNCH_RETRY_BACKOFF ** max(0, attempt_count - 1))
-
-
-def discard_managed_launch_credentials(task: dict[str, object]) -> None:
-    task.pop("token", None)
-    environment_path = task.get("environment_path")
-    if not isinstance(environment_path, str):
-        return
-    path = Path(environment_path)
-    try:
-        path.unlink()
-        queue_store.fsync_directory(path.parent)
-    except FileNotFoundError:
-        pass
-    except OSError as exc:
-        print(f"atc: warning: could not remove failed launch environment {path}: {exc}", file=sys.stderr)
-
-
-def mark_managed_task_launch_failed(root: Path, task: dict[str, object], reason: str) -> bool:
-    task["state"] = "launch_failed"
-    task["outcome"] = "unknown"
-    task["recovery_reason"] = reason
-    task["launch_failed_at"] = time.time()
-    task.pop("next_launch_at", None)
-    task.pop("exit_code", None)
-    discard_managed_launch_credentials(task)
-    write_managed_task(root, task)
-    queue_managed_task_callback(root, task)
-    return True
-
-
-def record_managed_launch_failure(root: Path, task: dict[str, object], reason: str) -> bool:
-    if task.get("state") == "launching" and "launch_attempt_count" not in task:
-        return mark_managed_task_launch_failed(
-            root,
-            task,
-            f"{reason}_legacy_attempt_count_unknown",
-        )
-    attempt_count = managed_launch_attempt_count(task)
-    now = time.time()
-    task["last_launch_failure"] = reason
-    task["last_launch_failure_at"] = now
-    if attempt_count >= MANAGED_LAUNCH_MAX_ATTEMPTS:
-        return mark_managed_task_launch_failed(
-            root,
-            task,
-            f"{reason}_after_{attempt_count}_attempts",
-        )
-
-    delay = managed_launch_retry_delay(attempt_count)
-    task["state"] = "submitted"
-    task["outcome"] = "pending"
-    task["next_launch_at"] = now + delay
-    write_managed_task(root, task)
-    print(
-        f"atc: managed task {task['id']} worker launch attempt {attempt_count}/"
-        f"{MANAGED_LAUNCH_MAX_ATTEMPTS} failed ({reason}); retrying in {delay:.1f}s",
-        file=sys.stderr,
-    )
-    return True
-
-
-def launch_managed_screen(root: Path, task: dict[str, object]) -> bool:
-    command = screen_binary()
-    if command is None:
-        return mark_managed_task_interrupted(root, task, "screen_required_but_unavailable")
-    session = str(task["screen_session"])
-    if screen_owner_state(session) != OwnerState.ABSENT:
-        return False
-    environment_path = Path(str(task["environment_path"]))
-    if not environment_path.exists():
-        return mark_managed_task_interrupted(root, task, "launch_environment_missing")
-    attempt_count = managed_launch_attempt_count(task)
-    if attempt_count >= MANAGED_LAUNCH_MAX_ATTEMPTS:
-        return mark_managed_task_launch_failed(
-            root,
-            task,
-            f"worker_start_handshake_failed_after_{attempt_count}_attempts",
-        )
-    attempt_count += 1
-    task["state"] = "launching"
-    task["launch_attempt_count"] = attempt_count
-    task["launch_requested_at"] = time.time()
-    task["launch_boot_id"] = host.current_boot_id()
-    task["screen_submitted_at"] = time.time()
-    task.pop("next_launch_at", None)
-    write_managed_task(root, task)
-    argv = worker_command("_screen-worker", "--task-file",
-                          str(layout.managed_task_path(root, str(task["id"]))),
-                          f"--token={task['token']}")
-    try:
-        ScreenBackend().launch(session, argv, Path(str(task["cwd"])), Path(str(task["log_path"])))
-    except LaunchError as exc:
-        if exc.uncertain:
-            task["launch_uncertain"] = True
-            task["launch_error"] = str(exc)
-            write_managed_task(root, task)
-            return True
-        return record_managed_launch_failure(root, task, "screen_launcher_unavailable")
-    print(f"atc: started managed task {task['id']} in screen session {session}", file=sys.stderr)
-    return True
-
-
-def select_execution_backend(args: argparse.Namespace) -> str:
-    """Resolve once at submission; recovery never silently changes ownership."""
-    # Direct API callers from 0.6 keep their historical screen behavior.
-    choice = getattr(args, "backend", "screen")
-    if choice not in ("auto", "screen", "systemd", "launchd", "windows-task"):
-        raise ValueError(f"unsupported execution backend: {choice!r}")
-    if sys.platform == "win32":
-        if choice not in ("auto", "windows-task"):
-            raise ValueError("native Windows requires --backend windows-task (or auto)")
-        if WindowsBackend().available():
-            return "windows-task"
-        raise ValueError("Windows Task Scheduler is unavailable for this user; inspect scheduler access")
-    if choice == "windows-task":
-        raise ValueError("Windows Task Scheduler requires native Windows")
-    if sys.platform not in ("linux", "darwin"):
-        raise ValueError("ATC supports Linux, macOS and native Windows")
-    if choice == "launchd" or (choice == "auto" and sys.platform == "darwin"):
-        if LaunchdBackend().available():
-            return "launchd"
-        if choice == "launchd":
-            raise ValueError("launchd GUI domain unavailable; log in to macOS or explicitly select --backend screen")
-    if choice in ("auto", "systemd") and SystemdUserBackend().available():
-        return "systemd-user"
-    if choice == "systemd":
-        raise ValueError("systemd user manager unavailable; start a user session or explicitly select --backend screen")
-    if screen_binary() is None:
-        raise ValueError(screen_required_error())
-    return "screen"
-
-
-def managed_owner_state(task: dict[str, object]) -> OwnerState:
-    if task.get("execution_backend", "screen") == "screen":
-        return screen_owner_state(str(task["screen_session"]))
-    owner = task.get("execution_owner")
-    if not isinstance(owner, str) or not owner:
-        return OwnerState.UNKNOWN
-    return native_backend(str(task["execution_backend"])).probe(owner)
-
-
-def native_backend(name: str):
-    if name == "windows-task":
-        return WindowsBackend()
-    if name == "launchd":
-        return LaunchdBackend()
-    if name == "systemd-user":
-        return SystemdUserBackend()
-    raise ValueError(f"unsupported native backend: {name!r}")
-
-
-def collect_managed_owner(root: Path, task: dict[str, object]) -> None:
-    if task.get("execution_backend") not in ("launchd", "windows-task") or task.get("owner_collected_at"):
-        return
-    owner = task.get("execution_owner")
-    if (task.get("machine_id") == host.current_machine_id() and isinstance(owner, str)
-            and native_backend(str(task["execution_backend"])).collect(owner)):
-        task["owner_collected_at"] = time.time()
-        write_managed_task(root, task)
-
-
-def launch_managed_task(root: Path, task: dict[str, object]) -> bool:
-    """Persist launch intent before contacting the independent OS owner.
-
-    An ambiguous submission is reconciled, never resent. Per-attempt owner names
-    and worker admission checks protect against delayed starts after a crash.
-    """
-    if task.get("execution_backend", "screen") == "screen":
-        return launch_managed_screen(root, task)
-    if not Path(str(task["environment_path"])).exists():
-        return mark_managed_task_interrupted(root, task, "launch_environment_missing")
-    backend = native_backend(str(task["execution_backend"]))
-    attempt = managed_launch_attempt_count(task) + 1
-    owner = backend.owner_name(str(task["id"]), attempt, root)
-    task.update(state="launching", launch_attempt_count=attempt,
-                launch_requested_at=time.time(), execution_owner=owner,
-                launch_boot_id=host.current_boot_id())
-    task.pop("next_launch_at", None)
-    write_managed_task(root, task)
-    argv = worker_command("_task-worker", "--task-file",
-                          str(layout.managed_task_path(root, str(task["id"]))),
-                          "--attempt", str(attempt))
-    try:
-        backend.launch(owner, argv, Path(str(task["cwd"])), Path(str(task["log_path"])))
-    except LaunchError as exc:
-        if not exc.uncertain:
-            return record_managed_launch_failure(root, task, "native_launcher_unavailable")
-        task["launch_uncertain"] = True
-        task["launch_error"] = str(exc)
-        write_managed_task(root, task)
-        print(f"atc: task {task['id']} launch is uncertain; reconciling without resubmission", file=sys.stderr)
-    return True
-
-
-def recover_managed_tasks(root: Path) -> int:
-    tasks_root = layout.managed_tasks_root(root)
-    if not tasks_root.exists():
-        return 0
-    current_boot = host.current_boot_id()
-    current_machine = host.current_machine_id()
-    processed = 0
-    for path in sorted(tasks_root.glob("*/task.json")):
-        lock: tuple[object, Path] | None = None
-        try:
-            task = load_managed_task(path)
-            task_id = str(task["id"])
-            lock = queue_store.acquire_owner_lock(root, f"managed-task-{task_id}", blocking=False)
-            if lock is None:
-                continue
-            # The worker may have completed while we acquired ownership.
-            task = load_managed_task(path)
-            state = task.get("state")
-            if state == "completed":
-                if queue_managed_task_callback(root, task):
-                    processed += 1
-                collect_managed_owner(root, task)
-                continue
-            if state in ("interrupted", "launch_failed"):
-                if queue_managed_task_callback(root, task):
-                    processed += 1
-                collect_managed_owner(root, task)
-                continue
-            if state not in ("submitted", "launching", "running"):
-                continue
-            if task.get("machine_id") != current_machine:
-                mark_managed_task_foreign_host(root, task)
-                processed += 1
-                continue
-            # Results take priority over an unavailable manager or stale owner.
-            result_path = layout.managed_result_path(root, task_id)
-            if state in ("running", "launching") and result_path.exists():
-                result = json.loads(result_path.read_text(encoding="utf-8"))
-                if not isinstance(result, dict) or result.get("id") != task_id or not isinstance(result.get("exit_code"), int):
-                    raise ValueError("invalid managed result identity or exit code")
-                task.update({key: result[key] for key in ("exit_code", "completed_at", "outcome") if key in result})
-                task["state"] = "completed"
-                task["outcome"] = "completed"
-                write_managed_task(root, task)
-                if queue_managed_task_callback(root, task):
-                    processed += 1
-                continue
-            recorded_boot = (task.get("boot_id") if state == "running"
-                             else task.get("launch_boot_id") or task.get("submission_boot_id"))
-            rebooted = bool(current_boot and recorded_boot and recorded_boot != current_boot)
-            if rebooted:
-                reason = "interrupted_by_host_reboot" if state == "running" else "not_started_before_host_reboot"
-                if mark_managed_task_interrupted(root, task, reason):
-                    processed += 1
-                continue
-            if state in ("running", "launching"):
-                owner_state = managed_owner_state(task)
-                if owner_state != OwnerState.ABSENT:
-                    # UNKNOWN is not evidence of death. In particular a broken
-                    # user bus cannot authorize a second execution attempt.
-                    continue
-                if state == "running":
-                    reason = ("screen_disappeared_before_completion" if task.get("execution_backend", "screen") == "screen"
-                              else "execution_owner_disappeared_before_completion")
-                    if mark_managed_task_interrupted(root, task, reason):
-                        processed += 1
-                    continue
-                submitted_at = task.get("launch_requested_at", task.get("screen_submitted_at"))
-                if isinstance(submitted_at, (int, float)) and time.time() - float(submitted_at) < MANAGED_WORKER_HANDSHAKE_SECONDS:
-                    continue
-                if task.get("execution_backend", "screen") != "screen" or task.get("launch_uncertain"):
-                    # A collected short-lived unit may already have performed
-                    # external work. Missing readiness is not proof of no work.
-                    if mark_managed_task_interrupted(root, task, "execution_launch_outcome_unknown"):
-                        processed += 1
-                elif record_managed_launch_failure(root, task, "worker_start_handshake_failed"):
-                    processed += 1
-                continue
-            next_launch_at = task.get("next_launch_at")
-            if isinstance(next_launch_at, (int, float)) and time.time() < float(next_launch_at):
-                continue
-            if launch_managed_task(root, task):
-                processed += 1
-        except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError) as exc:
-            print(f"atc: warning: could not recover managed task {path}: {exc}", file=sys.stderr)
-        finally:
-            queue_store.release_owner_lock(lock, remove=False)
-    return processed
-
-
-def validate_managed_goal(root: Path, goal_id: object) -> None:
-    if goal_id is None:
-        return
-    if not isinstance(goal_id, str):
-        raise ValueError("goal id must be a string")
-    goal = load_goal(root, goal_id)
-    if goal.get("state") != "active":
-        raise ValueError(f"goal {goal_id} is not active")
-
-
-def agent_prompt_text(parts: list[str]) -> str:
-    prompt_parts = list(parts)
-    if prompt_parts and prompt_parts[0] == "--":
-        prompt_parts = prompt_parts[1:]
-    if not prompt_parts:
-        raise SystemExit("agent mode requires a task prompt after --")
-    return prompt_parts[0] if len(prompt_parts) == 1 else " ".join(prompt_parts)
-
-
-def read_agent_system_prompt(path: Path) -> str:
-    """Require an actual nonblank UTF-8 file, never Pi's inline-path fallback."""
-    if not path.is_file():
-        raise ValueError(f"system prompt must be a readable file: {path}")
-    text = path.read_bytes().decode("utf-8-sig")
-    if not text.strip():
-        raise ValueError(f"system prompt file must not be empty: {path}")
-    return text
-
-
-def agent_wrapped_command(
-    worker: str,
-    *,
-    cwd: str,
-    result_path: Path,
-    sandbox_mode: str,
-    permission_mode: str,
-    model: str | None = None,
-    reasoning_effort: str | None = None,
-    system_prompt_path: Path | None = None,
-) -> list[str]:
-    options = ChildOptions(
-        cwd=cwd,
-        result_path=result_path,
-        sandbox_mode=sandbox_mode,
-        permission_mode=permission_mode,
-        model=model,
-        reasoning_effort=reasoning_effort,
-        system_prompt_path=system_prompt_path,
-    )
-    return get_child_agent(worker).child_command(options, delivery_engine.agent_environment(worker))
-
-
-def child_agent_environment(environment: dict[str, str]) -> dict[str, str]:
-    child = AGENTS.child_environment(environment)
-    # A fresh CLI child is not the Desktop conversation which submitted it.
-    # Keep the parent's callback route in the task record, not this marker.
-    child.pop("CODEX_INTERNAL_ORIGINATOR_OVERRIDE", None)
-    return child
-
-
-def submit_managed_run(args: argparse.Namespace) -> int:
-    if not callback_transport.preflight(args):
-        return 125
-    try:
-        backend = select_execution_backend(args)
-    except ValueError as exc:
-        args._health_backend_error = str(exc)
-        print(f"atc: refusing to submit task: {exc}", file=sys.stderr)
-        return 125
-    args._health_backend = backend
-    root = layout.queue_dir(args).expanduser().absolute()
-    queue_store.ensure_daemon_dirs(root)
-    try:
-        validate_managed_goal(root, getattr(args, "goal_id", None))
-    except (OSError, ValueError, json.JSONDecodeError) as exc:
-        print(f"atc: refusing to submit task: {exc}", file=sys.stderr)
-        return 125
-    target, target_source = bind_target(args)
-    try:
-        while True:
-            task_id = secrets.token_hex(4)
-            task_directory = layout.managed_task_dir(root, task_id)
-            try:
-                # Reserve atomically so concurrent submissions cannot share an ID.
-                task_directory.mkdir(mode=0o700, parents=True, exist_ok=False)
-            except FileExistsError:
-                continue
-            break
-    except OSError as exc:
-        print(f"atc: refusing to submit task because its durable record could not be written: {exc}", file=sys.stderr)
-        return 125
-    args._health_work = {"state": "unknown", "id": task_id}
-    environment_path = task_directory / "environment.json"
-    log_path = task_directory / "attempt-1.log"
-    task_kind = str(getattr(args, "task_kind", "command"))
-    wrapped_command = list(getattr(args, "wrapped_command", []))
-    agent_prompt_path: Path | None = None
-    agent_result_path: Path | None = None
-    agent_system_prompt_path: Path | None = None
-    if task_kind == "agent":
-        agent_prompt_path = task_directory / AGENT_PROMPT_FILE_NAME
-        agent_result_path = task_directory / AGENT_RESULT_FILE_NAME
-        if getattr(args, "agent_system_prompt_text", None) is not None:
-            agent_system_prompt_path = task_directory / AGENT_SYSTEM_PROMPT_FILE_NAME
-        wrapped_command = agent_wrapped_command(
-            str(args.agent_worker),
-            cwd=os.path.abspath(args.cwd),
-            result_path=agent_result_path,
-            sandbox_mode=str(args.sandbox_mode),
-            permission_mode=str(args.permission_mode),
-            model=getattr(args, "child_model", None),
-            reasoning_effort=getattr(args, "child_reasoning_effort", None),
-            system_prompt_path=agent_system_prompt_path,
-        )
-    environment = {
-        name: value
-        for name, value in os.environ.items()
-        if name not in ("INVOCATION_ID", "JOURNAL_STREAM", "SYSTEMD_EXEC_PID", "STY", "WINDOW",
-                        macos_platform.OWNER_ENV, "XPC_SERVICE_NAME", "XPC_FLAGS")
-    }
-    task: dict[str, object] = {
-        # Older daemons must reject new route intent, even for screen tasks,
-        # instead of silently auto-delivering an explicit manual callback.
-        "version": 4 if resolve_agent(args) == "pi" else 3,
-        "id": task_id,
-        "submitted_at": time.time(),
-        "execution_backend": backend,
-        "callback_format": getattr(args, "callback_format", "compact"),
-        "submission_boot_id": host.current_boot_id(),
-        "machine_id": host.current_machine_id(),
-        "state": "submitted",
-        "outcome": "pending",
-        "task": args.task,
-        "cwd": os.path.abspath(args.cwd),
-        "command": args.command or commands.format_command(wrapped_command),
-        "wrapped_command": wrapped_command,
-        "message": args.message,
-        "queue_dir": str(root),
-        "agent": resolve_agent(args),
-        "target": target,
-        "target_source": target_source,
-        "goal_id": getattr(args, "goal_id", None),
-        "approvals_reviewer": getattr(args, "approvals_reviewer", None) or DEFAULT_APPROVALS_REVIEWER,
-        "approval_policy": getattr(args, "approval_policy", None) or DEFAULT_APPROVAL_POLICY,
-        "sandbox_mode": getattr(args, "sandbox_mode", None) or DEFAULT_SANDBOX_MODE,
-        "permission_mode": getattr(args, "permission_mode", None) or DEFAULT_CLAUDE_PERMISSION_MODE,
-        "strict": bool(args.strict),
-        "screen_session": f"atc-{task_id}",
-        "log_path": str(log_path),
-        "environment_path": str(environment_path),
-        "token": MANAGED_WORKER_TOKEN_PREFIX + secrets.token_urlsafe(32),
-    }
-    task.update(callback_transport.selection(args))
-    if task.get("pi_delivery") == "steer":
-        task["version"] = 5  # Old coordinators must not downgrade steer to follow-up.
-    if task_kind == "agent" and agent_prompt_path is not None and agent_result_path is not None:
-        task.update(
-            {
-                "task_kind": "agent",
-                "agent_worker": str(args.agent_worker),
-                "agent_template": getattr(args, "template", None),
-                "agent_template_version": getattr(args, "template_version", None),
-                "agent_template_source": getattr(args, "template_source", None),
-                "agent_template_handoff": getattr(args, "template_handoff", None),
-                "child_model": getattr(args, "child_model", None),
-                "child_reasoning_effort": getattr(args, "child_reasoning_effort", None),
-                "agent_prompt_path": str(agent_prompt_path),
-                "agent_result_path": str(agent_result_path),
-            }
-        )
-        if agent_system_prompt_path is not None:
-            task.update({
-                "agent_system_prompt_path": str(agent_system_prompt_path),
-                "agent_system_prompt_source": args.agent_system_prompt_source,
-            })
-    try:
-        queue_store.private_directory(task_directory)
-        if agent_prompt_path is not None:
-            queue_store.write_private_text(agent_prompt_path, str(args.agent_prompt_text))
-        if agent_system_prompt_path is not None:
-            queue_store.write_private_text(agent_system_prompt_path, args.agent_system_prompt_text)
-        queue_store.write_request(environment_path, {"version": 1, "environment": environment})
-        write_managed_task(root, task)
-    except OSError as exc:
-        print(f"atc: refusing to submit task because its durable record could not be written: {exc}", file=sys.stderr)
-        return 125
-    args._health_work = {"state": "task_persisted", "id": task_id}
-    print(f"atc: submitted managed task {task_id}", file=sys.stderr)
-    print(f"atc: execution backend: {backend}", file=sys.stderr)
-    print(f"atc: callback mode: {task['callback_mode']}", file=sys.stderr)
-    if task["callback_mode"] == "manual":
-        print("atc: automatic callback disabled; inspect saved results and ACK from the bound session", file=sys.stderr)
-    if backend == "screen":
-        print(f"atc: screen session: {task['screen_session']}", file=sys.stderr)
-        print("atc: screen fallback: service-stop survival depends on its containing service", file=sys.stderr)
-    print(f"atc: task log: {log_path}", file=sys.stderr)
-    if agent_result_path is not None:
-        print(f"atc: agent result: {agent_result_path}", file=sys.stderr)
-    if agent_system_prompt_path is not None:
-        print(f"atc: agent system prompt: {agent_system_prompt_path}", file=sys.stderr)
-    if task["agent"] == "claude" and target.get("kind") == "session":
-        if claude_code.channel_is_held(str(target.get("value"))):
-            print("atc: Claude Code live callback: arrives through the atc channel; no `atc wait` needed",
-                  file=sys.stderr)
-        else:
-            wait = atc_runtime.control_command("wait", "--queue-dir", str(root), "--task", task_id)
-            print(f"atc: Claude Code live callback: run in the background (run_in_background): {wait}",
-                  file=sys.stderr)
-    return 0
-
-
-def run_task_worker(args: argparse.Namespace) -> int:
-    """Native service entry; admission is rechecked under the task owner lock."""
-    task_path = Path(args.task_file).expanduser().absolute()
-    try:
-        task = load_managed_task(task_path)
-        root = Path(str(task["queue_dir"])).expanduser().absolute()
-        if task_path != layout.managed_task_path(root, str(task["id"])).absolute():
-            raise ValueError("task outside its recorded queue")
-        lock = queue_store.acquire_owner_lock(root, f"managed-task-{task['id']}", blocking=True)
-        if lock is None:
-            raise ValueError("task already owned")
-        try:
-            task = load_managed_task(task_path)
-            if (task.get("execution_backend") not in ("systemd-user", "launchd", "windows-task") or task.get("state") != "launching"
-                    or task.get("launch_attempt_count") != args.attempt):
-                raise ValueError("stale or unauthorized native worker")
-            if task["execution_backend"] in ("launchd", "windows-task"):
-                backend = native_backend(str(task["execution_backend"]))
-                owner = backend.owner_name(str(task["id"]), args.attempt, root)
-                boot = host.current_boot_id()
-                if (task.get("execution_owner") != owner or not backend.admits_worker(owner)
-                        or task.get("machine_id") != host.current_machine_id()
-                        or not boot or task.get("launch_boot_id") != boot):
-                    raise ValueError("worker does not match its native owner, host or boot")
-                task["owner_invocation_id"] = owner
-            else:
-                if not os.environ.get("INVOCATION_ID"):
-                    raise ValueError("native worker requires a systemd service invocation")
-                task["owner_invocation_id"] = os.environ["INVOCATION_ID"]
-            if task["execution_backend"] == "windows-task":
-                windows_process.enter_worker_job()
-                with Path(str(task["log_path"])).open("a", encoding="utf-8") as log:
-                    with contextlib.redirect_stdout(log), contextlib.redirect_stderr(log):
-                        return run_managed_worker_locked(root, task)
-            return run_managed_worker_locked(root, task)
-        finally:
-            queue_store.release_owner_lock(lock, remove=False)
-    except (OSError, ValueError, KeyError, json.JSONDecodeError) as exc:
-        print(f"atc: native worker refused: {exc}", file=sys.stderr)
-        if os.name == "nt" and isinstance(locals().get("task"), dict):
-            # Scheduled tasks have no interactive stderr; retain admission
-            # failures next to their private record for diagnosis.
-            try:
-                with (task_path.parent / "worker-admission.log").open("a", encoding="utf-8") as log:
-                    log.write(f"native worker refused: {exc}\n")
-            except OSError:
-                pass
-        return 125
-
-
-def run_screen_worker(args: argparse.Namespace) -> int:
-    if not os.environ.get("STY"):
-        print("atc: refusing to run screen worker outside GNU screen", file=sys.stderr)
-        return 125
-    task_path = Path(args.task_file).expanduser().absolute()
-    try:
-        task = load_managed_task(task_path)
-    except (OSError, ValueError, json.JSONDecodeError) as exc:
-        print(f"atc: invalid managed task record {task_path}: {exc}", file=sys.stderr)
-        return 125
-    if task.get("token") != args.token:
-        print("atc: refusing unauthorized screen worker", file=sys.stderr)
-        return 125
-    root = Path(str(task["queue_dir"])).expanduser().absolute()
-    if task_path != layout.managed_task_path(root, str(task["id"])).absolute():
-        print("atc: refusing managed task outside its recorded queue", file=sys.stderr)
-        return 125
-    lock = queue_store.acquire_owner_lock(root, f"managed-task-{task['id']}", blocking=True)
-    if lock is None:
-        print("atc: could not acquire managed task ownership", file=sys.stderr)
-        return 125
-    try:
-        try:
-            task = load_managed_task(task_path)
-        except (OSError, ValueError, json.JSONDecodeError) as exc:
-            print(f"atc: invalid managed task record after worker handoff {task_path}: {exc}", file=sys.stderr)
-            return 125
-        if task.get("token") != args.token or task.get("state") != "launching":
-            print("atc: refusing stale or unauthorized screen worker", file=sys.stderr)
-            return 125
-        return run_screen_worker_locked(root, task)
-    finally:
-        queue_store.release_owner_lock(lock, remove=False)
-
-
-def run_screen_worker_locked(root: Path, task: dict[str, object]) -> int:
-    """Compatibility entry point for the screen backend and older integrations."""
-    return run_managed_worker_locked(root, task)
-
-
-def run_managed_worker_locked(root: Path, task: dict[str, object]) -> int:
-    environment_path = Path(str(task["environment_path"]))
-    try:
-        environment_record = json.loads(environment_path.read_text(encoding="utf-8"))
-        environment = environment_record["environment"]
-        if not isinstance(environment, dict) or not all(
-            isinstance(name, str) and isinstance(value, str) for name, value in environment.items()
-        ):
-            raise ValueError("invalid environment payload")
-    except (OSError, ValueError, KeyError, json.JSONDecodeError) as exc:
-        task["state"] = "interrupted"
-        task["outcome"] = "unknown"
-        task["recovery_reason"] = f"launch_environment_invalid: {exc}"
-        write_managed_task(root, task)
-        queue_managed_task_callback(root, task)
-        return 125
-    os.environ.update(environment)
-    if os.name == "nt":
-        environment["PYTHONIOENCODING"] = "utf-8"
-    try:
-        environment_path.unlink()
-        queue_store.fsync_directory(environment_path.parent)
-    except FileNotFoundError:
-        pass
-    task.pop("token", None)
-    task["state"] = "running"
-    task["outcome"] = "running"
-    task["boot_id"] = host.current_boot_id()
-    task["started_at"] = time.time()
-    task["worker_ready_at"] = task["started_at"]
-    task["wrapper_pid"] = os.getpid()
-    write_managed_task(root, task)
-    exit_code = 127
-    try:
-        command = [str(part) for part in task["wrapped_command"]]
-        run_kwargs: dict[str, object] = {
-            "cwd": str(task["cwd"]),
-            "shell": False,
-            "check": False,
-            "close_fds": True,
-        }
-        if os.name == "nt":
-            run_kwargs.update(stdout=sys.stdout, stderr=sys.stderr, env=environment,
-                              **windows_process.background_popen_kwargs())
-            command = commands.process_command(command, environment)
-        if task.get("task_kind") == "agent":
-            prompt_path = Path(str(task["agent_prompt_path"]))
-            result_path = Path(str(task["agent_result_path"]))
-            prompt = prompt_path.read_text(encoding="utf-8")
-            system_prompt = task.get("agent_system_prompt_path")
-            if system_prompt is not None:
-                expected = prompt_path.parent / AGENT_SYSTEM_PROMPT_FILE_NAME
-                if not isinstance(system_prompt, str) or Path(system_prompt) != expected:
-                    raise ValueError("system prompt snapshot must be in its managed task directory")
-                # Pi otherwise treats a missing/unreadable filename as literal
-                # system text or silently falls back to its default prompt.
-                read_agent_system_prompt(expected)
-            run_kwargs.update(
-                {
-                    "input": prompt,
-                    "text": True,
-                    "encoding": "utf-8",
-                    "env": child_agent_environment(environment),
-                }
-            )
-            captures_stdout = get_child_agent(str(task["agent_worker"])).child_result_mode == "stdout"
-            if captures_stdout:
-                run_kwargs["stdout"] = subprocess.PIPE
-            completed = subprocess.run(command, **run_kwargs)
-            if captures_stdout:
-                output = completed.stdout if isinstance(completed.stdout, str) else ""
-                queue_store.write_private_text(result_path, output)
-                if output:
-                    sys.stdout.write(output)
-                    if not output.endswith("\n"):
-                        sys.stdout.write("\n")
-                    sys.stdout.flush()
-            elif result_path.exists():
-                if os.name == "nt":
-                    windows_io.secure_file(result_path)
-                else:
-                    os.chmod(result_path, 0o600)
-            else:
-                queue_store.write_private_text(result_path, "")
-        else:
-            completed = subprocess.run(command, **run_kwargs)
-        exit_code = completed.returncode
-        completed_at = time.time()
-        result = {
-            "version": 1,
-            "id": task["id"],
-            "exit_code": exit_code,
-            "completed_at": completed_at,
-            "outcome": "completed",
-        }
-        queue_store.write_request(layout.managed_result_path(root, str(task["id"])), result)
-    except (OSError, UnicodeError, ValueError) as exc:
-        task["state"] = "interrupted"
-        task["outcome"] = "unknown"
-        task["recovery_reason"] = f"wrapped_command_launch_failed: {exc}"
-        task["interrupted_at"] = time.time()
-        write_managed_task(root, task)
-        queue_managed_task_callback(root, task)
-        return exit_code
-
-    # The durable result is authoritative. Failure to publish metadata or a
-    # callback must not reclassify successful execution as a launch failure.
-    task.update({key: result[key] for key in ("exit_code", "completed_at", "outcome")})
-    task["state"] = "completed"
-    try:
-        write_managed_task(root, task)
-        queue_managed_task_callback(root, task)
-    except (OSError, ValueError) as exc:
-        print(f"atc: result saved for {task['id']}; callback recovery deferred: {exc}", file=sys.stderr)
-    return exit_code
 
 
 def run(args: argparse.Namespace) -> int:
@@ -2211,7 +428,7 @@ def run(args: argparse.Namespace) -> int:
         raise SystemExit("run mode requires a command after --")
 
     args.command = args.command or commands.format_command(args.wrapped_command)
-    bind_target(args)
+    dispatch.bind_target(args)
     if args.dry_run:
         print(
             "\n".join(
@@ -2226,11 +443,11 @@ def run(args: argparse.Namespace) -> int:
             )
         )
         return 0
-    return submit_managed_run(args)
+    return dispatch.submit_managed_run(args)
 
 
 def agent(args: argparse.Namespace) -> int:
-    args.agent_prompt_text = agent_prompt_text(list(args.agent_prompt))
+    args.agent_prompt_text = managed_tasks.agent_prompt_text(list(args.agent_prompt))
     args.template = getattr(args, "template", None)
     args.template_file = getattr(args, "template_file", None)
     args.template_version = None
@@ -2270,14 +487,14 @@ def agent(args: argparse.Namespace) -> int:
             raise SystemExit(f"{child_adapter.display_name} children do not support --system-prompt-file")
         try:
             source = Path(system_prompt_file).expanduser().resolve()
-            args.agent_system_prompt_text = read_agent_system_prompt(source)
+            args.agent_system_prompt_text = managed_tasks.read_agent_system_prompt(source)
         except (OSError, UnicodeError, ValueError, RuntimeError) as exc:
             raise SystemExit(f"atc: could not load system prompt file: {exc}") from exc
         args.agent_system_prompt_source = str(source)
     args.task_kind = "agent"
     args.command = args.command or f"atc agent {args.agent_worker}"
     args.wrapped_command = []
-    bind_target(args)
+    dispatch.bind_target(args)
     if args.dry_run:
         print(
             "\n".join(
@@ -2299,7 +516,7 @@ def agent(args: argparse.Namespace) -> int:
             )
         )
         return 0
-    return submit_managed_run(args)
+    return dispatch.submit_managed_run(args)
 
 
 def add_common_flags(parser: argparse.ArgumentParser) -> None:
@@ -2610,7 +827,7 @@ def daemon_environment(args: argparse.Namespace, *, include_proxy_values: bool =
         "ATC_CODEX_BIN": codex_bin_path(args),
         CLAUDE_BIN_ENV: claude_bin_path(args),
         PI_BIN_ENV: pi_bin_path(args),
-        SCREEN_BIN_ENV: screen_binary() or "screen",
+        managed_tasks.SCREEN_BIN_ENV: managed_tasks.screen_binary() or "screen",
         app_server.DESKTOP_APP_SERVER_ENV: os.environ.get(app_server.DESKTOP_APP_SERVER_ENV, "1"),
         "PATH": getattr(args, "path", None) or os.environ.get("PATH", ""),
         PROXY_ENV_FILE_ENV: str(layout.service_proxy_env_path()),
@@ -3017,7 +1234,7 @@ def setup(args: argparse.Namespace) -> int:
         desktop.validate_setup(args)
         service = select_daemon_service(args)
         if not getattr(args, "callback_only", False):
-            select_execution_backend(args)
+            managed_tasks.select_execution_backend(args)
     except ValueError as exc:
         print(f"atc: setup cannot continue: {exc}", file=sys.stderr)
         return 2
@@ -3104,7 +1321,7 @@ def ack(args: argparse.Namespace) -> int:
         if not source.exists():
             continue
         try:
-            request = load_request(source)
+            request = dispatch.load_request(source)
             if state == "failed" or (state == "pending" and (request.get("callback_mode") == "manual"
                                                               or request.get("live_delivered_at"))):
                 queue_store.move_request(source, root / "done")
@@ -3138,7 +1355,7 @@ def retry_callback(args: argparse.Namespace) -> int:
         source = layout.request_path(root, "failed", args.id)
         if not source.exists():
             source = layout.request_path(root, "pending", args.id)
-        request = load_request(source)
+        request = dispatch.load_request(source)
         if source.parent.name == "pending" and request.get("callback_mode") != "manual":
             raise ValueError("callback is already pending")
         if layout.ack_path(root, args.id).exists() or queue_store.is_canceled(root, args.id):
@@ -3149,13 +1366,13 @@ def retry_callback(args: argparse.Namespace) -> int:
         if target_lock is None or delivery_engine.retained_target_lease_is_held(request):
             raise ValueError("the bound session has an active or unresolved delivery")
         if args.callback_mode:
-            options = argparse.Namespace(callback_mode=args.callback_mode, agent=request_agent(request))
+            options = argparse.Namespace(callback_mode=args.callback_mode, agent=dispatch.request_agent(request))
             pi_route = {key: request[key] for key in pi_callback.ROUTE_FIELDS if key in request}
             for key in callback_transport.ROUTE_FIELDS:
                 request.pop(key, None)
             request.update(callback_transport.selection(options))
             request.update(pi_route)
-            request["version"] = 3 if request_agent(request) == "pi" else 2
+            request["version"] = 3 if dispatch.request_agent(request) == "pi" else 2
             if request.get("pi_delivery") == "steer":
                 request["version"] = 4
         capability = callback_transport.inspect_route(request)
@@ -3189,7 +1406,7 @@ def retry_callback(args: argparse.Namespace) -> int:
 def goal_start(args: argparse.Namespace) -> int:
     root = layout.queue_dir(args)
     queue_store.ensure_daemon_dirs(root)
-    target, source = resolve_target(args)
+    target, source = dispatch.resolve_target(args)
     goal_id = args.id or uuid.uuid4().hex
     try:
         path = layout.goal_path(root, goal_id)
@@ -3200,7 +1417,7 @@ def goal_start(args: argparse.Namespace) -> int:
         print("atc: error: --idle-seconds must be positive", file=sys.stderr)
         return 2
     try:
-        plan_path, plan, plan_digest = resolve_goal_plan_file(
+        plan_path, plan, plan_digest = goals.resolve_goal_plan_file(
             args.cwd, getattr(args, "plan_file", None)
         )
     except ValueError as exc:
@@ -3212,8 +1429,8 @@ def goal_start(args: argparse.Namespace) -> int:
             print(f"atc: goal {goal_id} already exists", file=sys.stderr)
             return 1
         now = time.time()
-        write_goal(root, {"version": 1, "id": goal_id, "task": args.task, "cwd": args.cwd, "target": target,
-                          "target_source": source, "agent": resolve_agent(args), "state": "active", "created_at": now,
+        goals.write_goal(root, {"version": 1, "id": goal_id, "task": args.task, "cwd": args.cwd, "target": target,
+                          "target_source": source, "agent": dispatch.resolve_agent(args), "state": "active", "created_at": now,
                           "last_external_callback_at": now, "idle_seconds": args.idle_seconds,
                           "plan_file": str(plan_path), "plan_goal": plan["goal"],
                           "plan_sha256_at_start": plan_digest})
@@ -3233,15 +1450,15 @@ def goal_check(args: argparse.Namespace) -> int:
     lock = queue_store.acquire_owner_lock(root, layout.goal_lock_id(args.id), blocking=True)
     try:
         try:
-            goal = load_goal(root, args.id)
-            plan_path, plan, content, digest = goal_plan_snapshot(goal)
+            goal = goals.load_goal(root, args.id)
+            plan_path, plan, content, digest = goals.goal_plan_snapshot(goal)
         except (OSError, ValueError, json.JSONDecodeError) as exc:
             print(f"atc: error: {exc}", file=sys.stderr)
             return 1
         if goal.get("state") == "completed":
             print(f"atc: error: completed goal {args.id} is terminal", file=sys.stderr)
             return 1
-        completed, total, current, remaining = goal_plan_progress(plan)
+        completed, total, current, remaining = goals.goal_plan_progress(plan)
         now = time.time()
         goal["last_plan_checked_at"] = now
         goal["last_plan_check_sha256"] = digest
@@ -3249,7 +1466,7 @@ def goal_check(args: argparse.Namespace) -> int:
         goal["plan_revision"] = plan["revision"]
         goal["plan_completed_items"] = completed
         goal["plan_total_items"] = total
-        write_goal(root, goal)
+        goals.write_goal(root, goal)
     finally:
         queue_store.release_owner_lock(lock, remove=False)
 
@@ -3287,7 +1504,7 @@ def goal_set_plan(args: argparse.Namespace) -> int:
     lock = queue_store.acquire_owner_lock(root, layout.goal_lock_id(args.id), blocking=True)
     try:
         try:
-            goal = load_goal(root, args.id)
+            goal = goals.load_goal(root, args.id)
         except (OSError, ValueError, json.JSONDecodeError) as exc:
             print(f"atc: error: {exc}", file=sys.stderr)
             return 1
@@ -3295,7 +1512,7 @@ def goal_set_plan(args: argparse.Namespace) -> int:
             print(f"atc: error: completed goal {args.id} is terminal", file=sys.stderr)
             return 1
         try:
-            plan_path, plan, plan_digest = resolve_goal_plan_file(
+            plan_path, plan, plan_digest = goals.resolve_goal_plan_file(
                 str(goal.get("cwd", os.getcwd())), args.plan_file
             )
         except ValueError as exc:
@@ -3317,7 +1534,7 @@ def goal_set_plan(args: argparse.Namespace) -> int:
             "plan_total_items",
         ):
             goal.pop(field, None)
-        write_goal(root, goal)
+        goals.write_goal(root, goal)
     finally:
         queue_store.release_owner_lock(lock, remove=False)
     print(f"atc: goal {args.id} now follows YAML plan {plan_path}")
@@ -3339,7 +1556,7 @@ def goal_ack(args: argparse.Namespace) -> int:
         if args.email_after <= 0:
             print("atc: error: --email-after must be positive", file=sys.stderr)
             return 2
-        if args.email_to and not is_single_email_recipient(args.email_to):
+        if args.email_to and not goals.is_single_email_recipient(args.email_to):
             print("atc: error: invalid email recipient", file=sys.stderr)
             return 2
         configured_recipient = os.environ.get("ATC_BLOCKED_EMAIL_TO")
@@ -3349,7 +1566,7 @@ def goal_ack(args: argparse.Namespace) -> int:
     lock = queue_store.acquire_owner_lock(root, layout.goal_lock_id(args.id), blocking=True)
     try:
         try:
-            goal = load_goal(root, args.id)
+            goal = goals.load_goal(root, args.id)
         except (OSError, ValueError, json.JSONDecodeError) as exc:
             print(f"atc: error: {exc}", file=sys.stderr)
             return 1
@@ -3358,7 +1575,7 @@ def goal_ack(args: argparse.Namespace) -> int:
             return 1
         if args.state == "completed":
             try:
-                plan_path, plan, _, plan_digest = goal_plan_snapshot(goal)
+                plan_path, plan, _, plan_digest = goals.goal_plan_snapshot(goal)
             except ValueError as exc:
                 print(f"atc: error: {exc}", file=sys.stderr)
                 return 1
@@ -3378,7 +1595,7 @@ def goal_ack(args: argparse.Namespace) -> int:
                     file=sys.stderr,
                 )
                 return 1
-            completed_items, total_items, current, _ = goal_plan_progress(plan)
+            completed_items, total_items, current, _ = goals.goal_plan_progress(plan)
             if current is not None:
                 print(
                     f"atc: error: goal path is only {completed_items}/{total_items} complete; "
@@ -3392,80 +1609,21 @@ def goal_ack(args: argparse.Namespace) -> int:
         if args.message:
             goal["message"] = args.message
         if args.state == "blocked_conditions":
-            clear_blocked_goal_email(goal)
+            goals.clear_blocked_goal_email(goal)
             goal["condition"] = args.condition
             goal["blocked_email_to"] = args.email_to
             goal["blocked_email_after_seconds"] = args.email_after
         else:
             goal.pop("condition", None)
-            clear_blocked_goal_email(goal)
+            goals.clear_blocked_goal_email(goal)
             goal["completion_plan_sha256"] = plan_digest
             goal["completion_plan_revision"] = plan["revision"]
             goal["completion_plan_checked_at"] = goal["last_plan_checked_at"]
-        write_goal(root, goal)
+        goals.write_goal(root, goal)
     finally:
         queue_store.release_owner_lock(lock, remove=False)
     print(f"atc: goal {args.id} acknowledged as {args.state}")
     return 0
-
-
-def process_blocked_goal_email(root: Path) -> bool:
-    now = time.time()
-    configured_recipient = os.environ.get("ATC_BLOCKED_EMAIL_TO")
-    for path in sorted((root / "goals").glob("*.json")):
-        lock: tuple[object, Path] | None = None
-        try:
-            goal_id = path.stem
-            lock = queue_store.acquire_owner_lock(root, layout.goal_lock_id(goal_id), blocking=True)
-            goal = load_goal(root, goal_id)
-            if goal.get("state") != "blocked_conditions":
-                continue
-            recipient = goal.get("blocked_email_to")
-            changed_at = float(goal.get("state_changed_at", now))
-            delay = float(goal.get("blocked_email_after_seconds", DEFAULT_BLOCKED_EMAIL_SECONDS))
-            if (
-                not isinstance(recipient, str)
-                or not recipient
-                or recipient != configured_recipient
-                or not is_single_email_recipient(recipient)
-                or goal.get("blocked_email_result") == "accepted"
-                or goal.get("blocked_email_exhausted_at")
-                or now < changed_at + delay
-            ):
-                continue
-            next_attempt = float(goal.get("blocked_email_next_attempt_at", changed_at + delay))
-            if now < next_attempt:
-                continue
-            goal["blocked_email_attempted_at"] = now
-            attempts = int(goal.get("blocked_email_attempts", 0)) + 1
-            goal["blocked_email_attempts"] = attempts
-            write_goal(root, goal)
-            task = str(goal.get("task", goal.get("id"))).replace("\r", " ").replace("\n", " ")
-            message = EmailMessage()
-            message["To"] = recipient
-            message["Subject"] = f"Long-task goal remains blocked: {task}"
-            message.set_content(
-                f"Goal: {task}\nBlocked condition: {goal.get('condition')}\n"
-                f"State id: {goal.get('id')}\nThis confirms local MTA acceptance only."
-            )
-            try:
-                result = subprocess.run([os.environ.get("ATC_SENDMAIL", "/usr/sbin/sendmail"), "-t", "-oi"],
-                                        input=message.as_string(), text=True, stdout=subprocess.DEVNULL,
-                                        stderr=subprocess.DEVNULL, timeout=30, check=False)
-                goal["blocked_email_result"] = "accepted" if result.returncode == 0 else f"exit_{result.returncode}"
-            except (OSError, subprocess.TimeoutExpired) as exc:
-                goal["blocked_email_result"] = f"failed_{type(exc).__name__}"
-            if goal["blocked_email_result"] != "accepted" and attempts < 3:
-                goal["blocked_email_next_attempt_at"] = now + 3600 * (2 ** (attempts - 1))
-            elif goal["blocked_email_result"] != "accepted":
-                goal["blocked_email_exhausted_at"] = now
-            write_goal(root, goal)
-            return True
-        except (OSError, ValueError, TypeError, json.JSONDecodeError) as exc:
-            print(f"atc: warning: could not process blocked-goal email {path.name}: {exc}", file=sys.stderr)
-        finally:
-            queue_store.release_owner_lock(lock, remove=False)
-    return False
 
 
 def goal_resume(args: argparse.Namespace) -> int:
@@ -3478,7 +1636,7 @@ def goal_resume(args: argparse.Namespace) -> int:
     lock = queue_store.acquire_owner_lock(root, layout.goal_lock_id(args.id), blocking=True)
     try:
         try:
-            goal = load_goal(root, args.id)
+            goal = goals.load_goal(root, args.id)
         except (OSError, ValueError, json.JSONDecodeError) as exc:
             print(f"atc: error: {exc}", file=sys.stderr)
             return 1
@@ -3492,8 +1650,8 @@ def goal_resume(args: argparse.Namespace) -> int:
         goal.update({"state": "active", "state_changed_at": now, "last_external_callback_at": now})
         goal.pop("condition", None)
         goal.pop("last_reminder_at", None)
-        clear_blocked_goal_email(goal)
-        write_goal(root, goal)
+        goals.clear_blocked_goal_email(goal)
+        goals.write_goal(root, goal)
     finally:
         queue_store.release_owner_lock(lock, remove=False)
     print(f"atc: goal {args.id} resumed")
@@ -3503,30 +1661,9 @@ def goal_resume(args: argparse.Namespace) -> int:
 def cancel(args: argparse.Namespace) -> int:
     root = layout.queue_dir(args)
     if args.all:
-        cancel_all(root, args.message)
+        recovery.cancel_all(root, args.message)
         return 0
-    return 0 if cancel_one(root, args.id, args.message) else 1
-
-
-def request_task(request: dict[str, object]) -> str:
-    prompt = request.get("prompt")
-    if isinstance(prompt, str):
-        for line in prompt.splitlines():
-            if line.startswith("Task: "):
-                return line.removeprefix("Task: ").strip() or "long task"
-    return "long task"
-
-
-def request_target(request: dict[str, object]) -> str:
-    target = request.get("target")
-    if not isinstance(target, dict):
-        return "unknown target"
-    if target.get("kind") == "session":
-        value = str(target.get("value", "unknown"))
-        return f"session {value}"
-    if target.get("kind") == "last":
-        return "unsafe --last"
-    return "unknown target"
+    return 0 if recovery.cancel_one(root, args.id, args.message) else 1
 
 
 def queued_items(root: Path, states: list[str]) -> list[tuple[str, Path, dict[str, object]]]:
@@ -3534,7 +1671,7 @@ def queued_items(root: Path, states: list[str]) -> list[tuple[str, Path, dict[st
     for state in states:
         for path in sorted((root / state).glob("*.json")):
             try:
-                request = load_request(path)
+                request = dispatch.load_request(path)
             except Exception as exc:
                 request = {"id": path.stem, "prompt": "Task: unreadable callback", "last_error": str(exc)}
             items.append((state, path, request))
@@ -3557,7 +1694,7 @@ def status(args: argparse.Namespace) -> int:
     limit = max(1, args.limit)
     for state, path, request in items[:limit]:
         request_id = str(request.get("id", path.stem))
-        line = f"  - [{state}] {request_task(request)} | {request_target(request)} | id {request_id}"
+        line = f"  - [{state}] {dispatch.request_task(request)} | {dispatch.request_target(request)} | id {request_id}"
         if request.get("callback_mode") == "manual":
             line += " | manual receipt; automatic callback disabled"
         if request.get("delivery_state") == "blocked":
@@ -3864,7 +2001,7 @@ def main() -> int:
         required=True,
         help="Mutable UTF-8 YAML goal path that governs progress and completion",
     )
-    goal_start_parser.add_argument("--idle-seconds", type=float, default=DEFAULT_GOAL_IDLE_SECONDS)
+    goal_start_parser.add_argument("--idle-seconds", type=float, default=goals.DEFAULT_GOAL_IDLE_SECONDS)
     goal_check_parser = goal_sub.add_parser("check", help="Inspect and record the current YAML goal path")
     goal_check_parser.add_argument("--queue-dir", help="Queue root that owns the goal")
     goal_check_parser.add_argument("--id", required=True)
@@ -3885,7 +2022,7 @@ def main() -> int:
     goal_ack_parser.add_argument("--message")
     goal_ack_parser.add_argument("--condition")
     goal_ack_parser.add_argument("--email-to")
-    goal_ack_parser.add_argument("--email-after", type=float, default=DEFAULT_BLOCKED_EMAIL_SECONDS)
+    goal_ack_parser.add_argument("--email-after", type=float, default=goals.DEFAULT_BLOCKED_EMAIL_SECONDS)
     goal_resume_parser = goal_sub.add_parser("resume", help="Explicitly resume a blocked goal")
     goal_resume_parser.add_argument("--queue-dir", help="Queue root that owns the goal")
     goal_resume_parser.add_argument("--id", required=True)
@@ -3930,9 +2067,9 @@ def main() -> int:
     if args.mode == "agent":
         return invoke_with_diagnostics(args, agent)
     if args.mode == "_screen-worker":
-        return run_screen_worker(args)
+        return task_worker.run_screen_worker(args)
     if args.mode == "_task-worker":
-        return run_task_worker(args)
+        return task_worker.run_task_worker(args)
     if args.mode == "_delivery-worker":
         return delivery_engine.delivery_worker_main()
     if args.mode == "_windows-coordinator":

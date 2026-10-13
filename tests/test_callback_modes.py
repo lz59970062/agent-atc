@@ -12,6 +12,8 @@ import unittest
 from unittest import mock
 
 from agent_atc import callback_transport as transport, cli
+from agent_atc.engine import dispatch
+from agent_atc.engine import tasks as managed_tasks
 from agent_atc.engine import delivery as delivery_engine
 from agent_atc.harness.codex import app_server
 from agent_atc.store import records as queue_store
@@ -48,7 +50,7 @@ class CallbackModeTests(unittest.TestCase):
 
     def test_fresh_cli_child_does_not_inherit_parent_desktop_origin(self):
         original = {"CODEX_INTERNAL_ORIGINATOR_OVERRIDE": "Codex Desktop", "CODEX_THREAD_ID": "parent", "PATH": "keep"}
-        child = cli.child_agent_environment(original)
+        child = managed_tasks.child_agent_environment(original)
         self.assertNotIn("CODEX_INTERNAL_ORIGINATOR_OVERRIDE", child)
         self.assertNotIn("CODEX_THREAD_ID", child)
         self.assertEqual(child["PATH"], "keep")
@@ -60,8 +62,8 @@ class CallbackModeTests(unittest.TestCase):
 
     def test_unconfigured_desktop_refuses_before_workload_admission(self):
         args = argparse.Namespace(agent="codex", callback_mode="desktop", session="original", last=False)
-        with mock.patch.object(cli, "select_execution_backend") as backend, mock.patch.object(layout, "managed_task_dir") as directory:
-            self.assertEqual(cli.submit_managed_run(args), 125)
+        with mock.patch.object(managed_tasks, "select_execution_backend") as backend, mock.patch.object(layout, "managed_task_dir") as directory:
+            self.assertEqual(dispatch.submit_managed_run(args), 125)
         backend.assert_not_called()
         directory.assert_not_called()
         self.assertEqual(args._callback_capability["status"], "blocked")
@@ -127,7 +129,7 @@ class CallbackModeTests(unittest.TestCase):
         queue_store.write_request(queue / "pending/fixture.json", request)
         with mock.patch.object(delivery_engine, "run_resume_until_exit_or_ack", return_value=(subprocess.CompletedProcess([], 123), False, False)):
             self.assertTrue(delivery_engine.process_one(queue, argparse.Namespace(retries=0)))
-        saved = cli.load_request(queue / "pending/fixture.json")
+        saved = dispatch.load_request(queue / "pending/fixture.json")
         self.assertEqual(saved["attempts"], request["attempts"])
         self.assertIn("next_attempt_at", saved)
         self.assertFalse((queue / "failed/fixture.json").exists())
@@ -138,7 +140,7 @@ class CallbackModeTests(unittest.TestCase):
         queue_store.write_request(queue / "pending/fixture.json", self.request("cli"))
         with mock.patch.object(delivery_engine, "run_resume_until_exit_or_ack", return_value=(subprocess.CompletedProcess([], 126), False, False)):
             self.assertTrue(delivery_engine.process_one(queue, argparse.Namespace(retries=10)))
-        record = cli.load_request(queue / "failed/fixture.json")
+        record = dispatch.load_request(queue / "failed/fixture.json")
         self.assertEqual(record["delivery_state"], "blocked")
         self.assertFalse((queue / "pending/fixture.json").exists())
 
@@ -153,10 +155,10 @@ class CallbackModeTests(unittest.TestCase):
         request.pop("retain_target_lease")
         request["last_error"] = "original failure"
         queue_store.write_request(queue / "failed/fixture.json", request)
-        with mock.patch.object(cli, "submit_managed_run") as launch:
+        with mock.patch.object(dispatch, "submit_managed_run") as launch:
             self.assertEqual(cli.retry_callback(args), 0)
         launch.assert_not_called()
-        saved = cli.load_request(queue / "pending/fixture.json")
+        saved = dispatch.load_request(queue / "pending/fixture.json")
         self.assertEqual(saved["target"], request["target"])
         self.assertEqual(saved["id"], "fixture")
         self.assertEqual(saved["callback_mode"], "manual")

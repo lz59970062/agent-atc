@@ -13,6 +13,7 @@ from ..system import windows_io
 from ..store import layout
 from ..store import records as queue_store
 from .. import cli
+from . import dispatch
 
 
 CALLBACK_HOOK_SECTION = "[atc-user-hook]"
@@ -84,7 +85,7 @@ def allocate_prompt_cadence(
             or not isinstance(target.get("value"), str) or not target["value"]
             or not isinstance(request_id, str) or not request_id):
         return None  # --last cannot safely share a conversation counter.
-    agent = cli.request_agent(request)
+    agent = dispatch.request_agent(request)
     session = target["value"]
     digest = hashlib.sha256(json.dumps([agent, session]).encode("utf-8")).hexdigest()
     path = root / "prompt-counters" / f"{digest}.json"

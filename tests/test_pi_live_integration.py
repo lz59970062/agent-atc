@@ -21,6 +21,7 @@ import unittest
 from unittest import mock
 
 from agent_atc import cli
+from agent_atc.engine import dispatch
 from agent_atc.engine import delivery as delivery_engine
 from agent_atc.harness.codex import app_server
 from agent_atc.store import records as queue_store
@@ -162,7 +163,7 @@ def callback(runtime, session, callback_id, delivery=None):
     queue_dir = directory/'queue'; queue_store.ensure_daemon_dirs(queue_dir)
     token = 'CALLBACK_'+callback_id
     args=argparse.Namespace(agent='pi',session=str(session),last=False,cwd=str(directory),task=token,callback_mode='cli')
-    request=cli.make_request(args, token); request['id']=callback_id
+    request=dispatch.make_request(args, token); request['id']=callback_id
     if delivery == 'follow-up':
         # Retained callbacks from the earlier Pi preview keep their old timing.
         request['version'] = 3
@@ -280,7 +281,7 @@ class NativePiCallbackTests(unittest.TestCase):
             wait_for(lambda: any(e.get('type')=='message' and e['message']['role']=='assistant' for e in entries(session)))
             request,payload=callback(runtime,session,'idle')
             root=Path(payload['queue_dir'])
-            request=cli.prepare_request_for_queue(root,request,payload['prompt'])
+            request=dispatch.prepare_request_for_queue(root,request,payload['prompt'])
             # Exercise the actual ATC delivery worker. An online callback must not
             # execute this deliberately invalid Pi binary.
             with mock.patch.dict(os.environ, {'ATC_PI_BIN':str(directory/'must-not-launch-pi')}):
@@ -330,7 +331,7 @@ class NativePiCallbackTests(unittest.TestCase):
         assert not cli.pid_is_running(owner_pid)
         request,payload=callback(runtime,session,'offline')
         assert bridge.inspect_route(request)['status']=='offline_candidate'
-        root=Path(payload['queue_dir']); request=cli.prepare_request_for_queue(root,request,payload['prompt'])
+        root=Path(payload['queue_dir']); request=dispatch.prepare_request_for_queue(root,request,payload['prompt'])
         queue_store.write_request(root/'pending'/f"{request['id']}.json",request)
         assert delivery_engine.process_one(root,argparse.Namespace(resume_timeout=20,retries=0,retry_delay=0,retry_backoff=1))
         wait_for(reaped); delivery_engine.recover_running(root)

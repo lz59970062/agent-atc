@@ -12,6 +12,7 @@ import unittest
 from unittest import mock
 
 from agent_atc import cli
+from agent_atc.engine import tasks as managed_tasks
 from agent_atc.engine import delivery as delivery_engine
 from agent_atc.system import commands
 
@@ -35,7 +36,7 @@ class CodexCompatibilityTests(unittest.TestCase):
     def test_builder_preserves_requested_sandbox_with_explicit_auto_review(self):
         for sandbox in ("workspace-write", "read-only"):
             with self.subTest(sandbox=sandbox):
-                command = cli.agent_wrapped_command("codex", cwd="/tmp", result_path=Path("/tmp/result"),
+                command = managed_tasks.agent_wrapped_command("codex", cwd="/tmp", result_path=Path("/tmp/result"),
                                                     sandbox_mode=sandbox, permission_mode="auto")
                 self.assert_permissions(command, sandbox)
 
@@ -53,7 +54,7 @@ class CodexCompatibilityTests(unittest.TestCase):
                         argv.extend(["--", "Test the public contract."])
                         with mock.patch.object(sys, "argv", argv), \
                                 mock.patch.dict(os.environ, {"ATC_TEMPLATE_DIR": str(Path(tmp) / "templates")}), \
-                                mock.patch.object(cli, "screen_binary", return_value="/usr/bin/screen"), \
+                                mock.patch.object(managed_tasks, "screen_binary", return_value="/usr/bin/screen"), \
                                 contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
                             self.assertEqual(cli.main(), 0)
                         task_path = next(queue.glob("tasks/*/task.json"))
@@ -69,7 +70,7 @@ class CodexCompatibilityTests(unittest.TestCase):
         if binary is None:
             self.skipTest("Codex executable not installed")
         with tempfile.TemporaryDirectory() as tmp:
-            command = cli.agent_wrapped_command("codex", cwd=tmp, result_path=Path(tmp) / "result.txt",
+            command = managed_tasks.agent_wrapped_command("codex", cwd=tmp, result_path=Path(tmp) / "result.txt",
                                                 sandbox_mode="workspace-write", permission_mode="auto")
             command[0] = binary
             # Empty stdin stops before inference. A missing schema provides a second

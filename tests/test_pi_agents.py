@@ -21,6 +21,8 @@ import unittest
 from unittest import mock
 
 from agent_atc import cli
+from agent_atc.engine import dispatch
+from agent_atc.engine import tasks as managed_tasks
 from agent_atc.engine import delivery as delivery_engine
 from agent_atc.store import records as queue_store
 from agent_atc.store import layout
@@ -63,8 +65,8 @@ class PiAdapterContractTests(unittest.TestCase):
             with self.subTest(environment=environment):
                 self.assertEqual(AGENTS.detect(environment), expected)
                 with mock.patch.dict(os.environ, environment, clear=True):
-                    self.assertEqual(cli.resolve_agent(), expected)
-        self.assertEqual(cli.resolve_agent(argparse.Namespace(agent="pi")), "pi")
+                    self.assertEqual(dispatch.resolve_agent(), expected)
+        self.assertEqual(dispatch.resolve_agent(argparse.Namespace(agent="pi")), "pi")
 
     def test_pi_resume_command_resumes_the_bound_session_file_in_print_mode(self):
         session = ("/home/user/.pi/agent/sessions/--data-proj--/"
@@ -96,14 +98,14 @@ class PiAdapterContractTests(unittest.TestCase):
             approvals_reviewer="auto_review", approval_policy="on-request", sandbox_mode="workspace-write",
         )
         with mock.patch.dict(os.environ, {"PI_SESSION_FILE": session, "PI_SESSION_ID": "1"}, clear=True):
-            request = cli.make_request(args, "wake up")
-            self.assertEqual(cli.resolve_agent(args), "pi")
-            prompt = cli.build_prompt(args)
+            request = dispatch.make_request(args, "wake up")
+            self.assertEqual(dispatch.resolve_agent(args), "pi")
+            prompt = dispatch.build_prompt(args)
         self.assertEqual(request["agent"], "pi")
         self.assertEqual(request["target"], {"kind": "session", "value": session})
         self.assertEqual(request["target_source"], "PI_SESSION_FILE")
         self.assertIn("called back into PI Agent", prompt)
-        acknowledgement = cli.build_acknowledgement_text("atc ack --queue-dir /q --id abc", agent="pi")
+        acknowledgement = dispatch.build_acknowledgement_text("atc ack --queue-dir /q --id abc", agent="pi")
         self.assertIn("original PI Agent process through its native message API", acknowledgement)
         self.assertIn("--queue-dir /q --id abc", acknowledgement)
 
@@ -146,7 +148,7 @@ class PiAdapterContractTests(unittest.TestCase):
         }
         environment.update(preserved)
         before = dict(environment)
-        self.assertEqual(cli.child_agent_environment(environment), preserved)
+        self.assertEqual(managed_tasks.child_agent_environment(environment), preserved)
         self.assertEqual(environment, before)
 
 
@@ -193,7 +195,7 @@ class PiAgentContractTests(unittest.TestCase):
                 *options, "--", prompt]
         output = io.StringIO()
         with mock.patch.object(sys, "argv", argv), \
-                mock.patch.object(cli, "screen_binary", return_value="/fixture/screen"), \
+                mock.patch.object(managed_tasks, "screen_binary", return_value="/fixture/screen"), \
                 mock.patch.object(diagnostics, "emit_if_needed"), \
                 contextlib.redirect_stdout(output), contextlib.redirect_stderr(output):
             result = cli.main()
@@ -202,7 +204,7 @@ class PiAgentContractTests(unittest.TestCase):
     def task(self):
         paths = list(layout.managed_tasks_root(self.queue).glob("*/task.json"))
         self.assertEqual(len(paths), 1)
-        return paths[0], cli.load_managed_task(paths[0])
+        return paths[0], managed_tasks.load_managed_task(paths[0])
 
     def assert_rejected(self, options=(), **kwargs):
         try:
@@ -263,7 +265,7 @@ class PiAgentContractTests(unittest.TestCase):
 
     def run_worker(self, path, task):
         task["state"] = "launching"
-        cli.write_managed_task(self.queue, task)
+        managed_tasks.write_managed_task(self.queue, task)
         command = worker_command("_screen-worker", "--task-file", str(path), f"--token={task['token']}")
         # This is the log redirection normally supplied by the execution owner;
         # no actual screen session or coordinator is needed to run admission.
@@ -281,13 +283,13 @@ class PiAgentContractTests(unittest.TestCase):
         self.assertNotEqual(code, 0, Path(task["log_path"]).read_text(encoding="utf-8"))
         self.assertFalse(capture.exists())
         self.assertFalse(capture.with_suffix(".executions").exists(), "Pi must not start before snapshot validation")
-        completed = cli.load_managed_task(path)
+        completed = managed_tasks.load_managed_task(path)
         self.assertEqual((completed["state"], completed["outcome"]), ("interrupted", "unknown"))
         reason = completed["recovery_reason"]
         self.assertIn("system prompt", reason.lower().replace("_", " ").replace("-", " "))
         callbacks = list((self.queue / "pending").glob("*.json"))
         self.assertEqual(len(callbacks), 1)
-        callback = cli.load_request(callbacks[0])
+        callback = dispatch.load_request(callbacks[0])
         self.assertEqual(callback["agent"], task["agent"])
         self.assertEqual(callback["target"], task["target"])
         self.assertEqual(callback["agent_worker"], "pi")
@@ -335,7 +337,7 @@ class PiAgentContractTests(unittest.TestCase):
                              "OPENAI_API_KEY", "CUSTOM_WORKLOAD_SETTING"):
                     self.assertEqual(received["environment"][name], environment[name], name)
                 self.assertEqual(capture.with_suffix(".executions").read_text(encoding="utf-8"), "executed\n")
-                completed = cli.load_managed_task(path)
+                completed = managed_tasks.load_managed_task(path)
                 self.assertEqual((completed["state"], completed["outcome"], completed["exit_code"]),
                                  ("completed", "completed", exit_code))
                 result_path = Path(completed["agent_result_path"])
@@ -350,7 +352,7 @@ class PiAgentContractTests(unittest.TestCase):
                 self.assertNotIn("fixture-preserved-secret", log)
                 pending = list((self.queue / "pending").glob("*.json"))
                 self.assertEqual(len(pending), 1)
-                callback = cli.load_request(pending[0])
+                callback = dispatch.load_request(pending[0])
                 self.assertEqual(callback["agent"], parent)
                 self.assertEqual(callback["agent_worker"], "pi")
                 self.assertEqual(callback["target"], task["target"])
@@ -371,8 +373,8 @@ class PiAgentContractTests(unittest.TestCase):
         path, task = self.task()
         self.assertEqual(self.run_worker(path, task), 1)
         self.assertEqual(Path(task["agent_result_path"]).read_bytes(), b"")
-        self.assertEqual(cli.load_managed_task(path)["exit_code"], 1)
-        callback = cli.load_request(self.queue / "pending" / f"{task['id']}.json")
+        self.assertEqual(managed_tasks.load_managed_task(path)["exit_code"], 1)
+        callback = dispatch.load_request(self.queue / "pending" / f"{task['id']}.json")
         self.assertEqual(callback["exit_code"], 1)
         self.assertEqual(callback["agent"], "codex")
 
@@ -479,7 +481,7 @@ class PiAgentContractTests(unittest.TestCase):
             self.assertEqual(cli.main(), 0)
         pending = list((root / "pending").glob("*.json"))
         self.assertEqual(len(pending), 1)
-        request = cli.load_request(pending[0])
+        request = dispatch.load_request(pending[0])
         self.assertEqual(request["agent"], "pi")
         self.assertEqual(request["target"], {"kind": "session", "value": str(session)})
         self.assertIn("Bound session: " + str(session),
@@ -575,8 +577,8 @@ class PiAgentContractTests(unittest.TestCase):
         self.assertEqual(received["prompt"], submitted_prompt)
         self.assertEqual(received["argv"], ["--print", "--mode", "text", "--no-session",
                                             "--model", "original-provider/original-model", "--thinking", "high"])
-        self.assertEqual(cli.load_managed_task(path)["wrapped_command"], submitted_command)
-        callback = cli.load_request(self.queue / "pending" / f"{task['id']}.json")
+        self.assertEqual(managed_tasks.load_managed_task(path)["wrapped_command"], submitted_command)
+        callback = dispatch.load_request(self.queue / "pending" / f"{task['id']}.json")
         self.assertEqual(callback["agent_template"], "review")
         self.assertEqual(callback["agent_template_version"], 8)
         self.assertEqual(callback["agent_template_source"], str(template.resolve()))
@@ -598,7 +600,7 @@ class PiAgentContractTests(unittest.TestCase):
         self.assertNotIn("--thinking", task["wrapped_command"])
         self.assertIn("Do not run tests", Path(task["agent_prompt_path"]).read_text(encoding="utf-8"))
         task.update(state="completed", outcome="completed", exit_code=7)
-        handoff = cli.managed_task_prompt(task, outcome="completed")
+        handoff = managed_tasks.managed_task_prompt(task, outcome="completed")
         self.assertIn("NOT a test execution result", handoff)
         self.assertIn("execute the tests", handoff)
         self.assertIn("exit code: 7", handoff)
@@ -731,7 +733,7 @@ class PiAgentContractTests(unittest.TestCase):
                 snapshot = Path(task["agent_system_prompt_path"])
                 self.assertEqual(snapshot.read_text(encoding="utf-8"), original_system)
                 assert_private_file(self, snapshot)
-                callback = cli.load_request(self.queue / "pending" / f"{task['id']}.json")
+                callback = dispatch.load_request(self.queue / "pending" / f"{task['id']}.json")
                 self.assertEqual(callback["agent"], "claude")
                 self.assertEqual(callback["target"], {"kind": "session", "value": "parent-claude"})
                 self.assertEqual(callback["exit_code"], 0)
