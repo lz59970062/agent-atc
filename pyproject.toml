@@ -28,4 +28,4 @@ atc-desktop-core = "agent_atc.harness.codex.desktop.core:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-agent_atc = ["skill/SKILL.md", "claude_skill/SKILL.md", "pi_skill/SKILL.md", "skill/agents/openai.yaml", "templates/*.md", "owners/*.ps1", "harness/codex/desktop/windows_assets/*.ps1", "harness/codex/desktop/windows_assets/*.py", "harness/pi/extension/*.js"]
+agent_atc = ["assets/skills/reference/SKILL.md", "assets/skills/claude/SKILL.md", "assets/skills/pi/SKILL.md", "assets/skills/reference/agents/openai.yaml", "templates/*.md", "owners/*.ps1", "harness/codex/desktop/windows_assets/*.ps1", "harness/codex/desktop/windows_assets/*.py", "harness/pi/extension/*.js"]

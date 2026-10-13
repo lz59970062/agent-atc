@@ -37,7 +37,8 @@ def install_skill_tree(target: Path, *, include_codex_plugin: bool, force: bool,
         )
         return 1
 
-    package_root = resources.files("agent_atc").joinpath("skill")
+    skills = resources.files("agent_atc").joinpath("assets").joinpath("skills")
+    package_root = skills.joinpath("reference")
     with template_registration.preserve_installed_index(target):
         if target.exists():
             shutil.rmtree(target)
@@ -54,7 +55,7 @@ def install_skill_tree(target: Path, *, include_codex_plugin: bool, force: bool,
                     shutil.copy2(source, destination)
         if focused:
             os.replace(target / "SKILL.md", target / "REFERENCE.md")
-            with resources.as_file(resources.files("agent_atc").joinpath(focused, "SKILL.md")) as source:
+            with resources.as_file(skills.joinpath(focused).joinpath("SKILL.md")) as source:
                 shutil.copy2(source, target / "SKILL.md")
 
     print(f"Installed agent-atc skill to {target}")
@@ -77,10 +78,10 @@ def install_skill(args: argparse.Namespace) -> int:
                                      keep_existing=keep)
     if target_name in ("claude", "both", "all"):
         status |= install_skill_tree(layout.claude_home() / "skills" / "agent-atc", include_codex_plugin=False, force=args.force,
-                                     keep_existing=keep, focused="claude_skill")
+                                     keep_existing=keep, focused="claude")
     if target_name in ("pi", "all"):
         status |= install_skill_tree(pi_callback.profile_dir() / "skills" / "agent-atc", include_codex_plugin=False,
-                                     force=args.force, keep_existing=keep, focused="pi_skill")
+                                     force=args.force, keep_existing=keep, focused="pi")
     return status
 
 

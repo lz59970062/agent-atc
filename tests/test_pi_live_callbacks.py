@@ -10,7 +10,8 @@ import tempfile
 import time
 import unittest
 
-from agent_atc import callback_transport, cli
+from agent_atc.engine import routes as callback_transport
+from agent_atc import cli
 from agent_atc.commands import callbacks as callback_commands
 from agent_atc.tower import main as tower
 from agent_atc.engine import dispatch

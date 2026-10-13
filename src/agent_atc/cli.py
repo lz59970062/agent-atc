@@ -33,7 +33,7 @@ except ImportError:  # pragma: no cover - the durable run lifecycle is POSIX-onl
 
 from . import __version__
 from .core import envelope as callbacks
-from . import callback_transport
+from .engine import routes as callback_transport
 from .harness.claude import session as claude_code
 from .harness.pi import channel as pi_callback
 from .install import diagnostics

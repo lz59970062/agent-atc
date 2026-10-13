@@ -8,7 +8,7 @@ import shutil
 import sys
 import time
 from pathlib import Path
-from .. import callback_transport
+from . import routes as callback_transport
 from ..harness.pi import channel as pi_callback
 from ..harness import AGENTS, CHILD_AGENT_NAMES, ChildOptions, get_agent, get_child_agent
 from ..harness.base import DEFAULT_APPROVALS_REVIEWER, DEFAULT_APPROVAL_POLICY, DEFAULT_SANDBOX_MODE, DEFAULT_CLAUDE_PERMISSION_MODE

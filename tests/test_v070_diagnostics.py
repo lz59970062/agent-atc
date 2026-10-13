@@ -334,7 +334,7 @@ class SkillRepairPreservationTests(unittest.TestCase):
             target = Path(temporary) / "missing" / "agent-atc"
             with contextlib.redirect_stdout(io.StringIO()):
                 self.assertEqual(skill_install.install_skill_tree(target, include_codex_plugin=True, force=True, keep_existing=True), 0)
-            bundled = Path(cli.__file__).parent / "skill"
+            bundled = Path(cli.__file__).parent / "assets" / "skills" / "reference"
             self.assertEqual((target / "SKILL.md").read_bytes(), (bundled / "SKILL.md").read_bytes())
             self.assertTrue((target / "agents" / "openai.yaml").is_file())
 

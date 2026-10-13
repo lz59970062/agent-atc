@@ -38,7 +38,7 @@ jobs:
         run: |
           atc --version
           atc run --agent codex --session ci-preview --backend auto --dry-run -- echo preview
-          python -c "from importlib.resources import files; assert files('agent_atc').joinpath('skill/SKILL.md').is_file()"
+          python -c "from importlib.resources import files; assert files('agent_atc').joinpath('assets/skills/reference/SKILL.md').is_file()"
       - name: Native macOS task and coordinator lifecycle
         if: runner.os == 'macOS'
         env:

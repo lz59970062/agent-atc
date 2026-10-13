@@ -14,7 +14,7 @@ from pathlib import Path
 import subprocess
 import sys
 
-from ....callback_transport import configuration_path
+from ....engine.routes import configuration_path
 from .connection import load_bridge_endpoint
 from ....runtime import worker_command
 from ....store.files import write_private_text, write_request

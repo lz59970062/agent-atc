@@ -11,7 +11,8 @@ import tempfile
 import unittest
 from unittest import mock
 
-from agent_atc import callback_transport as transport, cli
+from agent_atc.engine import routes as transport
+from agent_atc import cli
 from agent_atc.commands import callbacks as callback_commands
 from agent_atc.engine import dispatch
 from agent_atc.engine import tasks as managed_tasks

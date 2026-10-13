@@ -11,7 +11,7 @@ import subprocess
 import sys
 import time
 
-from ....callback_transport import configuration_path
+from ....engine.routes import configuration_path
 from .connection import load_unix_bridge_endpoint
 from .core import BRIDGE_FILE_ENV, REAL_CODEX_ENV
 from ....runtime import worker_command

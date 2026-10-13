@@ -12,7 +12,7 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 from ..core import envelope as callbacks
-from .. import callback_transport
+from . import routes as callback_transport
 from ..harness.claude import session as claude_code
 from ..harness.pi import channel as pi_callback
 from ..harness import AGENTS, AGENT_NAMES, get_agent

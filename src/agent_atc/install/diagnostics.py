@@ -17,7 +17,8 @@ import sys
 import tempfile
 import time
 
-from .. import __version__, callback_transport
+from .. import __version__
+from ..engine import routes as callback_transport
 from ..harness.claude import session as claude_code
 from ..harness import get_agent, get_child_agent
 from ..system import posix, windows_io

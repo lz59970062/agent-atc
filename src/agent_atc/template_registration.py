@@ -259,7 +259,7 @@ def _refresh_indexes(plan: _Plan, entries: dict, roots: list[Path], *, install_m
         path = (root / "agent-atc" / "SKILL.md").resolve()
         text = _read(path)
         if text is None and install_missing:
-            package = resources.files("agent_atc").joinpath("skill")
+            package = resources.files("agent_atc").joinpath("assets").joinpath("skills").joinpath("reference")
             text = package.joinpath("SKILL.md").read_text(encoding="utf-8")
             if any(entry.get("parent_homes", {}).get("codex") == str(root) for entry in entries.values()):
                 metadata = path.parent / "agents" / "openai.yaml"

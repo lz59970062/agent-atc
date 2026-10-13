@@ -537,7 +537,7 @@ def install_extension(args: argparse.Namespace) -> int:
     from ...store import layout
     skill = profile / "skills" / "agent-atc"
     if skill_install.install_skill_tree(skill, include_codex_plugin=False, force=bool(getattr(args, "force", False)),
-                              keep_existing=not getattr(args, "force", False), focused="pi_skill") != 0:
+                              keep_existing=not getattr(args, "force", False), focused="pi") != 0:
         raise ValueError(f"Could not install the Pi skill at {skill}")
     print("Existing Pi processes need /reload or a restart. Ordinary Pi receives online callbacks; use atc pi for managed offline recovery.")
     return 0
