@@ -20,6 +20,7 @@ from agent_atc.engine import delivery as delivery_engine
 from agent_atc.harness.codex import app_server
 from agent_atc.store import records as queue_store
 from agent_atc.store import layout
+import atc_records
 
 
 class CallbackModeTests(unittest.TestCase):
@@ -36,9 +37,7 @@ class CallbackModeTests(unittest.TestCase):
         self.stack.enter_context(contextlib.redirect_stderr(io.StringIO()))
 
     def request(self, mode="manual"):
-        return {"version": 1, "id": "fixture", "agent": "codex", "cwd": str(self.root),
-                "target": {"kind": "session", "value": "original"}, "target_source": "fixture",
-                "prompt": "inspect the saved fixture", "callback_mode": mode, "attempts": 1}
+        return atc_records.callback_record("fixture", str(self.root), target={"kind": "session", "value": "original"}, prompt="inspect the saved fixture", agent="codex", target_source="fixture", callback_mode=mode, attempts=1)
 
     def test_auto_desktop_is_distinct_from_cli_and_manual(self):
         args = argparse.Namespace(agent="codex", callback_mode="auto")

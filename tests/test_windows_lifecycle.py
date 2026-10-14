@@ -29,6 +29,7 @@ from agent_atc.store import layout
 from agent_atc.owners import LaunchError, OwnerState
 from agent_atc.owners.windows import WindowsBackend
 from agent_atc.system import windows_process
+import atc_records
 
 
 @unittest.skipUnless(os.name == "nt", "requires native Windows locks, ACLs and processes")
@@ -71,12 +72,7 @@ class WindowsLifecycleTests(unittest.TestCase):
         return managed_tasks.load_managed_task(path)
 
     def request(self, root, ident, state="pending"):
-        request = {
-            "version": 1, "id": ident, "created_at": time.time(), "cwd": str(self.directory),
-            "agent": "codex", "target": {"kind": "session", "value": "windows-original-session"},
-            "target_source": "explicit", "prompt": "Model-free Windows lifecycle fixture",
-            "queue_dir": str(root), "lifecycle_state": state, "attempts": 0,
-        }
+        request = atc_records.callback_record(ident, str(self.directory), target={"kind": "session", "value": "windows-original-session"}, prompt="Model-free Windows lifecycle fixture", created_at=time.time(), agent="codex", target_source="explicit", queue_dir=str(root), lifecycle_state=state, attempts=0)
         queue_store.ensure_daemon_dirs(root)
         queue_store.write_request(layout.request_path(root, state, ident), request)
         return request

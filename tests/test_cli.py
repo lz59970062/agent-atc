@@ -41,6 +41,7 @@ from agent_atc import runtime as atc_runtime
 from agent_atc.store import records as queue_store
 from agent_atc.system import shell
 from agent_atc.store import layout
+import atc_records
 
 
 def assert_private_file(test: unittest.TestCase, path: Path) -> None:
@@ -1238,14 +1239,7 @@ class CliTests(unittest.TestCase):
 
     def test_move_request_collision_is_idempotent_only_for_same_valid_id(self) -> None:
         def payload(request_id: str, cwd: str, prompt: str) -> dict[str, object]:
-            return {
-                "version": 1,
-                "id": request_id,
-                "created_at": 1.0,
-                "cwd": cwd,
-                "target": {"kind": "last"},
-                "prompt": prompt,
-            }
+            return atc_records.callback_record(request_id, cwd, target={"kind": "last"}, prompt=prompt, created_at=1.0)
 
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "queue"
@@ -1630,15 +1624,7 @@ class CliTests(unittest.TestCase):
             root_a = Path(tmp) / "queue-a"
             root_b = Path(tmp) / "queue-b"
             target = {"kind": "session", "value": "stale-selection-session"}
-            failed = {
-                "version": 1,
-                "id": "desktop-unknown",
-                "created_at": 1.0,
-                "cwd": tmp,
-                "target": target,
-                "prompt": "wake up",
-                "retain_target_lease": True,
-            }
+            failed = atc_records.callback_record("desktop-unknown", tmp, target=target, prompt="wake up", created_at=1.0, retain_target_lease=True)
             queue_store.ensure_daemon_dirs(root_a)
             queue_store.write_request(layout.request_path(root_a, "failed", "desktop-unknown"), failed)
             self._write_request(root_b, "contender", tmp, target=target)
@@ -2328,14 +2314,7 @@ class CliTests(unittest.TestCase):
             (root / "running").mkdir(parents=True)
             (root / "running" / "running-one.json").write_text(
                 json.dumps(
-                    {
-                        "version": 1,
-                        "id": "running-one",
-                        "created_at": 1.0,
-                        "cwd": tmp,
-                        "target": {"kind": "last"},
-                        "prompt": "wake up",
-                    }
+                    atc_records.callback_record("running-one", tmp, target={"kind": "last"}, prompt="wake up", created_at=1.0)
                 )
                 + "\n",
                 encoding="utf-8",
@@ -2352,14 +2331,7 @@ class CliTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "queue"
             (root / "pending").mkdir(parents=True)
-            request = {
-                "version": 1,
-                "id": "pending-id",
-                "created_at": 1.0,
-                "cwd": tmp,
-                "target": {"kind": "session", "value": "thread-1"},
-                "prompt": "[atc]\nTask: train model\n",
-            }
+            request = atc_records.callback_record("pending-id", tmp, target={"kind": "session", "value": "thread-1"}, prompt="[atc]\nTask: train model\n", created_at=1.0)
             (root / "pending" / "pending-id.json").write_text(json.dumps(request), encoding="utf-8")
             args = argparse.Namespace(queue_dir=str(root), state=None, limit=5, quiet_empty=False, shell_hook=True)
 
@@ -2418,16 +2390,7 @@ class CliTests(unittest.TestCase):
             self.assertEqual(
                 dispatch.enqueue_existing_request(
                     root,
-                    {
-                        "version": 1,
-                        "id": "terminal-callback",
-                        "created_at": time.time(),
-                        "cwd": tmp,
-                        "target": {"kind": "session", "value": "thread-1"},
-                        "target_source": "--session",
-                        "goal_id": "terminal-goal",
-                        "prompt": "Task: stale callback",
-                    },
+                    atc_records.callback_record("terminal-callback", tmp, target={"kind": "session", "value": "thread-1"}, prompt="Task: stale callback", created_at=time.time(), target_source="--session", goal_id="terminal-goal"),
                     "Task: stale callback",
                 ),
                 1,
@@ -2633,15 +2596,7 @@ class CliTests(unittest.TestCase):
             callback_time = time.time()
             queue_store.write_request(
                 root / "pending" / "crash-window.json",
-                {
-                    "version": 1,
-                    "id": "crash-window",
-                    "created_at": callback_time,
-                    "cwd": tmp,
-                    "target": {"kind": "session", "value": "thread-1"},
-                    "goal_id": "recovery-goal",
-                    "prompt": "Task: callback persisted before goal timestamp",
-                },
+                atc_records.callback_record("crash-window", tmp, target={"kind": "session", "value": "thread-1"}, prompt="Task: callback persisted before goal timestamp", created_at=callback_time, goal_id="recovery-goal"),
             )
 
             self.assertFalse(goals.process_goal_reminders(root))
@@ -3060,14 +3015,7 @@ class CliTests(unittest.TestCase):
 
             delivery = IncompleteDelivery()
             queue_root = Path(tmp) / "queue"
-            request = {
-                "version": 1,
-                "id": "desktop-timeout",
-                "created_at": 1.0,
-                "cwd": tmp,
-                "target": {"kind": "session", "value": "desktop-thread"},
-                "prompt": "wake up",
-            }
+            request = atc_records.callback_record("desktop-timeout", tmp, target={"kind": "session", "value": "desktop-thread"}, prompt="wake up", created_at=1.0)
             payload = {
                 "command": ["unused"],
                 "prompt": "wake up",
@@ -3118,14 +3066,7 @@ class CliTests(unittest.TestCase):
                     pass
 
             queue_root = Path(tmp) / "queue"
-            request = {
-                "version": 1,
-                "id": "desktop-late-ack",
-                "created_at": 1.0,
-                "cwd": tmp,
-                "target": {"kind": "session", "value": "desktop-thread"},
-                "prompt": "wake up",
-            }
+            request = atc_records.callback_record("desktop-late-ack", tmp, target={"kind": "session", "value": "desktop-thread"}, prompt="wake up", created_at=1.0)
             ack = Path(tmp) / "acks" / "callback.json"
             payload = {
                 "command": ["unused"],
@@ -3172,15 +3113,7 @@ class CliTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "queue"
             queue_store.ensure_daemon_dirs(root)
-            request = {
-                "version": 1,
-                "id": "desktop-unknown",
-                "created_at": 1.0,
-                "cwd": tmp,
-                "target": {"kind": "session", "value": "desktop-thread"},
-                "prompt": "wake up",
-                "retain_target_lease": True,
-            }
+            request = atc_records.callback_record("desktop-unknown", tmp, target={"kind": "session", "value": "desktop-thread"}, prompt="wake up", created_at=1.0, retain_target_lease=True)
             queue_store.write_request(layout.request_path(root, "failed", "desktop-unknown"), request)
             with mock.patch.dict(os.environ, {layout.TARGET_LOCK_DIR_ENV: str(Path(tmp) / "target-locks")}, clear=False):
                 delivery_engine.retain_target_lease(root, request)
@@ -3193,15 +3126,7 @@ class CliTests(unittest.TestCase):
             root_a = Path(tmp) / "queue-a"
             root_b = Path(tmp) / "queue-b"
             target = {"kind": "session", "value": "desktop-thread"}
-            failed = {
-                "version": 1,
-                "id": "desktop-unknown",
-                "created_at": 1.0,
-                "cwd": tmp,
-                "target": target,
-                "prompt": "wake up",
-                "retain_target_lease": True,
-            }
+            failed = atc_records.callback_record("desktop-unknown", tmp, target=target, prompt="wake up", created_at=1.0, retain_target_lease=True)
             queue_store.ensure_daemon_dirs(root_a)
             queue_store.write_request(layout.request_path(root_a, "failed", "desktop-unknown"), failed)
             self._write_request(root_b, "same-session", tmp, target=target)
@@ -3234,14 +3159,7 @@ class CliTests(unittest.TestCase):
         target: dict[str, str] | None = None,
     ) -> None:
         (root / "pending").mkdir(parents=True, exist_ok=True)
-        request = {
-            "version": 1,
-            "id": request_id,
-            "created_at": 1.0,
-            "cwd": cwd,
-            "target": target or {"kind": "last"},
-            "prompt": "wake up",
-        }
+        request = atc_records.callback_record(request_id, cwd, target=target or {"kind": "last"}, prompt="wake up", created_at=1.0)
         (root / "pending" / f"{request_id}.json").write_text(
             json.dumps(request) + "\n",
             encoding="utf-8",

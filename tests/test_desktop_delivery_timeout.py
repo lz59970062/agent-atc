@@ -25,6 +25,7 @@ from agent_atc.engine import delivery as delivery_engine
 from agent_atc.harness.codex import app_server
 from agent_atc.store import records as queue_store
 from agent_atc.store import layout
+import atc_records
 
 
 class DesktopDeliveryTimeoutTests(unittest.TestCase):
@@ -35,13 +36,7 @@ class DesktopDeliveryTimeoutTests(unittest.TestCase):
         self.root = self.directory / "queue"
         self.events = self.directory / "rpc-events.jsonl"
         self.cli_calls = self.directory / "cli-calls"
-        self.request = {
-            "version": 1, "id": "desktop-fixture", "created_at": time.time(),
-            "agent": "codex", "cwd": str(self.directory), "queue_dir": str(self.root),
-            "target": {"kind": "session", "value": "fixture-original-session"},
-            "target_source": "explicit", "prompt": "Model-free Desktop delivery fixture",
-            "sandbox_mode": "workspace-write", "attempts": 0,
-        }
+        self.request = atc_records.callback_record("desktop-fixture", str(self.directory), target={"kind": "session", "value": "fixture-original-session"}, prompt="Model-free Desktop delivery fixture", created_at=time.time(), agent="codex", queue_dir=str(self.root), target_source="explicit", sandbox_mode="workspace-write", attempts=0)
         self.stack = contextlib.ExitStack()
         self.addCleanup(self.stack.close)
         self.stack.enter_context(mock.patch.dict(os.environ, {
