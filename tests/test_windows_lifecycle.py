@@ -164,8 +164,8 @@ class WindowsLifecycleTests(unittest.TestCase):
         os.environ.update(environment)
         self.assertEqual(workload.call_count, 1)
         result = json.loads(layout.managed_result_path(self.root, str(task["id"])).read_text(encoding="utf-8"))
-        self.assertEqual(result["exit_code"], 7)
-        self.assertEqual(result["outcome"], "completed")
+        self.assertEqual(result["observed"]["exit_code"], 7)
+        self.assertEqual(result["observed"]["state"], "exited")
         # Also model the crash after result publication but before metadata.
         task.update(state="running", boot_id="fixture-boot")
         managed_tasks.write_managed_task(self.root, task)

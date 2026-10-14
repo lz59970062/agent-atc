@@ -34,6 +34,7 @@ from agent_atc.harness import AGENTS, CHILD_AGENT_NAMES, ChildOptions, get_agent
 from agent_atc.runtime import worker_command
 from agent_atc.core import ids
 from test_cli import assert_private_file, executable_python_fixture, patch_fixture_commands
+import atc_records
 
 
 PI_THINKING_LEVELS = ("off", "minimal", "low", "medium", "high", "xhigh", "max")
@@ -318,14 +319,14 @@ class PiAgentContractTests(unittest.TestCase):
                 self.assertNotIn("--system-prompt", task["wrapped_command"])
                 self.assertEqual(task["agent"], parent)
                 self.assertEqual(task["target"], {"kind": "session", "value": f"parent-{parent}"})
-                self.assertEqual(Path(task["agent_prompt_path"]).read_bytes(), prompt.encode("utf-8"))
+                self.assertEqual(Path(task["agent_prompt_path"]).read_bytes(), atc_records.agent_prompt(prompt, task).encode("utf-8"))
                 self.assertNotIn(prompt, path.read_text(encoding="utf-8"))
                 assert_private_file(self, Path(task["agent_prompt_path"]))
                 assert_private_file(self, Path(task["environment_path"]))
                 self.assertEqual(self.run_worker(path, task), exit_code,
                                  Path(task["log_path"]).read_text(encoding="utf-8"))
                 received = json.loads(capture.read_text(encoding="utf-8"))
-                self.assertEqual(received["prompt"], prompt)
+                self.assertEqual(received["prompt"], atc_records.agent_prompt(prompt, task))
                 self.assertIsNone(received["system_prompt"])
                 self.assertEqual(received["cwd"], str(self.directory))
                 self.assertEqual(received["argv"], ["--print", "--mode", "text", "--no-session",
@@ -344,7 +345,7 @@ class PiAgentContractTests(unittest.TestCase):
                 assert_private_file(self, result_path)
                 self.assertFalse(Path(task["environment_path"]).exists())
                 durable = json.loads(layout.managed_result_path(self.queue, task["id"]).read_text(encoding="utf-8"))
-                self.assertEqual(durable["exit_code"], exit_code)
+                self.assertEqual(durable["observed"]["exit_code"], exit_code)
                 log = Path(task["log_path"]).read_text(encoding="utf-8")
                 self.assertIn(report, log)
                 self.assertIn("fixture Pi diagnostic", log)
@@ -647,7 +648,7 @@ class PiAgentContractTests(unittest.TestCase):
         self.assertEqual(command[command.index("--system-prompt") + 1], str(snapshot))
         self.assertNotIn(str(source), command)
         self.assertNotIn(system_text, path.read_text(encoding="utf-8"))
-        self.assertEqual(Path(task["agent_prompt_path"]).read_text(encoding="utf-8"), user_prompt)
+        self.assertEqual(Path(task["agent_prompt_path"]).read_text(encoding="utf-8"), atc_records.agent_prompt(user_prompt, task))
         self.assertEqual(task["cwd"], str(child.resolve()))
 
     def test_yaml_system_prompt_is_relative_to_the_template_and_cli_file_overrides_it(self):
@@ -728,7 +729,7 @@ class PiAgentContractTests(unittest.TestCase):
                 received = json.loads(capture.read_text(encoding="utf-8"))
                 self.assertEqual(received["system_prompt"], original_system)
                 self.assertEqual(received["system_prompt_path"], task["agent_system_prompt_path"])
-                self.assertEqual(received["prompt"], user_prompt)
+                self.assertEqual(received["prompt"], atc_records.agent_prompt(user_prompt, task))
                 snapshot = Path(task["agent_system_prompt_path"])
                 self.assertEqual(snapshot.read_text(encoding="utf-8"), original_system)
                 assert_private_file(self, snapshot)

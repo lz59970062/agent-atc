@@ -55,9 +55,8 @@ class HealthArtifacts:
         self.write_json(layout.managed_task_path(self.root, task_id), task)
         return task
 
-    def result(self, task, **updates):
-        result = {"version": 1, "id": task["id"], "exit_code": 7, "completed_at": 1000.0, "outcome": "completed"}
-        result.update(updates)
+    def result(self, task, exit_code=7, completed_at=1000.0, **updates):
+        result = atc_records.result_record(task, exit_code=exit_code, ended_at=completed_at, **updates)
         self.write_json(layout.managed_result_path(self.root, task["id"]), result)
 
     def callback(self, callback_id=ids.callback_id("fixture-task"), state="pending", **updates):
@@ -170,7 +169,7 @@ class RuntimeHealthTests(HealthArtifacts, unittest.TestCase):
 
     def test_corrupt_result_and_task_record_are_visible_without_exposing_contents(self):
         task = self.task()
-        self.result(task, id="different-task", exit_code="SECRET_INVALID_RESULT")
+        self.result(task, root="different-task", exit_code="SECRET_INVALID_RESULT")
         invalid = layout.managed_task_path(self.root, "corrupt-record")
         invalid.parent.mkdir(parents=True)
         invalid.write_text("SECRET_INVALID_JSON", encoding="utf-8")

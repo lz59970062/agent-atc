@@ -10,7 +10,7 @@ import sys
 import time
 from datetime import datetime
 from pathlib import Path
-from ..core import capabilities, envelope, ids, records
+from ..core import capabilities, envelope, ids, records, results
 from . import routes
 from ..harness.claude import session as claude_session
 from ..harness.pi import channel as pi_channel
@@ -456,6 +456,9 @@ def submit_managed_run(args: argparse.Namespace) -> int:
                 "agent_result_path": str(agent_result_path),
             }
         )
+        if not getattr(args, "no_report", False):
+            # The child writes its claims here; the worker validates them into result.json.
+            task["report_path"] = str(task_directory / results.REPORT_FILE_NAME)
         if agent_system_prompt_path is not None:
             task.update({
                 "agent_system_prompt_path": str(agent_system_prompt_path),
@@ -464,7 +467,10 @@ def submit_managed_run(args: argparse.Namespace) -> int:
     try:
         queue_store.private_directory(task_directory)
         if agent_prompt_path is not None:
-            queue_store.write_private_text(agent_prompt_path, str(args.agent_prompt_text))
+            prompt_text = str(args.agent_prompt_text)
+            if task.get("report_path"):
+                prompt_text += "\n\n" + results.REPORT_INSTRUCTIONS.format(path=task["report_path"])
+            queue_store.write_private_text(agent_prompt_path, prompt_text)
         if agent_system_prompt_path is not None:
             queue_store.write_private_text(agent_system_prompt_path, args.agent_system_prompt_text)
         queue_store.write_request(environment_path, {"version": 1, "environment": environment})

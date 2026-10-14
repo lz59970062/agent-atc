@@ -22,6 +22,7 @@ try:
 except ImportError:  # pragma: no cover - Windows uses its own file locks
     fcntl = None
 
+from ..core import results
 from .. import __version__
 from ..harness.pi import channel as pi_channel
 from ..engine import routes
@@ -176,15 +177,14 @@ def runtime_issues(root: Path) -> list[dict[str, object]]:
             result = json.loads(path.read_text(encoding="utf-8"))
         except FileNotFoundError:
             return None
-        if not isinstance(result, dict) or result.get("id") != task["id"] or type(result.get("exit_code")) is not int:
-            raise ValueError("invalid result identity")
+        results.observed_exit(result, str(task["id"]))
         return result
 
     def handoff(task: dict[str, object], result: dict[str, object] | None, record_path: Path) -> None:
         task_id = str(task["id"])
         if managed_tasks.managed_callback_exists(root, task_id):
             return
-        finished = (result or {}).get("completed_at")
+        finished = results.seconds(((result or {}).get("observed") or {}).get("ended_at"))
         if not isinstance(finished, (int, float)):
             finished = next((task.get(key) for key in ("completed_at", "interrupted_at", "launch_failed_at")
                              if isinstance(task.get(key), (int, float))), record_path.stat().st_mtime)

@@ -15,3 +15,23 @@ def callback_record(request_id: str, cwd: str, *, target: dict[str, str], prompt
     record.update(fields)
     record.setdefault("requires", capabilities.required_for(record))
     return record
+
+
+def agent_prompt(prompt: str, task: dict[str, object]) -> str:
+    """What a child agent receives: the user's prompt verbatim, then the report request."""
+    from agent_atc.core import results
+
+    if not task.get("report_path"):
+        return prompt
+    return prompt + "\n\n" + results.REPORT_INSTRUCTIONS.format(path=task["report_path"])
+
+
+def result_record(task: dict[str, object], *, exit_code: int, ended_at: float, started_at: float | None = None,
+                  **fields: object) -> dict[str, object]:
+    """An atc.result/1 record for a task whose process ATC saw exit."""
+    from agent_atc.core import ids, results
+
+    record = results.exited(task, exit_code=exit_code, started_at=started_at, ended_at=ended_at,
+                            attempt=ids.attempt_id(str(task["id"]), 1), log="attempt-1.log")
+    record.update(fields)
+    return record

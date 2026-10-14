@@ -243,6 +243,8 @@ def main() -> int:
             choices=adapter.reasoning_efforts or REASONING_EFFORTS,
             help="Child reasoning effort; PI Agent maps this to --thinking; model must support it",
         )
+        child_parser.add_argument("--no-report", action="store_true",
+                                  help="Do not ask the child for a structured report (ATC_REPORT_FILE)")
         child_parser.add_argument("agent_prompt", nargs=argparse.REMAINDER)
 
     screen_worker_parser = sub.add_parser("_screen-worker", help=argparse.SUPPRESS)

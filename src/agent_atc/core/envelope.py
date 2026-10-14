@@ -59,12 +59,28 @@ def source_text(request: Mapping[str, object]) -> str:
     return "external job (atc done)"
 
 
+def report_text(request: Mapping[str, object]) -> str | None:
+    """A child agent's own account; always marked as a claim ATC did not verify."""
+    status = request.get("report_status")
+    if isinstance(status, str) and status:
+        count = request.get("report_artifact_count")
+        count = count if isinstance(count, int) else 0
+        return f"{status} (claimed, unverified) · {count} artifact{'' if count == 1 else 's'}"
+    error = request.get("report_error")
+    if request.get("task_kind") == "agent" and isinstance(error, str) and error:
+        return "none: " + (error if len(error) <= 80 else error[:77] + "...")
+    return None
+
+
 def render(request: Mapping[str, object], details_path: Path, ack_command: str) -> str:
     task = " ".join(str(request.get("task") or "Task update").split())
     if len(task) > 180:
         task = task[:177] + "..."
     lines = [f"[atc] {request['id']}", f"Task: {task}", f"Result: {result_text(request)}",
              f"From: {source_text(request)}"]
+    report = report_text(request)
+    if report:
+        lines.append(f"Report: {report}")
     log = request.get("log_path")
     result = request.get("agent_result_path")
     if isinstance(log, str) and log:
@@ -73,6 +89,9 @@ def render(request: Mapping[str, object], details_path: Path, ack_command: str) 
         if isinstance(result, str) and Path(result).parent == parent:
             files.append(Path(result).name)
             result = None
+        result_json = request.get("result_path")
+        if isinstance(result_json, str) and Path(result_json).parent == parent:
+            files.append(Path(result_json).name)
         lines.append(f"Files: {parent}/ ({', '.join(files)})")
     if result:
         lines.append(f"Agent result: {result}")

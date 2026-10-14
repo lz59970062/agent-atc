@@ -17,6 +17,7 @@ from agent_atc.engine import tasks as managed_tasks
 from agent_atc.engine import worker as task_worker
 from agent_atc.core import ids
 from test_cli import executable_python_fixture, patch_fixture_commands
+import atc_records
 
 
 class TemplateContractTests(unittest.TestCase):
@@ -89,7 +90,7 @@ class TemplateContractTests(unittest.TestCase):
         self.assertIsNone(task.get("child_reasoning_effort"))
         self.assertNotIn("--model", task["wrapped_command"])
         self.assertFalse(any(arg.startswith("model_reasoning_effort=") for arg in task["wrapped_command"]))
-        self.assertEqual(Path(task["agent_prompt_path"]).read_text(encoding="utf-8"), prompt)
+        self.assertEqual(Path(task["agent_prompt_path"]).read_text(encoding="utf-8"), atc_records.agent_prompt(prompt, task))
 
     def test_claude_template_inherits_cli_model_and_does_not_receive_codex_effort(self):
         self.assertEqual(self.invoke(worker="claude", options=["--template", "test"]), 0)

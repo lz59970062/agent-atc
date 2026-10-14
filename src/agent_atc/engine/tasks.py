@@ -15,7 +15,7 @@ from ..harness.base import DEFAULT_APPROVALS_REVIEWER, DEFAULT_APPROVAL_POLICY, 
 from ..runtime import worker_command
 from ..owners import LaunchError, OwnerState, ScreenBackend, SystemdUserBackend, LaunchdBackend
 from ..owners.windows import WindowsBackend
-from ..core import ids
+from ..core import ids, results
 from ..store import layout
 from ..owners import host
 from ..store import records as queue_store
@@ -88,6 +88,17 @@ def load_managed_task(path: Path) -> dict[str, object]:
     if backend == "screen" and not isinstance(task.get("screen_session"), str):
         raise ValueError("managed task is missing screen metadata")
     return task
+
+
+def report_fields(result: dict[str, object]) -> dict[str, object]:
+    """The part of a child's report a callback envelope shows; claims stay marked as claims."""
+    report = result.get("report")
+    if isinstance(report, dict):
+        return {"report_status": report.get("status"), "report_artifact_count": len(report.get("artifacts") or []),
+                "report_error": result.get("report_error")}
+    if result.get("kind") == "agent" and result.get("report_error"):
+        return {"report_status": None, "report_artifact_count": 0, "report_error": result["report_error"]}
+    return {}
 
 
 def managed_callback_exists(root: Path, task_id: str) -> bool:
@@ -219,6 +230,12 @@ def managed_callback_request(
             "outcome": task.get("outcome", "unknown"),
         }
     )
+    result_path = layout.managed_result_path(Path(str(task["queue_dir"])), str(task["id"]))
+    if result_path.exists():
+        request["result_path"] = str(result_path)
+    for key in ("report_status", "report_artifact_count", "report_error"):
+        if key in task:
+            request[key] = task[key]
     if isinstance(task.get("exit_code"), int):
         request["exit_code"] = task["exit_code"]
     if task.get("recovery_reason"):
@@ -527,9 +544,11 @@ def recover_managed_tasks(root: Path) -> int:
             result_path = layout.managed_result_path(root, task_id)
             if state in ("running", "launching") and result_path.exists():
                 result = json.loads(result_path.read_text(encoding="utf-8"))
-                if not isinstance(result, dict) or result.get("id") != task_id or not isinstance(result.get("exit_code"), int):
-                    raise ValueError("invalid managed result identity or exit code")
-                task.update({key: result[key] for key in ("exit_code", "completed_at", "outcome") if key in result})
+                task["exit_code"] = results.observed_exit(result, task_id)
+                ended = results.seconds(result["observed"].get("ended_at"))
+                if ended is not None:
+                    task["completed_at"] = ended
+                task.update(report_fields(result))
                 task["state"] = "completed"
                 task["outcome"] = "completed"
                 write_managed_task(root, task)

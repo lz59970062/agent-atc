@@ -9,6 +9,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from ..core import ids, results
 from ..harness import get_child_agent
 from ..system import windows_io, windows_process
 from ..store import layout
@@ -165,12 +166,17 @@ def run_managed_worker_locked(root: Path, task: dict[str, object]) -> int:
                 # Pi otherwise treats a missing/unreadable filename as literal
                 # system text or silently falls back to its default prompt.
                 managed_tasks.read_agent_system_prompt(expected)
+            child_environment = managed_tasks.child_agent_environment(environment)
+            report_path = Path(str(task["report_path"])) if task.get("report_path") else None
+            if report_path is not None:
+                report_path.unlink(missing_ok=True)  # never read a report left by an earlier attempt
+                child_environment[results.REPORT_ENV] = str(report_path)
             run_kwargs.update(
                 {
                     "input": prompt,
                     "text": True,
                     "encoding": "utf-8",
-                    "env": managed_tasks.child_agent_environment(environment),
+                    "env": child_environment,
                 }
             )
             captures_stdout = get_child_agent(str(task["agent_worker"])).child_result_mode == "stdout"
@@ -196,13 +202,23 @@ def run_managed_worker_locked(root: Path, task: dict[str, object]) -> int:
             completed = subprocess.run(command, **run_kwargs)
         exit_code = completed.returncode
         completed_at = time.time()
-        result = {
-            "version": 1,
-            "id": task["id"],
-            "exit_code": exit_code,
-            "completed_at": completed_at,
-            "outcome": "completed",
-        }
+        report = report_error = None
+        if task.get("report_path"):
+            try:
+                report_text = Path(str(task["report_path"])).read_text(encoding="utf-8")
+            except FileNotFoundError:
+                report_text = None
+            except (OSError, UnicodeError) as exc:
+                report_text, report_error = None, f"report could not be read: {exc}"
+            if report_error is None:
+                report, report_error = results.parse_report(report_text)
+        result = results.exited(
+            task, exit_code=exit_code, started_at=task.get("started_at"), ended_at=completed_at,
+            attempt=ids.attempt_id(str(task["id"]), max(1, managed_tasks.managed_launch_attempt_count(task))),
+            log=Path(str(task["log_path"])).name if task.get("log_path") else None,
+            text_result=Path(str(task["agent_result_path"])).name if task.get("agent_result_path") else None,
+            report=report, report_error=report_error,
+        )
         queue_store.write_request(layout.managed_result_path(root, str(task["id"])), result)
     except (OSError, UnicodeError, ValueError) as exc:
         task["state"] = "interrupted"
@@ -215,7 +231,8 @@ def run_managed_worker_locked(root: Path, task: dict[str, object]) -> int:
 
     # The durable result is authoritative. Failure to publish metadata or a
     # callback must not reclassify successful execution as a launch failure.
-    task.update({key: result[key] for key in ("exit_code", "completed_at", "outcome")})
+    task.update(exit_code=exit_code, completed_at=completed_at, outcome="completed")
+    task.update(managed_tasks.report_fields(result))
     task["state"] = "completed"
     try:
         managed_tasks.write_managed_task(root, task)

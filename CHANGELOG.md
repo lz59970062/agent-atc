@@ -23,6 +23,12 @@
   tower leaves a callback that needs an unknown capability untouched in the
   queue. Records without the schema are refused with a hint to run
   `atc migrate`.
+- Task results are `atc.result/1`: `observed` holds what ATC saw (state,
+  exit code, attempt, RFC 3339 times, backend, log), kept apart from `report`,
+  the child agent's own claims. `atc agent` asks the child to write a JSON
+  report to `$ATC_REPORT_FILE` (opt out with `--no-report`); it is validated
+  and bounded, and the envelope shows it as `Report: … (claimed, unverified)`.
+  A missing report never fails a task.
 - Remove `--last`. ATC only resumes an explicitly bound session and never
   falls back to "the most recent session"; stored callbacks must name one.
 - Remove the `codex-long-task-wakeup` command alias and the automatic adoption

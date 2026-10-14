@@ -209,7 +209,7 @@ class RealStandaloneScreenTests(unittest.TestCase):
                     callback_path = layout.request_path(root, "pending", ids.callback_id(str(task["id"])))
                     self.wait_until(lambda: callback_path.exists(), "screen workload did not produce durable callback")
                     result = json.loads(layout.managed_result_path(root, str(task["id"])).read_text())
-                    self.assertEqual(result["exit_code"], 7)
+                    self.assertEqual(result["observed"]["exit_code"], 7)
                     self.assertEqual(output.read_text(), "finished after standalone coordinator was killed")
                     with mock.patch.dict(os.environ, environment, clear=True):
                         self.wait_until(

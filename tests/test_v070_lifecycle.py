@@ -22,6 +22,7 @@ from agent_atc.store import records as queue_store
 from agent_atc.store import layout
 from agent_atc.owners import LaunchError, OwnerState, ScreenBackend, SystemdUserBackend
 from agent_atc.core import ids
+import atc_records
 
 
 class NativeTaskLifecycleTests(unittest.TestCase):
@@ -127,7 +128,7 @@ class NativeTaskLifecycleTests(unittest.TestCase):
     def test_persisted_result_wins_over_lost_manager_and_callback_is_idempotent(self) -> None:
         path = self.submit()
         task = self.mark_running(path)
-        result = {"version": 1, "id": task["id"], "exit_code": 7, "completed_at": time.time()}
+        result = atc_records.result_record(task, exit_code=7, ended_at=time.time())
         queue_store.write_request(layout.managed_result_path(self.root, str(task["id"])), result)
         with mock.patch.object(SystemdUserBackend, "probe", return_value=OwnerState.UNKNOWN), mock.patch.object(
             SystemdUserBackend, "launch"
@@ -151,10 +152,8 @@ class NativeTaskLifecycleTests(unittest.TestCase):
         task = self.mark_running(path)
         task["started_at"] = 100.0
         managed_tasks.write_managed_task(self.root, task)
-        queue_store.write_request(layout.managed_result_path(self.root, str(task["id"])), {
-            "version": 1, "id": task["id"], "exit_code": 0,
-            "completed_at": 225.5,
-        })
+        queue_store.write_request(layout.managed_result_path(self.root, str(task["id"])),
+                                  atc_records.result_record(task, exit_code=0, ended_at=225.5))
         with mock.patch.object(cli.time, "time", return_value=10000.0):
             managed_tasks.recover_managed_tasks(self.root)
         callback = dispatch.load_request(layout.request_path(self.root, "pending", ids.callback_id(str(task["id"]))))
@@ -165,9 +164,8 @@ class NativeTaskLifecycleTests(unittest.TestCase):
     def test_foreign_result_identity_cannot_mark_task_complete(self) -> None:
         path = self.submit()
         task = self.mark_running(path)
-        queue_store.write_request(layout.managed_result_path(self.root, str(task["id"])), {
-            "version": 1, "id": "different-task", "exit_code": 0,
-        })
+        queue_store.write_request(layout.managed_result_path(self.root, str(task["id"])),
+                                  atc_records.result_record({"id": "different-task"}, exit_code=0, ended_at=time.time()))
         with mock.patch.object(SystemdUserBackend, "probe", return_value=OwnerState.ABSENT), mock.patch.object(
             SystemdUserBackend, "launch"
         ) as launch:
@@ -350,7 +348,7 @@ class NativeTaskLifecycleTests(unittest.TestCase):
         self.assertFalse(task.get("callback_queued", False))
         self.assertEqual(list((self.root / "pending").glob("*.json")), [])
         result = json.loads(layout.managed_result_path(self.root, str(task["id"])).read_text())
-        self.assertEqual(result["exit_code"], 7)
+        self.assertEqual(result["observed"]["exit_code"], 7)
         with mock.patch.object(SystemdUserBackend, "launch") as relaunch:
             managed_tasks.recover_managed_tasks(self.root)
             managed_tasks.recover_managed_tasks(self.root)
@@ -379,8 +377,8 @@ class NativeTaskLifecycleTests(unittest.TestCase):
         self.assertEqual(task["state"], "running")
         self.assertNotIn("recovery_reason", task)
         result = json.loads(layout.managed_result_path(self.root, str(task["id"])).read_text())
-        self.assertEqual(result["outcome"], "completed")
-        self.assertEqual(result["exit_code"], 7)
+        self.assertEqual(result["observed"]["state"], "exited")
+        self.assertEqual(result["observed"]["exit_code"], 7)
         with mock.patch.object(SystemdUserBackend, "launch") as relaunch, mock.patch.object(
             SystemdUserBackend, "probe", return_value=OwnerState.UNKNOWN
         ):

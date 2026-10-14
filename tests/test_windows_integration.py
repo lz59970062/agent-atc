@@ -111,7 +111,7 @@ class WindowsIntegrationTests(unittest.TestCase):
             callback = layout.request_path(self.root, "pending", ids.callback_id(str(task["id"])))
             self.wait_until(callback.exists, "runner did not publish its callback")
             result = json.loads(layout.managed_result_path(self.root, task["id"]).read_text(encoding="utf-8"))
-            self.assertEqual(result["exit_code"], 7)
+            self.assertEqual(result["observed"]["exit_code"], 7)
             self.assertEqual(managed_tasks.load_managed_task(task_path)["state"], "completed")
             self.assertIn("completed after coordinator exit", Path(task["log_path"]).read_text(encoding="utf-8"))
             self.assertEqual(json.loads(callback.read_text(encoding="utf-8"))["target"]["value"], "fixture-no-model")
