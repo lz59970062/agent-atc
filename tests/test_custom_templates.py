@@ -13,6 +13,7 @@ from unittest import mock
 from agent_atc import cli
 from agent_atc.engine import tasks as managed_tasks
 from agent_atc.engine import worker as task_worker
+from agent_atc.core import ids
 from test_cli import executable_python_fixture, patch_fixture_commands
 
 
@@ -211,7 +212,7 @@ class CustomTemplateTests(unittest.TestCase):
         self.assertEqual(received["prompt"], frozen_prompt)
         self.assertIn("original-model", received["argv"])
         self.assertIn('model_reasoning_effort="high"', received["argv"])
-        callback = json.loads((self.queue / "pending" / f"{task['id']}.json").read_text())
+        callback = json.loads((self.queue / "pending" / f"{ids.callback_id(task['id'])}.json").read_text())
         self.assertEqual(callback["agent_template_version"], 8)
         self.assertEqual(callback["agent_template_source"], str(path.resolve()))
         self.assertEqual(callback["agent_template_handoff"], "ORIGINAL HANDOFF")

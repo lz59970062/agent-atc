@@ -8,10 +8,9 @@ import re
 import secrets
 import sys
 import time
-import uuid
 from datetime import datetime
 from pathlib import Path
-from ..core import envelope
+from ..core import envelope, ids
 from . import routes
 from ..harness.claude import session as claude_session
 from ..harness.pi import channel as pi_channel
@@ -145,6 +144,19 @@ def attach_routing_text(prompt: str, request: dict[str, object]) -> str:
     return f"{prompt}\n\n{routing_text(request)}"
 
 
+def new_callback_id(queue: Path) -> str:
+    """The first callback of a fresh root that no task or callback uses yet."""
+    queue = queue.expanduser().absolute()
+
+    def taken(root: str) -> bool:
+        callback = ids.callback_id(root)
+        return (layout.managed_task_dir(queue, root).exists() or layout.ack_path(queue, callback).exists()
+                or any(layout.request_path(queue, state, callback).exists()
+                       for state in (layout.ACTIVE_STATE, "pending", "running", "done", "failed", "canceled")))
+
+    return ids.callback_id(ids.new_root(taken))
+
+
 def make_request(
     args: argparse.Namespace, prompt: str, *, duration: float | None = None,
 ) -> dict[str, object]:
@@ -152,7 +164,7 @@ def make_request(
     agent = resolve_agent(args)
     request = {
         "version": 1,
-        "id": getattr(args, "_callback_id", None) or uuid.uuid4().hex,
+        "id": getattr(args, "_callback_id", None) or new_callback_id(layout.queue_dir(args)),
         "created_at": time.time(),
         "cwd": args.cwd,
         "agent": agent,
@@ -349,7 +361,7 @@ def submit_managed_run(args: argparse.Namespace) -> int:
     target, target_source = bind_target(args)
     try:
         while True:
-            task_id = secrets.token_hex(4)
+            task_id = ids.new_root()
             task_directory = layout.managed_task_dir(root, task_id)
             try:
                 # Reserve atomically so concurrent submissions cannot share an ID.

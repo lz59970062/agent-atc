@@ -42,6 +42,7 @@ from agent_atc import runtime as atc_runtime
 from agent_atc.store import records as queue_store
 from agent_atc.system import shell
 from agent_atc.store import layout
+from agent_atc.core import ids
 import atc_records
 
 
@@ -317,7 +318,7 @@ class CliTests(unittest.TestCase):
             self.assertIsNone(result["claude_session_id"])
             self.assertIsNone(result["claudecode"])
             assert_private_file(self, result_path)
-            callback = dispatch.load_request(root / "pending" / f"{task['id']}.json")
+            callback = dispatch.load_request(root / "pending" / f"{ids.callback_id(task['id'])}.json")
             self.assertEqual(callback["agent_worker"], "codex")
             self.assertIn("Child agent: Codex", Path(callback["prompt_details_path"]).read_text())
             self.assertIn(result_path.name, callback["prompt"])
@@ -389,7 +390,7 @@ class CliTests(unittest.TestCase):
             assert_private_file(self, result_path)
             self.assertFalse(environment_path.exists())
             self.assertNotIn("secret-sentinel-value", output.getvalue())
-            callback = dispatch.load_request(root / "pending" / f"{task['id']}.json")
+            callback = dispatch.load_request(root / "pending" / f"{ids.callback_id(task['id'])}.json")
             self.assertEqual(callback["agent"], "codex")
             self.assertEqual(callback["agent_worker"], "claude")
             details = Path(callback["prompt_details_path"]).read_text()
@@ -608,8 +609,8 @@ class CliTests(unittest.TestCase):
             self.assertEqual(task["exit_code"], 7)
             self.assertNotIn("token", task)
             self.assertFalse(Path(str(task["environment_path"])).exists())
-            callback = dispatch.load_request(root / "pending" / f"{task['id']}.json")
-            self.assertEqual(callback["id"], task["id"])
+            callback = dispatch.load_request(root / "pending" / f"{ids.callback_id(task['id'])}.json")
+            self.assertEqual(callback["id"], ids.callback_id(task["id"]))
             self.assertEqual(callback["exit_code"], 7)
             self.assertIn(f"Task log: {task['log_path']}", Path(callback["prompt_details_path"]).read_text())
             self.assertIn(Path(task["log_path"]).name, callback["prompt"])
@@ -638,7 +639,7 @@ class CliTests(unittest.TestCase):
             restart.assert_not_called()
             task = managed_tasks.load_managed_task(task_path)
             self.assertEqual(task["recovery_reason"], "interrupted_by_host_reboot")
-            callback = dispatch.load_request(root / "pending" / f"{task['id']}.json")
+            callback = dispatch.load_request(root / "pending" / f"{ids.callback_id(task['id'])}.json")
             self.assertEqual(callback["agent"], "claude")
             self.assertEqual(callback["target"], {"kind": "session", "value": "test-thread"})
             self.assertIn("not automatically restarted", callback["prompt"])
@@ -664,7 +665,7 @@ class CliTests(unittest.TestCase):
                 self.assertEqual(managed_tasks.recover_managed_tasks(root), 0)
 
             relaunch.assert_not_called()
-            self.assertFalse((root / "pending" / f"{task['id']}.json").exists())
+            self.assertFalse((root / "pending" / f"{ids.callback_id(task['id'])}.json").exists())
 
     def test_cross_host_record_is_preserved_without_launch_or_callback(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -684,7 +685,7 @@ class CliTests(unittest.TestCase):
             task = managed_tasks.load_managed_task(task_path)
             self.assertEqual(task["state"], "foreign_host")
             self.assertEqual(task["recovery_reason"], "cross_host_recovery_unsupported")
-            self.assertFalse((root / "pending" / f"{task['id']}.json").exists())
+            self.assertFalse((root / "pending" / f"{ids.callback_id(task['id'])}.json").exists())
 
     def test_reboot_recovery_callback_ack_does_not_complete_bound_goal(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -717,10 +718,10 @@ class CliTests(unittest.TestCase):
             ):
                 self.assertEqual(managed_tasks.recover_managed_tasks(root), 1)
 
-            callback = dispatch.load_request(root / "pending" / f"{task['id']}.json")
+            callback = dispatch.load_request(root / "pending" / f"{ids.callback_id(task['id'])}.json")
             self.assertEqual(callback["goal_id"], "stage-goal")
             self.assertEqual(
-                callback_commands.ack(argparse.Namespace(queue_dir=str(root), id=task["id"], message="recovery inspected")),
+                callback_commands.ack(argparse.Namespace(queue_dir=str(root), id=callback["id"], message="recovery inspected")),
                 0,
             )
             goal = goals.load_goal(root, "stage-goal")
@@ -731,9 +732,10 @@ class CliTests(unittest.TestCase):
             reminders = [
                 dispatch.load_request(path)
                 for path in (root / "pending").glob("*.json")
-                if path.stem != task["id"]
+                if path.stem != ids.callback_id(task["id"])
             ]
             self.assertEqual(len(reminders), 1)
+            self.assertEqual(reminders[0]["id"], "g-stage-goal-c1")
             self.assertTrue(reminders[0]["goal_reminder"])
 
     def test_active_owner_lock_blocks_premature_recovery(self) -> None:
@@ -809,7 +811,7 @@ class CliTests(unittest.TestCase):
 
             task = managed_tasks.load_managed_task(task_path)
             self.assertEqual(task["state"], "interrupted")
-            callback = dispatch.load_request(root / "pending" / f"{task['id']}.json")
+            callback = dispatch.load_request(root / "pending" / f"{ids.callback_id(task['id'])}.json")
             self.assertEqual(callback["outcome"], "unknown")
             self.assertIn("wrapped_command_launch_failed", callback["prompt"])
 

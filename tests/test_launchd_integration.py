@@ -30,6 +30,7 @@ from agent_atc.owners import host
 from agent_atc.store import layout
 from agent_atc.install import diagnostics, launchd_service
 from agent_atc.owners import LaunchdBackend, OwnerState, macos
+from agent_atc.core import ids
 
 
 @unittest.skipUnless(sys.platform == "darwin" and os.environ.get("ATC_TEST_LAUNCHD") == "1",
@@ -110,7 +111,7 @@ class RealLaunchdTests(unittest.TestCase):
                 self.assertEqual(executions.read_text().splitlines(), ["executed"])
                 self.assertEqual(diagnostics.runtime_issues(root), [])
                 release.touch()
-                callback_path = layout.request_path(root, "pending", task["id"])
+                callback_path = layout.request_path(root, "pending", ids.callback_id(str(task["id"])))
                 self.wait_until(callback_path.exists, "task failed to publish callback")
                 self.wait_until(lambda: backend.probe(task_owner) == OwnerState.ABSENT, "task owner did not exit")
                 self.assertEqual(json.loads(layout.managed_result_path(root, task["id"]).read_text())["exit_code"], 7)

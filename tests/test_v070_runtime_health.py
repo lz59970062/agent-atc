@@ -19,6 +19,7 @@ from agent_atc.store import records as queue_store
 from agent_atc.store import layout
 from agent_atc.install import diagnostics
 from agent_atc.owners import OwnerState
+from agent_atc.core import ids
 import atc_records
 
 
@@ -59,7 +60,7 @@ class HealthArtifacts:
         result.update(updates)
         self.write_json(layout.managed_result_path(self.root, task["id"]), result)
 
-    def callback(self, callback_id="fixture-task", state="pending", **updates):
+    def callback(self, callback_id=ids.callback_id("fixture-task"), state="pending", **updates):
         value = atc_records.callback_record(callback_id, str(self.directory), target={"kind": "session", "value": "bound-fixture-session"}, prompt="SECRET_CALLBACK_CONTENT", agent="codex", last_error="SECRET_EXCEPTION_CONTENT")
         value.update(updates)
         self.write_json(layout.request_path(self.root, state, callback_id), value)
@@ -231,7 +232,7 @@ class RuntimeHealthTests(HealthArtifacts, unittest.TestCase):
         for state in (layout.ACTIVE_STATE, "pending", "running", "done", "failed", "canceled", "acks"):
             task_id = f"callback-{state}"
             self.task(task_id, state="completed", completed_at=100.0)
-            self.callback(task_id, state)
+            self.callback(ids.callback_id(task_id), state)
         issues, probe = self.observe_tasks()
         self.assertEqual(issues, [])
         probe.assert_not_called()

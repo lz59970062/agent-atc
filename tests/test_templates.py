@@ -15,6 +15,7 @@ from unittest import mock
 from agent_atc import cli
 from agent_atc.engine import tasks as managed_tasks
 from agent_atc.engine import worker as task_worker
+from agent_atc.core import ids
 from test_cli import executable_python_fixture, patch_fixture_commands
 
 
@@ -189,7 +190,7 @@ class TemplateContractTests(unittest.TestCase):
                 self.assertEqual(completed["exit_code"], exit_code)
                 report = Path(completed["agent_result_path"]).read_text(encoding="utf-8")
                 self.assertEqual(bool(report), exit_code == 0)
-                callback = json.loads((self.queue / "pending" / f"{task['id']}.json").read_text(encoding="utf-8"))
+                callback = json.loads((self.queue / "pending" / f"{ids.callback_id(task['id'])}.json").read_text(encoding="utf-8"))
                 self.assertEqual(callback["target"], {"kind": "session", "value": "parent-session"})
                 self.assertEqual(callback["agent"], "claude")
                 self.assertEqual(callback["exit_code"], exit_code)

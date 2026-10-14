@@ -32,6 +32,7 @@ from agent_atc.install import diagnostics
 from agent_atc.harness.pi import channel as pi_channel
 from agent_atc.harness import AGENTS, CHILD_AGENT_NAMES, ChildOptions, get_agent, get_child_agent
 from agent_atc.runtime import worker_command
+from agent_atc.core import ids
 from test_cli import assert_private_file, executable_python_fixture, patch_fixture_commands
 
 
@@ -372,7 +373,7 @@ class PiAgentContractTests(unittest.TestCase):
         self.assertEqual(self.run_worker(path, task), 1)
         self.assertEqual(Path(task["agent_result_path"]).read_bytes(), b"")
         self.assertEqual(managed_tasks.load_managed_task(path)["exit_code"], 1)
-        callback = dispatch.load_request(self.queue / "pending" / f"{task['id']}.json")
+        callback = dispatch.load_request(self.queue / "pending" / f"{ids.callback_id(task['id'])}.json")
         self.assertEqual(callback["exit_code"], 1)
         self.assertEqual(callback["agent"], "codex")
 
@@ -576,7 +577,7 @@ class PiAgentContractTests(unittest.TestCase):
         self.assertEqual(received["argv"], ["--print", "--mode", "text", "--no-session",
                                             "--model", "original-provider/original-model", "--thinking", "high"])
         self.assertEqual(managed_tasks.load_managed_task(path)["wrapped_command"], submitted_command)
-        callback = dispatch.load_request(self.queue / "pending" / f"{task['id']}.json")
+        callback = dispatch.load_request(self.queue / "pending" / f"{ids.callback_id(task['id'])}.json")
         self.assertEqual(callback["agent_template"], "review")
         self.assertEqual(callback["agent_template_version"], 8)
         self.assertEqual(callback["agent_template_source"], str(template.resolve()))
@@ -731,7 +732,7 @@ class PiAgentContractTests(unittest.TestCase):
                 snapshot = Path(task["agent_system_prompt_path"])
                 self.assertEqual(snapshot.read_text(encoding="utf-8"), original_system)
                 assert_private_file(self, snapshot)
-                callback = dispatch.load_request(self.queue / "pending" / f"{task['id']}.json")
+                callback = dispatch.load_request(self.queue / "pending" / f"{ids.callback_id(task['id'])}.json")
                 self.assertEqual(callback["agent"], "claude")
                 self.assertEqual(callback["target"], {"kind": "session", "value": "parent-claude"})
                 self.assertEqual(callback["exit_code"], 0)

@@ -29,6 +29,7 @@ from agent_atc.store import records as queue_store
 from agent_atc.store import layout
 from agent_atc.install import diagnostics
 from agent_atc.owners import SystemdUserBackend
+from agent_atc.core import ids
 
 
 @unittest.skipUnless(os.environ.get("ATC_TEST_SCREEN") == "1", "set ATC_TEST_SCREEN=1 for real screen/container test")
@@ -205,7 +206,7 @@ class RealStandaloneScreenTests(unittest.TestCase):
                     self.assertFalse(output.exists())
 
                     release.write_text("finish", encoding="utf-8")
-                    callback_path = layout.request_path(root, "pending", str(task["id"]))
+                    callback_path = layout.request_path(root, "pending", ids.callback_id(str(task["id"])))
                     self.wait_until(lambda: callback_path.exists(), "screen workload did not produce durable callback")
                     result = json.loads(layout.managed_result_path(root, str(task["id"])).read_text())
                     self.assertEqual(result["exit_code"], 7)

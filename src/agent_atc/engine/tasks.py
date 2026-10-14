@@ -15,6 +15,7 @@ from ..harness.base import DEFAULT_APPROVALS_REVIEWER, DEFAULT_APPROVAL_POLICY, 
 from ..runtime import worker_command
 from ..owners import LaunchError, OwnerState, ScreenBackend, SystemdUserBackend, LaunchdBackend
 from ..owners.windows import WindowsBackend
+from ..core import ids
 from ..store import layout
 from ..owners import host
 from ..store import records as queue_store
@@ -90,10 +91,12 @@ def load_managed_task(path: Path) -> dict[str, object]:
 
 
 def managed_callback_exists(root: Path, task_id: str) -> bool:
-    if layout.ack_path(root, task_id).exists():
+    """Whether the task's completion callback (its first) was already queued."""
+    callback = ids.callback_id(task_id)
+    if layout.ack_path(root, callback).exists():
         return True
     return any(
-        layout.request_path(root, state, task_id).exists()
+        layout.request_path(root, state, callback).exists()
         for state in (layout.ACTIVE_STATE, "pending", "running", "done", "failed", "canceled")
     )
 
@@ -126,7 +129,7 @@ def managed_task_namespace(task: dict[str, object]) -> argparse.Namespace:
         strict=bool(task.get("strict", False)),
         dry_run=False,
         wrapped_command=[str(part) for part in task["wrapped_command"]],
-        _callback_id=str(task["id"]),
+        _callback_id=ids.callback_id(str(task["id"])),
         _callback_target=target,
         _callback_target_source=str(task.get("target_source", "managed-task")),
         _callback_agent=str(task.get("agent", "codex")),

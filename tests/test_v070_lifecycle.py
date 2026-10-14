@@ -21,6 +21,7 @@ from agent_atc.owners import host
 from agent_atc.store import records as queue_store
 from agent_atc.store import layout
 from agent_atc.owners import LaunchError, OwnerState, ScreenBackend, SystemdUserBackend
+from agent_atc.core import ids
 
 
 class NativeTaskLifecycleTests(unittest.TestCase):
@@ -101,7 +102,7 @@ class NativeTaskLifecycleTests(unittest.TestCase):
             managed_tasks.recover_managed_tasks(self.root)
         launch.assert_not_called()
         self.assertEqual(managed_tasks.load_managed_task(path)["state"], "running")
-        self.assertFalse(layout.request_path(self.root, "pending", str(task["id"])).exists())
+        self.assertFalse(layout.request_path(self.root, "pending", ids.callback_id(str(task["id"]))).exists())
 
     def test_ambiguous_launch_is_never_reissued_even_after_owner_disappears(self) -> None:
         path = self.submit()
@@ -141,7 +142,7 @@ class NativeTaskLifecycleTests(unittest.TestCase):
         pending = list((self.root / "pending").glob("*.json"))
         self.assertEqual(len(pending), 1)
         callback = dispatch.load_request(pending[0])
-        self.assertEqual(callback["id"], task["id"])
+        self.assertEqual(callback["id"], ids.callback_id(task["id"]))
         self.assertEqual(callback["exit_code"], 7)
         self.assertEqual(callback["target"], {"kind": "session", "value": "bound-native-session"})
 
@@ -156,7 +157,7 @@ class NativeTaskLifecycleTests(unittest.TestCase):
         })
         with mock.patch.object(cli.time, "time", return_value=10000.0):
             managed_tasks.recover_managed_tasks(self.root)
-        callback = dispatch.load_request(layout.request_path(self.root, "pending", str(task["id"])))
+        callback = dispatch.load_request(layout.request_path(self.root, "pending", ids.callback_id(str(task["id"]))))
         self.assertEqual(callback["duration_seconds"], 125.5)
         self.assertIn("Duration: 2m 5.5s", callback["prompt_compact"])
         self.assertIn("Duration: 125.5s", Path(callback["prompt_details_path"]).read_text())

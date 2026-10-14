@@ -7,6 +7,10 @@
   `${ATC_HOME:-~/.atc}`, services and skills `agent-atc`, and the callback tag
   `[atc]`. Environment variables `CODEX_LONG_TASK_WAKEUP_*`, `LONG_TASK_WAKEUP_*`
   and `LTC_*` become `ATC_*`.
+- Give every callback a root and a kind suffix: a task's completion callback
+  is `<task id>-c1` instead of the bare task ID, an `atc done` callback gets a
+  fresh root (`<root>-c1`), and goal reminders are `g-<goal id>-c<N>` with the
+  ordinal reserved in the goal record. Generated goal IDs are 8 hex digits.
 - Remove `--last`. ATC only resumes an explicitly bound session and never
   falls back to "the most recent session"; stored callbacks must name one.
 - Remove the `codex-long-task-wakeup` command alias and the automatic adoption

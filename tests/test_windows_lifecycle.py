@@ -29,6 +29,7 @@ from agent_atc.store import layout
 from agent_atc.owners import LaunchError, OwnerState
 from agent_atc.owners.windows import WindowsBackend
 from agent_atc.system import windows_process
+from agent_atc.core import ids
 import atc_records
 
 
@@ -178,7 +179,7 @@ class WindowsLifecycleTests(unittest.TestCase):
         callbacks = list((self.root / "pending").glob("*.json"))
         self.assertEqual(len(callbacks), 1)
         callback = dispatch.load_request(callbacks[0])
-        self.assertEqual(callback["id"], task["id"])
+        self.assertEqual(callback["id"], ids.callback_id(task["id"]))
         self.assertEqual(callback["exit_code"], 7)
         self.assertEqual(callback["target"], {"kind": "session", "value": "windows-original-session"})
 

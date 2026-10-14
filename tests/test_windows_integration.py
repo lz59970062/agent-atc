@@ -30,6 +30,7 @@ from agent_atc.owners import OwnerState
 from agent_atc.owners.windows import WindowsBackend, scheduler_call, process_identity
 from agent_atc.system import windows_io
 from agent_atc.runtime import worker_command
+from agent_atc.core import ids
 
 
 @unittest.skipUnless(sys.platform == "win32" and os.environ.get("ATC_TEST_WINDOWS_TASK") == "1",
@@ -107,7 +108,7 @@ class WindowsIntegrationTests(unittest.TestCase):
             managed_tasks.recover_managed_tasks(self.root)
             self.assertEqual(executions.read_text(encoding="utf-8").splitlines(), ["run"])
             release.touch()
-            callback = layout.request_path(self.root, "pending", task["id"])
+            callback = layout.request_path(self.root, "pending", ids.callback_id(str(task["id"])))
             self.wait_until(callback.exists, "runner did not publish its callback")
             result = json.loads(layout.managed_result_path(self.root, task["id"]).read_text(encoding="utf-8"))
             self.assertEqual(result["exit_code"], 7)

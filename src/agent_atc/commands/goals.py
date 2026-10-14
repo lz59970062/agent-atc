@@ -6,7 +6,7 @@ import json
 import os
 import sys
 import time
-import uuid
+from ..core import ids
 from ..store import layout
 from ..store import records as queue_store
 from ..engine import dispatch
@@ -17,7 +17,7 @@ def goal_start(args: argparse.Namespace) -> int:
     root = layout.queue_dir(args)
     queue_store.ensure_daemon_dirs(root)
     target, source = dispatch.resolve_target(args)
-    goal_id = args.id or uuid.uuid4().hex
+    goal_id = args.id or ids.new_goal_id()
     try:
         path = layout.goal_path(root, goal_id)
     except ValueError as exc:

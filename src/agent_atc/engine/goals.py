@@ -9,9 +9,9 @@ import re
 import subprocess
 import sys
 import time
-import uuid
 from pathlib import Path
 import yaml
+from ..core import ids
 from ..store import layout
 from .. import runtime as atc_runtime
 from ..store import records as queue_store
@@ -231,8 +231,13 @@ def process_goal_reminders(root: Path) -> bool:
                 goal["last_reminder_at"] = now
                 write_goal(root, goal)
                 return True
+            # Reserve the reminder's ordinal before queueing it, so a crash can
+            # skip a number but never reuse one.
+            sequence = int(goal.get("reminder_sequence", 0)) + 1
+            goal["reminder_sequence"] = sequence
+            write_goal(root, goal)
             request = {
-                "version": 1, "id": uuid.uuid4().hex, "created_at": now, "cwd": goal["cwd"],
+                "version": 1, "id": ids.callback_id(ids.goal_root(goal_id), sequence), "created_at": now, "cwd": goal["cwd"],
                 "agent": goal.get("agent", "codex"),
                 "target": goal["target"], "target_source": goal.get("target_source", "goal"),
                 "goal_id": goal_id, "goal_reminder": True, "prompt": "",
