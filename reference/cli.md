@@ -45,7 +45,7 @@ atc agent --help
 | --- | --- |
 | `atc status` | 查看待处理回调 |
 | `atc status --state failed` | 查看投递失败的回调 |
-| `atc ack --id <回调ID>` | 确认已经读取结果 |
+| `atc ack <回调ID>` | 确认已经读取结果 |
 | `atc cancel --id <回调ID>` | 撤销这条回调的投递 |
 | `atc prompt-policy` | 查看提醒间隔 |
 

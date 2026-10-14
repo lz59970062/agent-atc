@@ -21,7 +21,7 @@
 直接执行回调中的完整命令，默认形式是：
 
 ```bash
-atc ack --id <callback-id>
+atc ack <callback-id>
 ```
 
 使用自定义队列时，回调里的命令还会带上 `--queue-dir`。保留这个参数，就会写入对应队列的确认记录。

@@ -44,7 +44,7 @@ ATC demo finished
 读完结果后，让 Codex 执行回调里给出的完整 ACK 命令。默认队列的命令形式是：
 
 ```bash
-atc ack --id <callback-id>
+atc ack <callback-id>
 ```
 
 把 `<callback-id>` 换成这条回调给出的 ID。ACK 会把回调标记为已收到，结束这条回调的提醒。
