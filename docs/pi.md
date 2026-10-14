@@ -53,7 +53,7 @@ for manual recovery — never replayed automatically — when:
 | `--resume-timeout` (default 1 h) passed since publication | no ACK in time |
 
 `last_error` records whether Pi had already admitted the message. Inspect the session, then
-`atc ack --id <id>` if it was handled, or `atc retry --id <id>` to deliver it again.
+`atc ack <id>` if it was handled, or `atc retry --id <id>` to deliver it again.
 
 ### Ordinary and managed Pi
 

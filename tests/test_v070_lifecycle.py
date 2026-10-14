@@ -159,7 +159,7 @@ class NativeTaskLifecycleTests(unittest.TestCase):
             managed_tasks.recover_managed_tasks(self.root)
         callback = dispatch.load_request(layout.request_path(self.root, "pending", ids.callback_id(str(task["id"]))))
         self.assertEqual(callback["duration_seconds"], 125.5)
-        self.assertIn("Duration: 2m 5.5s", callback["prompt_compact"])
+        self.assertIn("Result: exited 0 · 2m 5.5s", callback["prompt_compact"])
         self.assertIn("Duration: 125.5s", Path(callback["prompt_details_path"]).read_text())
 
     def test_foreign_result_identity_cannot_mark_task_complete(self) -> None:

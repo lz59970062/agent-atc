@@ -49,13 +49,14 @@ The agent ends its turn — zero model calls while it waits. Two hours later, th
 receives a short envelope like this:
 
 ```text
-[atc] <callback-id>
+[atc] <task-id>-c1
 Task: train model
-Result: finished; exit=0
+Result: exited 0 · 2h 3m 32s
+From: run on systemd-user
 Files: ~/.atc/tasks/<task-id>/ (attempt-1.log)
-Details: .../details/<callback-id>.md (as needed)
+Details: .../details/<task-id>-c1.md (as needed)
 Session: <session-id> (only)
-...plus the exact `atc ack` command to run
+ACK after inspection: atc ack <task-id>-c1
 ```
 
 ## Why more than one harness?
@@ -243,7 +244,7 @@ queues the callback — it doesn't make the preceding process durable.
 
 ```bash
 atc wait --task <task-id>         # (Claude Code) block until the callback is ready, then print it
-atc ack --id <callback-id>        # confirm a callback was received and inspected
+atc ack <callback-id>        # confirm a callback was received and inspected
 atc status                        # list callbacks that still need handling
 atc cancel --id <callback-id>     # cancel a queued callback
 atc retry --id <callback-id>      # (0.7.1) re-deliver a result without rerunning the task

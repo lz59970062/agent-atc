@@ -1,8 +1,7 @@
 """Small callback envelopes; verbose evidence stays in a durable local artifact.
 
 Rendering is deliberately independent of transport, reminder counters and disk
-I/O. Old queue records retain their original rendering in the CLI compatibility
-path. User instructions are never silently discarded: the envelope requires
+I/O. The text is for models; programs read the JSON record, never this text. User instructions are never silently discarded: the envelope requires
 reading the details whenever a message or custom handoff is present.
 """
 from __future__ import annotations
@@ -11,7 +10,7 @@ import math
 from pathlib import Path
 from typing import Mapping
 
-FORMAT = "compact-v1"
+FORMAT = "atc-compact/1"
 REMINDER = "Inspect results, ACK receipt, then continue the goal. Check existing work before relaunching. ACK is not goal completion."
 
 
@@ -31,17 +30,41 @@ def format_duration(seconds: object) -> str | None:
     return " ".join(parts)
 
 
+def result_text(request: Mapping[str, object]) -> str:
+    """What ATC observed, plus the measured runtime when there is one."""
+    outcome = str(request.get("outcome") or "finished")
+    exit_code = request.get("exit_code")
+    if exit_code is not None and outcome in ("finished", "completed"):
+        text = f"exited {exit_code}"
+    elif exit_code is not None:
+        text = f"{outcome}, exit {exit_code}"
+    else:
+        text = outcome
+    duration = format_duration(request.get("duration_seconds"))
+    return text if duration is None else f"{text} · {duration}"
+
+
+def source_text(request: Mapping[str, object]) -> str:
+    """Who did the work: the managed command's owner, a child agent, or an external job."""
+    if request.get("task_kind") == "agent":
+        parts = [f"agent {request.get('agent_worker') or 'unknown'}"]
+        if request.get("child_model"):
+            parts.append(f"model {request['child_model']}")
+        if request.get("agent_template"):
+            parts.append(f"template {request['agent_template']}")
+        return ", ".join(parts)
+    if request.get("managed_task_id"):
+        backend = request.get("execution_backend")
+        return f"run on {backend}" if backend else "run"
+    return "external job (atc done)"
+
+
 def render(request: Mapping[str, object], details_path: Path, ack_command: str) -> str:
     task = " ".join(str(request.get("task") or "Task update").split())
     if len(task) > 180:
         task = task[:177] + "..."
-    lines = [f"[atc] {request['id']}", f"Task: {task}"]
-    outcome = str(request.get("outcome") or "finished")
-    exit_code = request.get("exit_code")
-    lines.append(f"Result: {outcome}" + (f"; exit={exit_code}" if exit_code is not None else ""))
-    duration = format_duration(request.get("duration_seconds"))
-    if duration is not None:
-        lines.append(f"Duration: {duration}")
+    lines = [f"[atc] {request['id']}", f"Task: {task}", f"Result: {result_text(request)}",
+             f"From: {source_text(request)}"]
     log = request.get("log_path")
     result = request.get("agent_result_path")
     if isinstance(log, str) and log:
@@ -64,5 +87,5 @@ def render(request: Mapping[str, object], details_path: Path, ack_command: str) 
     target = request.get("target")
     if isinstance(target, dict) and target.get("kind") == "session":
         lines.append(f"Session: {target['value']} (only)")
-    lines.extend(["ACK after inspection:", ack_command])
+    lines.append(f"ACK after inspection: {ack_command}")
     return "\n".join(lines)

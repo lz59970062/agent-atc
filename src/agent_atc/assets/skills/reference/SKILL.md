@@ -538,7 +538,7 @@ compute resources between hosts.
 The callback prompt includes:
 
 ```bash
-atc ack --queue-dir <queue-dir> --id <callback-id>
+atc ack [--queue-dir <queue-dir>] <callback-id>
 ```
 
 After inspecting the result and choosing whether to continue, stop, or ask, run that command.

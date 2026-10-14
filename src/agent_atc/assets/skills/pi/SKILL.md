@@ -39,12 +39,14 @@ differs from this page about callback delivery, this page applies to Pi.
 3. **Handle the callback** — it arrives as a user message:
 
    ```text
-   [atc] <callback-id>
+   [atc] <task-id>-c1
    Task: train model
-   Result: finished; exit=0
+   Result: exited 0 · 2h 3m 32s
+   From: run on systemd-user
    Files: <task dir>/ (attempt-1.log)
    Details: <path> (as needed | read before acting)
    Session: <this session file> (only)
+   ACK after inspection: atc ack <task-id>-c1
    ```
 
    Inspect the log and artifacts (read Details first when it says "read before acting"), decide

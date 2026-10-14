@@ -56,14 +56,14 @@ class CompactCallbackTests(unittest.TestCase):
         message = "HANDOFF: inspect held-out failures.\n" + "evidence detail " * 900
         request, full = self.make_callback("compact-result", command=command, message=message)
         prepared = dispatch.prepare_request_for_queue(self.root, request, full)
-        self.assertEqual(prepared["prompt_format"], "compact-v1")
+        self.assertEqual(prepared["prompt_format"], "atc-compact/1")
         compact = prepared["prompt_compact"]
         self.assertLess(len(compact), 1200)
         self.assertLess(len(prepared["prompt"]), 1500)
         self.assertNotIn(command, compact)
         self.assertNotIn(message, compact)
-        self.assertIn("Duration: 2m 5.5s", compact)
-        for essential in ("compact-result", "bound-original-session", "ack", "--id", str(self.root)):
+        self.assertIn("Result: exited 0 · 2m 5.5s", compact)
+        for essential in ("compact-result", "bound-original-session", "ack", str(self.root)):
             self.assertIn(essential, compact)
         details = Path(prepared["prompt_details_path"])
         self.assertTrue(details.is_file())
@@ -83,7 +83,7 @@ class CompactCallbackTests(unittest.TestCase):
                 selected = reminder_policy.select_delivery_prompt(payload)
                 retried = reminder_policy.select_delivery_prompt(payload)
             self.assertEqual(restored["duration_seconds"], 125.5)
-            self.assertIn("Duration: 2m 5.5s", selected)
+            self.assertIn("Result: exited 0 · 2m 5.5s", selected)
             self.assertEqual(selected, retried)
 
     def test_duration_handles_long_runs_and_rounding_without_fabricating_values(self) -> None:
@@ -97,14 +97,15 @@ class CompactCallbackTests(unittest.TestCase):
                 request, prompt = self.make_callback("runtime-unknown")
                 request["duration_seconds"] = seconds
                 prepared = dispatch.prepare_request_for_queue(self.root, request, prompt)
-                self.assertNotIn("Duration:", prepared["prompt_compact"])
+                self.assertIn("Result: exited 0\n", prepared["prompt_compact"])
 
     def test_ack_line_can_be_executed_with_spaces_and_quotes_without_wrong_queue(self) -> None:
         launcher = "/opt/ATC user's tools/atc"
         with mock.patch.object(atc_runtime, "console_script_path", return_value=launcher):
             prepared = self.prepare("ack-correct-queue")
         lines = prepared["prompt_compact"].splitlines()
-        candidates = [line for line in lines if "--queue-dir" in line and "--id" in line]
+        prefix = "ACK after inspection: "
+        candidates = [line.removeprefix(prefix) for line in lines if line.startswith(prefix)]
         self.assertEqual(len(candidates), 1)
         if os.name == "nt":
             shell = shutil.which("pwsh") or shutil.which("powershell")
@@ -117,8 +118,36 @@ class CompactCallbackTests(unittest.TestCase):
         else:
             self.assertEqual(
                 shlex.split(candidates[0]),
-                [launcher, "ack", "--queue-dir", str(self.root), "--id", "ack-correct-queue"],
+                [launcher, "ack", "--queue-dir", str(self.root), "ack-correct-queue"],
             )
+
+    def test_default_queue_ack_is_just_the_callback_id(self) -> None:
+        launcher = "/usr/local/bin/atc"
+        with mock.patch.object(atc_runtime, "console_script_path", return_value=launcher), \
+                mock.patch.object(layout, "queue_dir", return_value=self.root):
+            prepared = self.prepare("default-queue")
+        self.assertIn(f"ACK after inspection: {launcher} ack default-queue", prepared["prompt_compact"])
+        self.assertNotIn("--queue-dir", prepared["prompt_compact"])
+
+    def test_ack_takes_the_id_positionally_or_by_flag(self) -> None:
+        from agent_atc.commands import callbacks as callback_commands
+        for name, positional, flag in (("positional", "cb-one", None), ("flag", None, "cb-one"), ("both", "cb-one", "cb-one")):
+            with self.subTest(name=name), mock.patch("sys.stderr"):
+                args = argparse.Namespace(queue_dir=str(self.root / name), callback_id=positional, id=flag, message=None)
+                self.assertEqual(callback_commands.ack(args), 0)
+                self.assertTrue(layout.ack_path(self.root / name, "cb-one").exists())
+        for positional, flag in (("cb-one", "cb-two"), (None, None)):
+            with self.subTest(positional=positional, flag=flag), mock.patch("sys.stderr"):
+                args = argparse.Namespace(queue_dir=str(self.root), callback_id=positional, id=flag, message=None)
+                self.assertEqual(callback_commands.ack(args), 2)
+
+    def test_from_line_names_who_did_the_work(self) -> None:
+        request, _ = self.make_callback("source")
+        self.assertEqual(envelope.source_text(request), "external job (atc done)")
+        request.update(managed_task_id="1a2b3c4d", execution_backend="systemd-user")
+        self.assertEqual(envelope.source_text(request), "run on systemd-user")
+        request.update(task_kind="agent", agent_worker="claude", child_model="opus", agent_template="writer")
+        self.assertEqual(envelope.source_text(request), "agent claude, model opus, template writer")
 
     def test_unknown_outcome_is_visible_and_full_recovery_guidance_is_retained(self) -> None:
         request, full = self.make_callback(
@@ -138,7 +167,7 @@ class CompactCallbackTests(unittest.TestCase):
         message = "USER REQUESTED FULL EVIDENCE " * 100
         request, full = self.make_callback("full-request", message=message, callback_format="full")
         prepared = dispatch.prepare_request_for_queue(self.root, request, full)
-        self.assertNotEqual(prepared.get("prompt_format"), "compact-v1")
+        self.assertNotEqual(prepared.get("prompt_format"), "atc-compact/1")
         self.assertIn(message, prepared["prompt"])
 
     def test_legacy_request_is_not_silently_reinterpreted_or_loses_handoff(self) -> None:

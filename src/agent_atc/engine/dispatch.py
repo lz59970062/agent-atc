@@ -196,11 +196,18 @@ def make_request(
     return request
 
 
+def ack_command(root: Path, request_id: str) -> str:
+    """The command a session runs to acknowledge; it names the queue only when not the default."""
+    if root.expanduser().absolute() == layout.queue_dir(None).expanduser().absolute():
+        return atc_runtime.control_command("ack", request_id)
+    return atc_runtime.control_command("ack", "--queue-dir", str(root), request_id)
+
+
 def prepare_request_for_queue(root: Path, request: dict[str, object], prompt: str) -> dict[str, object]:
     request_id = str(request["id"])
     request["queue_dir"] = str(root)
     request["lifecycle_state"] = "pending"
-    acknowledgement = atc_runtime.control_command("ack", "--queue-dir", str(root), "--id", request_id)
+    acknowledgement = ack_command(root, request_id)
     routed_prompt = attach_routing_text(prompt, request)
     request["prompt"] = f"{routed_prompt}\n\n{build_acknowledgement_text(acknowledgement, agent=request_agent(request))}"
     if request.get("prompt_format") == envelope.FORMAT:

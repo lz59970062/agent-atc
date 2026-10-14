@@ -29,7 +29,7 @@ atc run --cwd "$PWD" --task "train model" -- python train.py
 atc wait --queue-dir ~/.atc/queue --task <task-id>
 
 # 3. When it exits, the session wakes with the callback. Inspect, then:
-atc ack --queue-dir ~/.atc/queue --id <callback-id>
+atc ack <callback-id>
 ```
 
 The installed Claude skill (`~/.claude/skills/agent-atc/SKILL.md`) teaches Claude this

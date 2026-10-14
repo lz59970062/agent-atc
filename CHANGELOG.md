@@ -11,6 +11,12 @@
   is `<task id>-c1` instead of the bare task ID, an `atc done` callback gets a
   fresh root (`<root>-c1`), and goal reminders are `g-<goal id>-c<N>` with the
   ordinal reserved in the goal record. Generated goal IDs are 8 hex digits.
+- Callback envelopes use `atc-compact/1`: `Result: exited 0 · 2h 3m 32s`
+  folds the exit code and runtime together, a new `From:` line names who did
+  the work (`run on systemd-user`, `agent claude, model …`, or an external
+  job), and the ACK is one line. `atc ack` takes the callback ID positionally
+  (`atc ack <id>`; `--id` still works) and the generated command names the
+  queue only when it is not the default one.
 - Remove `--last`. ATC only resumes an explicitly bound session and never
   falls back to "the most recent session"; stored callbacks must name one.
 - Remove the `codex-long-task-wakeup` command alias and the automatic adoption

@@ -5,7 +5,7 @@
 Callback delivery ACK confirms that one wakeup was received and inspected:
 
 ```bash
-atc ack --queue-dir <queue-dir> --id <callback-id>
+atc ack [--queue-dir <queue-dir>] <callback-id>
 ```
 
 An unacknowledged callback is retried with backoff. ACK is monotonic.

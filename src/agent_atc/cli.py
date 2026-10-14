@@ -389,7 +389,8 @@ def main() -> int:
 
     ack_parser = sub.add_parser("ack", help="Mark a daemon callback as successfully received")
     ack_parser.add_argument("--queue-dir", help="Wakeup queue directory")
-    ack_parser.add_argument("--id", required=True, help="Callback request id to acknowledge")
+    ack_parser.add_argument("callback_id", nargs="?", help="Callback id to acknowledge")
+    ack_parser.add_argument("--id", help="Callback id to acknowledge (same as the positional id)")
     ack_parser.add_argument("--message", help="Optional acknowledgement note")
 
     goal_parser = sub.add_parser("goal", help="Manage persistent long-running goal acknowledgements")

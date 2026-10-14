@@ -839,7 +839,7 @@ class CliTests(unittest.TestCase):
             self.assertEqual(recovered["outcome"], "completed")
             self.assertEqual(recovered["exit_code"], 9)
             self.assertIn("Exit code: 9", Path(recovered["prompt_details_path"]).read_text())
-            self.assertIn("exit=9", recovered["prompt"])
+            self.assertIn("Result: exited 9", recovered["prompt"])
 
     def test_recover_active_discards_definitely_unlaunched_record(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

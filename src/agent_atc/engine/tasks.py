@@ -213,6 +213,7 @@ def managed_callback_request(
         {
             "managed_task_id": task["id"],
             "managed_task_state": task["state"],
+            "execution_backend": task.get("execution_backend", "screen"),
             "screen_session": task.get("screen_session"),
             "log_path": task["log_path"],
             "outcome": task.get("outcome", "unknown"),

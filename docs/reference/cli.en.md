@@ -45,7 +45,7 @@ Put submission options before `--`:
 | --- | --- |
 | `atc status` | Inspect outstanding callbacks |
 | `atc status --state failed` | Inspect failed deliveries |
-| `atc ack --id <callback-id>` | Confirm that you have read the result |
+| `atc ack <callback-id>` | Confirm that you have read the result |
 | `atc cancel --id <callback-id>` | Cancel delivery of this callback |
 | `atc prompt-policy` | Inspect reminder intervals |
 

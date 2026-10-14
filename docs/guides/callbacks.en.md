@@ -19,7 +19,7 @@ Callbacks use a compact format by default. Add `--callback-format full` when sub
 Run the complete command provided in the callback. Its default form is:
 
 ```bash
-atc ack --id <callback-id>
+atc ack <callback-id>
 ```
 
 For a custom queue, the printed command also includes `--queue-dir`. Keep it so the acknowledgement is written to that queue.

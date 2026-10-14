@@ -278,8 +278,8 @@ separate, Codex-specific path; adapters can use CLI resume without implementing 
 
 ## Compact callback protocol
 
-New `run`, `agent` and `done` callbacks default to `compact-v1`: ID, task, outcome/exit, artifact directory,
-bound session and executable ACK. Command lines, timestamps and full handoff prose
+New `run`, `agent` and `done` callbacks default to `atc-compact/1`: callback ID, task, observed result and
+runtime, who did the work, artifact directory, bound session and a one-line ACK. Command lines, timestamps and full handoff prose
 are in the private `details/<id>.md` artifact. Envelopes explicitly require reading
 it when custom messages/handoffs or recovery instructions apply. `--callback-format
 full` preserves inline detail. Legacy queued records retain their original format.

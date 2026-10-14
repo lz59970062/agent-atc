@@ -16,6 +16,14 @@ from ..engine import recovery
 
 
 def ack(args: argparse.Namespace) -> int:
+    positional = getattr(args, "callback_id", None)
+    if positional and args.id and positional != args.id:
+        print("atc: error: two different callback ids given", file=sys.stderr)
+        return 2
+    args.id = args.id or positional
+    if not args.id:
+        print("atc: error: name the callback to acknowledge: atc ack <callback-id>", file=sys.stderr)
+        return 2
     root = layout.queue_dir(args)
     queue_store.ensure_daemon_dirs(root)
     marker = layout.ack_path(root, args.id)

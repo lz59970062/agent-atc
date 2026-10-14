@@ -282,7 +282,7 @@ ACK after inspection: atc ack 8e4f0c12-c1
 - `Report` 行必须带 `claimed, unverified`，提醒模型这是子代理自己说的。
 - 中断、启动失败、未知状态，在 `Result` 后追加 `Recovery: <原因>; not restarted. Inspect before relaunching.`，沿用现有措辞。
 - 有自定义消息、模板交接、恢复说明或目标提醒时，`Details` 行写 `(read before acting)`，沿用现有规则。
-- ACK 命令只写 `atc ack <id>`，不再带 `--queue-dir`。ATC 只有一个固定的状态目录，这是第 5 步的前提。
+- ACK 命令只写 `atc ack <id>`；只有使用非默认队列目录时才带 `--queue-dir`，否则会话在别的环境里执行 ACK 可能找不到队列。固定安装位置落地后，非默认队列会更少见。
 - 现有的长度测试改成针对新格式，长度不应超过现在的 compact-v1。
 
 ## 8. 和旧 LTC 的衔接

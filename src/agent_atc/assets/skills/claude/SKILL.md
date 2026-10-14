@@ -44,12 +44,14 @@ differs from this page about callback delivery, this page applies to Claude Code
 3. **Wake up** — when the job finishes, the background command exits and prints a callback:
 
    ```text
-   [atc] <callback-id>
+   [atc] <task-id>-c1
    Task: train model
-   Result: finished; exit=0
+   Result: exited 0 · 2h 3m 32s
+   From: run on systemd-user
    Files: <task dir>/ (attempt-1.log)
    Details: <path> (as needed | read before acting)
    Session: <this session id> (only)
+   ACK after inspection: atc ack <task-id>-c1
    ```
 
    Read the background command's output, inspect the log and artifacts (read Details first when it

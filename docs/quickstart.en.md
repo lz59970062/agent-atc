@@ -44,7 +44,7 @@ ATC demo finished
 After reading the result, ask Codex to execute the complete ACK command from the callback. For the default queue, it looks like this:
 
 ```bash
-atc ack --id <callback-id>
+atc ack <callback-id>
 ```
 
 Replace `<callback-id>` with the ID in that callback. ACK records receipt and ends reminders for this callback.

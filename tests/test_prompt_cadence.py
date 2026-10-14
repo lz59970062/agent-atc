@@ -268,7 +268,7 @@ class PromptCadenceTests(unittest.TestCase):
         compact = request["prompt_compact"]
         self.assertLess(len(compact), len(request["prompt"]))
         for retained in (message, "retain-data", "/tmp/work", "false", "7", "12.5", "parent",
-                         "ack", "--id", "prepare-only", str(self.root)):
+                         "ack", "prepare-only", str(self.root)):
             self.assertIn(retained, compact)
         self.assertEqual(compact.count("Please inspect the result and any relevant artifacts."), 1)
         self.assertFalse((self.root / "prompt-counters").exists())
