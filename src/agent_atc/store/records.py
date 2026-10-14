@@ -8,6 +8,7 @@ try:
     import fcntl
 except ImportError:  # pragma: no cover - the durable run lifecycle is POSIX-only
     fcntl = None
+from ..core import records as core_records
 from ..system import files as private_files
 from ..system import posix as posix_platform
 from ..system import windows_io
@@ -78,8 +79,8 @@ def move_request(source: Path, destination_dir: Path) -> Path:
             not isinstance(source_id, str)
             or not isinstance(source_data, dict)
             or not isinstance(destination_data, dict)
-            or source_data.get("version") not in (1, 2, 3, 4)
-            or destination_data.get("version") not in (1, 2, 3, 4)
+            or not core_records.is_callback(source_data)
+            or not core_records.is_callback(destination_data)
             or source_id != destination_id
             or source_id != source.stem
             or source_data != destination_data

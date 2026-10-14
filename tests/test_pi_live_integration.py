@@ -30,6 +30,7 @@ from agent_atc.system import shell
 from agent_atc.store import layout
 from agent_atc.harness.pi import channel as bridge
 from agent_atc.runtime import worker_command
+from agent_atc.core import capabilities
 
 
 
@@ -166,9 +167,9 @@ def callback(runtime, session, callback_id, delivery=None):
     args=argparse.Namespace(agent='pi',session=str(session),last=False,cwd=str(directory),task=token,callback_mode='cli')
     request=dispatch.make_request(args, token); request['id']=callback_id
     if delivery == 'follow-up':
-        # Retained callbacks from the earlier Pi preview keep their old timing.
-        request['version'] = 3
-        request.pop('pi_delivery')
+        # Follow-up delivery queues behind the current turn instead of steering into it.
+        request['pi_delivery'] = 'follow-up'
+        request['requires'] = capabilities.required_for(request)
     provider.callbacks[token] = shlex.join(worker_command('ack','--queue-dir',str(queue_dir),'--id',callback_id))
     payload={'request':request,'queue_dir':str(queue_dir),'prompt':token,'ack_path':str(layout.ack_path(queue_dir,callback_id)),
         'canceled_path':str(layout.request_path(queue_dir,'canceled',callback_id)), 'command':delivery_engine.resume_command(request),

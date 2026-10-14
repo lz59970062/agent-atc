@@ -12,6 +12,7 @@ import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
+from ..core import capabilities, records
 from .. import __version__
 from ..harness.claude import session as claude_session
 from ..harness.pi import channel as pi_channel
@@ -342,6 +343,8 @@ def select_pending(root: Path, now: float) -> Path | None:
             request = json.loads(path.read_text(encoding="utf-8"))
         except Exception:
             return path
+        if isinstance(request, dict) and capabilities.unsupported(request.get("requires")) and records.is_callback(request):
+            continue  # needs a newer tower; leave it untouched rather than deliver it halfway
         if isinstance(request, dict) and (request.get("callback_mode") == "manual"
                                          or target_has_live_resume(root, request)
                                          or claude_session.live_watcher_is_held(request)):

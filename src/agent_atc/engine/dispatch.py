@@ -10,7 +10,7 @@ import sys
 import time
 from datetime import datetime
 from pathlib import Path
-from ..core import envelope, ids
+from ..core import capabilities, envelope, ids, records
 from . import routes
 from ..harness.claude import session as claude_session
 from ..harness.pi import channel as pi_channel
@@ -163,7 +163,7 @@ def make_request(
     target, target_source = bind_target(args)
     agent = resolve_agent(args)
     request = {
-        "version": 1,
+        "schema": records.CALLBACK_SCHEMA,
         "id": getattr(args, "_callback_id", None) or new_callback_id(layout.queue_dir(args)),
         "created_at": time.time(),
         "cwd": args.cwd,
@@ -182,10 +182,7 @@ def make_request(
     if duration is not None:
         request["duration_seconds"] = duration
     request.update(routes.selection(args))
-    if request.get("callback_mode"):
-        request["version"] = 3 if agent == "pi" else 2  # Older daemons must reject new route semantics.
-        if agent == "pi" and request.get("pi_delivery") == "steer":
-            request["version"] = 4
+    request["requires"] = capabilities.required_for(request)
     if agent == "claude":
         request["permission_mode"] = getattr(args, "permission_mode", None) or os.environ.get(
             CLAUDE_PERMISSION_MODE_ENV, DEFAULT_CLAUDE_PERMISSION_MODE
@@ -299,22 +296,23 @@ def load_request(path: Path) -> dict[str, object]:
     data = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(data, dict):
         raise ValueError("request must be a JSON object")
-    if data.get("version") not in (1, 2, 3, 4):
-        raise ValueError("unsupported request version")
-    if data.get("version") in (2, 3, 4) and data.get("callback_mode") not in ("cli", "desktop", "manual"):
-        raise ValueError("version 2 callback requires an explicit mode")
+    if not records.is_callback(data):
+        raise ValueError(f"not an {records.CALLBACK_SCHEMA} record; queues from Long Task Callback need atc migrate")
+    missing = capabilities.unsupported(data.get("requires"))
+    if missing:
+        raise ValueError("callback requires unsupported capabilities: " + ", ".join(missing))
+    if data.get("callback_mode") not in ("cli", "desktop", "manual"):
+        raise ValueError("callback requires an explicit mode")
     if not isinstance(data.get("id"), str) or data["id"] != path.stem:
         raise ValueError("request id must match its filename")
     if not isinstance(data.get("cwd"), str):
         raise ValueError("request cwd must be a string")
     if not isinstance(data.get("prompt"), str):
         raise ValueError("request prompt must be a string")
-    if data.get("version") in (3, 4):
+    if set(data["requires"]) & {capabilities.PI_STEER, capabilities.PI_FOLLOW_UP}:
         if request_agent(data) != "pi":
-            raise ValueError("version 3 callback requires a frozen Pi route")
+            raise ValueError("only Pi callbacks can require Pi delivery")
         pi_channel.validate_route(data)
-    if data.get("version") == 4 and data.get("pi_delivery") != "steer":
-        raise ValueError("version 4 callback requires explicit Pi steer delivery")
     delivery_engine.resume_command(data)
     return data
 

@@ -6,6 +6,7 @@ import re
 import sys
 import time
 from pathlib import Path
+from ..core import capabilities
 from ..engine import routes
 from ..harness.pi import channel as pi_channel
 from ..store import layout
@@ -90,9 +91,7 @@ def retry_callback(args: argparse.Namespace) -> int:
                 request.pop(key, None)
             request.update(routes.selection(options))
             request.update(pi_route)
-            request["version"] = 3 if dispatch.request_agent(request) == "pi" else 2
-            if request.get("pi_delivery") == "steer":
-                request["version"] = 4
+            request["requires"] = capabilities.required_for(request)
         capability = routes.inspect_route(request)
         if capability["status"] == "blocked":
             raise ValueError("callback route remains blocked: " + str(capability.get("reason")))

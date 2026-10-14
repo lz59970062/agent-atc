@@ -11,7 +11,7 @@ import sys
 import time
 from pathlib import Path
 import yaml
-from ..core import ids
+from ..core import capabilities, ids, records
 from ..store import layout
 from .. import runtime as atc_runtime
 from ..store import records as queue_store
@@ -237,7 +237,8 @@ def process_goal_reminders(root: Path) -> bool:
             goal["reminder_sequence"] = sequence
             write_goal(root, goal)
             request = {
-                "version": 1, "id": ids.callback_id(ids.goal_root(goal_id), sequence), "created_at": now, "cwd": goal["cwd"],
+                "schema": records.CALLBACK_SCHEMA, "id": ids.callback_id(ids.goal_root(goal_id), sequence),
+                "created_at": now, "cwd": goal["cwd"], "callback_mode": "cli", "requires": [capabilities.CLI_RESUME],
                 "agent": goal.get("agent", "codex"),
                 "target": goal["target"], "target_source": goal.get("target_source", "goal"),
                 "goal_id": goal_id, "goal_reminder": True, "prompt": "",

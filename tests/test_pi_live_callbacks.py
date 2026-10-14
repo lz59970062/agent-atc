@@ -21,6 +21,7 @@ from agent_atc.harness.codex import app_server
 from agent_atc.store import records as queue_store
 from agent_atc.store import layout
 from agent_atc.harness.pi import channel as bridge
+from agent_atc.core import capabilities
 
 
 def build_bound(tmp_path):
@@ -72,7 +73,7 @@ class PiLiveCallbackTests(unittest.TestCase):
         args = argparse.Namespace(agent='pi', session=request['target']['value'], last=False,
                                   cwd=request['cwd'], task='fixture', callback_mode='cli')
         steer = dispatch.make_request(args, 'Steer with completed results')
-        assert steer['version'] == 4 and steer['pi_delivery'] == 'steer'
+        assert capabilities.PI_STEER in steer['requires'] and steer['pi_delivery'] == 'steer'
         steer['id'] = 'fixture'
         path = queue/'pending/fixture.json'
         queue_store.write_request(path, steer)
@@ -85,20 +86,20 @@ class PiLiveCallbackTests(unittest.TestCase):
         loaded = managed_tasks.load_managed_task(task_path)
         with mock.patch.dict(os.environ, {bridge.PROFILE_ENV: str(self.directory/'other-profile')}):
             restored = managed_tasks.managed_callback_request(loaded, 'Saved result')
-        assert restored['version'] == 4 and restored['pi_delivery'] == 'steer'
+        assert capabilities.PI_STEER in restored['requires'] and restored['pi_delivery'] == 'steer'
         task_path.write_text(json.dumps(dict(task, pi_delivery='invalid')))
         with self.assertRaisesRegex(ValueError, 'Pi delivery'):
             managed_tasks.load_managed_task(task_path)
 
-    def test_legacy_follow_up_and_invalid_delivery(self):
+    def test_explicit_follow_up_and_invalid_delivery(self):
         request, _, _, queue, _ = self.bound
-        legacy = dict(request)
-        legacy.pop('pi_delivery')
-        legacy['version'] = 3
+        follow_up = dict(request, pi_delivery='follow-up')
+        follow_up['requires'] = capabilities.required_for(follow_up)
         path = queue/'pending/fixture.json'
-        queue_store.write_request(path, legacy)
-        assert dispatch.load_request(path)['version'] == 3
-        assert bridge.inspect_route(legacy)['status'] == 'owner_registered'
+        queue_store.write_request(path, follow_up)
+        loaded = dispatch.load_request(path)
+        assert capabilities.PI_FOLLOW_UP in loaded['requires'] and loaded['pi_delivery'] == 'follow-up'
+        assert bridge.inspect_route(follow_up)['status'] == 'owner_registered'
         queue_store.write_request(path, dict(request, pi_delivery='invalid'))
         with self.assertRaisesRegex(ValueError, 'Pi delivery'):
             dispatch.load_request(path)
@@ -112,7 +113,7 @@ class PiLiveCallbackTests(unittest.TestCase):
         with mock.patch.dict(os.environ, {bridge.PROFILE_ENV: str(self.directory/'other-profile')}):
             assert callback_commands.retry_callback(args) == 0
         restored = dispatch.load_request(queue/'pending/fixture.json')
-        assert restored['version'] == 4 and restored['pi_delivery'] == 'steer'
+        assert capabilities.PI_STEER in restored['requires'] and restored['pi_delivery'] == 'steer'
         for key in bridge.ROUTE_FIELDS:
             assert restored[key] == request[key]
 

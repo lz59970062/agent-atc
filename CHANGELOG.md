@@ -17,6 +17,12 @@
   job), and the ACK is one line. `atc ack` takes the callback ID positionally
   (`atc ack <id>`; `--id` still works) and the generated command names the
   queue only when it is not the default one.
+- Callback records carry `schema: atc.callback/1` and a `requires` list of
+  delivery capabilities (`deliver.cli-resume`, `deliver.codex-desktop`,
+  `deliver.pi-steer`, `deliver.pi-follow-up`) instead of versions 1–4. A
+  tower leaves a callback that needs an unknown capability untouched in the
+  queue. Records without the schema are refused with a hint to run
+  `atc migrate`.
 - Remove `--last`. ATC only resumes an explicitly bound session and never
   falls back to "the most recent session"; stored callbacks must name one.
 - Remove the `codex-long-task-wakeup` command alias and the automatic adoption
