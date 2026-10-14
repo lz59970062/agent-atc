@@ -116,7 +116,6 @@ def managed_task_namespace(task: dict[str, object]) -> argparse.Namespace:
         exit_code=task.get("exit_code"),
         message=task.get("message"),
         session=target.get("value") if isinstance(target, dict) and target.get("kind") == "session" else None,
-        last=isinstance(target, dict) and target.get("kind") == "last",
         agent=str(task.get("agent", "codex")),
         queue_dir=str(task["queue_dir"]),
         goal_id=task.get("goal_id"),

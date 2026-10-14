@@ -95,7 +95,7 @@ On every callback, inspect the result and relevant artifacts, decide whether the
 original goal is complete, blocked, or needs another action, and continue when the
 next step is clear and safe. Inspect existing work before relaunching it. Then run
 the supplied ACK command; ACK confirms receipt, not completion of the overall goal.
-Resume only the bound conversation, never redirect to `--last` or another session.
+Resume only the bound conversation, never redirect to another session.
 
 Read the user callback hook at initial ATC use when present. Its instructions still
 apply when not repeated. Since ATC 0.6.6, standard reminders appear on the first callback and every
@@ -111,7 +111,7 @@ the effective policy. `1` means every callback. The file is
 `${ATC_HOME:-~/.atc}/callback-prompts.yaml`. Counters are per
 queue, agent and bound session, allocated at first delivery attempt. Retries reuse
 the same sequence and reminder decisions across restarts. Queuing/dry-run does not
-count. An unsafe `--last` target keeps full reminders because its identity is unknown.
+count.
 
 ## Ownership invariant
 
@@ -183,7 +183,7 @@ launchd/screen readiness. Repair commands follow the selected platform and queue
 The setup repair uses `--keep-skill` to retain an installed skill while installing
 one when missing. It can update the ATC coordinator configuration; inspect existing
 service customizations before doing so. Never replace a missing binding with an
-invented session or `--last`.
+invented session.
 For `done`, repair adds `setup --callback-only`: externally owned work needs the
 callback coordinator, not a local business-task execution backend.
 
@@ -256,7 +256,7 @@ experimental shared-server bridge is available only through explicit setup;
 its package-context route passed real Desktop original-session receipt/ACK on
 2026-09-27 on one tested installation. It remains experimental. Execute the callback's emitted
 PowerShell ACK verbatim, including its leading `&` and quoted paths. ACK confirms
-receipt only, not goal completion. Never replace the target with `--last`.
+receipt only, not goal completion. Never replace the target with another session.
 
 A live Windows test with Codex 0.153.4 could not resume its open Desktop session:
 the CLI reported `already has an active writer`. Ending an Agent turn does not
@@ -487,9 +487,8 @@ Run from the agent-owned environment and omit target flags by default. ATC detec
 `CODEX_THREAD_ID`, `CLAUDE_CODE_SESSION_ID`, or Pi's absolute `PI_SESSION_FILE` (an ID alone is insufficient).
 
 Use `--agent codex|claude|pi --session <id>` when explicit binding is necessary. For Pi,
-prefer the absolute session file from `PI_SESSION_FILE`. Use `--last` only as
-an unsafe manual fallback; it always warns. If the target cannot be determined, fail instead of
-guessing.
+prefer the absolute session file from `PI_SESSION_FILE`. If the target cannot be determined, fail
+instead of guessing; there is no "most recent session" fallback.
 
 ## Restart recovery
 

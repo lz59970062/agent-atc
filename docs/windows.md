@@ -122,7 +122,7 @@ separate evidence.
 
 Run from the original Agent conversation so the session can be detected, or pass
 its actual ID with `--agent codex|claude|pi --session <original-session-id>`. Never
-substitute `--last` or copy a Mac's session binding to Windows.
+substitute another session or copy a Mac's session binding to Windows.
 
 ```powershell
 $ltcPython = (Resolve-Path .\.venv\Scripts\python.exe).Path

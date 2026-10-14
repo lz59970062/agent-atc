@@ -82,13 +82,9 @@ class PiAdapterContractTests(unittest.TestCase):
                 delivery_engine.resume_command({"agent": "pi", "target": {"kind": "session", "value": session}}),
                 ["/opt/my Pi/bin/pi", "--print", "--session", session],
             )
-        self.assertEqual(
-            get_agent("pi").resume_command({"target": {"kind": "last"}}, {}),
-            ["pi", "--print", "--continue"],
-        )
         self.assertNotIn("--no-session", get_agent("pi").resume_command(
             {"target": {"kind": "session", "value": session}}, {}))
-        for target in (None, {}, {"kind": "session", "value": ""}, {"kind": "future-unknown"}):
+        for target in (None, {}, {"kind": "session", "value": ""}, {"kind": "last"}, {"kind": "future-unknown"}):
             with self.subTest(target=target), self.assertRaises(ValueError):
                 get_agent("pi").resume_command({"target": target}, {})
 

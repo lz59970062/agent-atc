@@ -55,13 +55,7 @@ class PiAdapter:
         # Print mode processes the callback prompt from stdin, appends one turn
         # to the bound session and exits; it never opens the interactive UI.
         cmd = [self.executable(environment), "--print"]
-        kind, value = resume_target(request)
-        if kind == "session":
-            cmd.extend(["--session", str(value)])
-        else:
-            # ``--last`` remains an explicit unsafe fallback: continue the most
-            # recent session for the delivery working directory.
-            cmd.append("--continue")
+        cmd.extend(["--session", resume_target(request)])
         return cmd
 
     def child_command(

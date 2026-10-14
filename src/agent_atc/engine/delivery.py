@@ -115,8 +115,6 @@ def callback_target_key(request: dict[str, object]) -> str | None:
         if dispatch.request_agent(request) == "pi":
             value = pi_channel.canonical_session(value)
         return f"session:{value}"
-    if kind == "last":
-        return "last"
     return None
 
 

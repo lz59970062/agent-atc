@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import contextlib
 import hashlib
 import io
 import json
@@ -957,14 +958,22 @@ class CliTests(unittest.TestCase):
             self.assertIn(str(request["id"]), request["prompt"])
             self.assertIn("Bound session: session-1", details)
             self.assertIn("Binding source: --session", details)
-            self.assertIn("never redirect this callback to --last", details)
+            self.assertIn("never redirect this callback to another thread", details)
             self.assertIn("Session: session-1 (only)", request["prompt"])
             self.assertEqual(request["queue_dir"], tmp)
+
+    def test_there_is_no_most_recent_session_fallback(self) -> None:
+        for argv in (["run", "--last", "--", "true"], ["doctor", "--last"]):
+            with self.subTest(argv=argv), mock.patch.object(sys, "argv", ["atc", *argv]), \
+                    contextlib.redirect_stderr(io.StringIO()) as errors, self.assertRaises(SystemExit) as caught:
+                cli.main()
+            self.assertEqual(caught.exception.code, 2)
+            self.assertIn("unrecognized arguments: --last", errors.getvalue())
 
     def test_resume_command_makes_queue_dir_writable(self) -> None:
         command = delivery_engine.resume_command(
             {
-                "target": {"kind": "last"},
+                "target": {"kind": "session", "value": "codex-session-1"},
                 "cwd": "/tmp",
                 "prompt": "hello",
                 "queue_dir": "/tmp/callback-queue",
@@ -972,6 +981,7 @@ class CliTests(unittest.TestCase):
         )
 
         self.assertIn('sandbox_workspace_write.writable_roots=["/tmp/callback-queue"]', command)
+        self.assertEqual(command[-2:], ["codex-session-1", "-"])
 
     def test_resolve_agent_detects_claude_environment(self) -> None:
         env = {key: value for key, value in os.environ.items()
@@ -1041,7 +1051,7 @@ class CliTests(unittest.TestCase):
     def test_claude_resume_command_honors_overrides(self) -> None:
         request = {
             "agent": "claude",
-            "target": {"kind": "last"},
+            "target": {"kind": "session", "value": "claude-session-1"},
             "cwd": "/tmp",
             "prompt": "hello",
             "permission_mode": "acceptEdits",
@@ -1049,7 +1059,7 @@ class CliTests(unittest.TestCase):
         with mock.patch.dict(os.environ, {"ATC_CLAUDE_BIN": "/opt/claude"}, clear=False):
             command = delivery_engine.resume_command(request)
 
-        self.assertEqual(command, ["/opt/claude", "-p", "--permission-mode", "acceptEdits", "--continue"])
+        self.assertEqual(command, ["/opt/claude", "-p", "--permission-mode", "acceptEdits", "--resume", "claude-session-1"])
 
     def test_claude_prompt_and_acknowledgement_text(self) -> None:
         args = argparse.Namespace(
@@ -1239,7 +1249,7 @@ class CliTests(unittest.TestCase):
 
     def test_move_request_collision_is_idempotent_only_for_same_valid_id(self) -> None:
         def payload(request_id: str, cwd: str, prompt: str) -> dict[str, object]:
-            return atc_records.callback_record(request_id, cwd, target={"kind": "last"}, prompt=prompt, created_at=1.0)
+            return atc_records.callback_record(request_id, cwd, target={"kind": "session", "value": "fixture-session"}, prompt=prompt, created_at=1.0)
 
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "queue"
@@ -2314,7 +2324,7 @@ class CliTests(unittest.TestCase):
             (root / "running").mkdir(parents=True)
             (root / "running" / "running-one.json").write_text(
                 json.dumps(
-                    atc_records.callback_record("running-one", tmp, target={"kind": "last"}, prompt="wake up", created_at=1.0)
+                    atc_records.callback_record("running-one", tmp, target={"kind": "session", "value": "fixture-session"}, prompt="wake up", created_at=1.0)
                 )
                 + "\n",
                 encoding="utf-8",
@@ -3159,7 +3169,7 @@ class CliTests(unittest.TestCase):
         target: dict[str, str] | None = None,
     ) -> None:
         (root / "pending").mkdir(parents=True, exist_ok=True)
-        request = atc_records.callback_record(request_id, cwd, target=target or {"kind": "last"}, prompt="wake up", created_at=1.0)
+        request = atc_records.callback_record(request_id, cwd, target=target or {"kind": "session", "value": "fixture-session"}, prompt="wake up", created_at=1.0)
         (root / "pending" / f"{request_id}.json").write_text(
             json.dumps(request) + "\n",
             encoding="utf-8",

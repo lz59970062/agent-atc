@@ -57,8 +57,7 @@ User text in `callback-hook.md` is appended only on due attempts, and is reread 
 each such attempt, including retries. Editing it needs no restart. An empty hook
 adds no text. Policy changes likewise need no restart once the new delivery worker
 is installed. Existing queued callbacks without a compact prompt keep their full
-standard text; their user hook can still follow the new cadence. `--last` always
-keeps full reminders because its actual conversation identity is not pinned.
+standard text; their user hook can still follow the new cadence.
 
 The counter and per-callback allocations are atomically saved together under
 `<queue>/prompt-counters/`, with a separate file lock. If configuration or counter

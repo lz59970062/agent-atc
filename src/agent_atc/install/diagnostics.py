@@ -310,8 +310,6 @@ def inspect(args: argparse.Namespace) -> dict[str, object]:
             value = getattr(args, option, None)
             if value:
                 recheck.extend(["--" + option.replace("_", "-"), str(value)])
-        if getattr(args, "last", False):
-            recheck.append("--last")
         return {
             "schema": SCHEMA, "status": "needs_configuration", "scope": "local_prerequisites",
             "environment": environment, "checks": {"support": "unsupported", "configuration": "not_checked", "runtime": "not_checked"},
@@ -373,12 +371,11 @@ def inspect(args: argparse.Namespace) -> dict[str, object]:
     # resolve_target is intentionally quiet; bind_target prints normal CLI output.
     target_args = argparse.Namespace(**vars(args))
     target_args.session = getattr(args, "session", None)
-    target_args.last = bool(getattr(args, "last", False))
     target = None
     try:
         target, _ = dispatch.resolve_target(target_args)
     except SystemExit:
-        issues.append({"code": "session_unbound", "action": "Recover the actual originating Agent session ID and pass --session; never invent a target or substitute --last."})
+        issues.append({"code": "session_unbound", "action": "Recover the actual originating Agent session ID and pass --session; never invent a target."})
 
     capability = getattr(args, "_callback_capability", None)
     if not isinstance(capability, dict):
@@ -412,10 +409,7 @@ def inspect(args: argparse.Namespace) -> dict[str, object]:
     if getattr(args, "callback_mode", "auto") != "auto":
         recheck.extend(["--callback-mode", args.callback_mode])
     if target is not None:
-        if target.get("kind") == "session":
-            recheck.extend(["--session", target["value"]])
-        elif target.get("kind") == "last":
-            recheck.append("--last")
+        recheck.extend(["--session", target["value"]])
     if operation == "agent" and child_agent:
         recheck.extend(["--agent-worker", child_agent])
     for issue in issues:

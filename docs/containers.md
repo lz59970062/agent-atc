@@ -456,8 +456,7 @@ to replay interrupted work or redirect its callback.
   as belonging to another host. Persistent files enable inspection, but do not
   establish cross-container or cross-host callback recovery.
 - Keep the original bound Agent session and its files accessible. A new login or
-  a new conversation is not permission to redirect an old callback. Do not use
-  `--last` to work around missing session history.
+  a new conversation is not permission to redirect an old callback.
 - The Linux container path does not establish native macOS or Windows support.
   GPU access and checkpointing belong to your workload/container configuration.
 

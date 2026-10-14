@@ -87,8 +87,7 @@ differs from this page about callback delivery, this page applies to Claude Code
 
 ## Rules
 
-- **Session binding is automatic** from `CLAUDE_CODE_SESSION_ID`. Never use `--last` or invent a
-  session id. `atc wait` refuses to run without a session.
+- **Session binding is automatic** from `CLAUDE_CODE_SESSION_ID`. Never invent a session id. `atc wait` refuses to run without a session.
 - **One wait, one wake-up.** A wait exits after printing what it found; start a new one for the next
   task. Every unacknowledged callback of this session keeps coming back until you ACK it.
 - **If the session closes**, nothing is lost: when no waiter is alive, the ATC daemon falls back to a

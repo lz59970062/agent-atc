@@ -67,17 +67,17 @@ class AgentAdapter(ChildAgentAdapter, Protocol):
     ) -> list[str]: ...
 
 
-def resume_target(request: Mapping[str, object]) -> tuple[str, str | None]:
-    """Validate stored routing before constructing any resume command."""
+def resume_target(request: Mapping[str, object]) -> str:
+    """Return the bound session, validated before any resume command is built.
+
+    ATC only ever resumes an explicitly bound session; it never guesses one.
+    """
     target = request.get("target")
     if not isinstance(target, dict):
         raise ValueError("request target must be an object")
-    kind = target.get("kind")
-    if kind == "session":
-        value = target.get("value")
-        if not isinstance(value, str) or not value:
-            raise ValueError("session target requires a non-empty value")
-        return "session", value
-    if kind == "last":
-        return "last", None
-    raise ValueError("request target kind must be 'session' or 'last'")
+    if target.get("kind") != "session":
+        raise ValueError("request target kind must be 'session'")
+    value = target.get("value")
+    if not isinstance(value, str) or not value:
+        raise ValueError("session target requires a non-empty value")
+    return value

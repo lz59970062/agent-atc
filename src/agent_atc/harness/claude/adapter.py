@@ -45,11 +45,7 @@ class ClaudeAdapter:
         queue_root = request.get("queue_dir")
         if isinstance(queue_root, str) and queue_root:
             cmd.extend(["--add-dir", queue_root])
-        kind, value = resume_target(request)
-        if kind == "session":
-            cmd.extend(["--resume", str(value)])
-        else:
-            cmd.append("--continue")
+        cmd.extend(["--resume", resume_target(request)])
         return cmd
 
     def child_command(

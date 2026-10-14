@@ -83,7 +83,7 @@ def allocate_prompt_cadence(
     if (not isinstance(target, dict) or target.get("kind") != "session"
             or not isinstance(target.get("value"), str) or not target["value"]
             or not isinstance(request_id, str) or not request_id):
-        return None  # --last cannot safely share a conversation counter.
+        return None  # Without a bound session there is no conversation counter.
     agent = dispatch.request_agent(request)
     session = target["value"]
     digest = hashlib.sha256(json.dumps([agent, session]).encode("utf-8")).hexdigest()

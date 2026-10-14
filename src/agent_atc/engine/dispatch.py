@@ -98,10 +98,6 @@ def resolve_target(args: argparse.Namespace) -> tuple[dict[str, str], str]:
     if args.session:
         value = pi_channel.canonical_session(args.session) if resolve_agent(args) == "pi" else args.session
         return {"kind": "session", "value": value}, "--session"
-    if args.last:
-        if resolve_agent(args) == "pi":
-            raise ValueError("Pi callbacks require an absolute session file; --last is not supported")
-        return {"kind": "last"}, "--last"
 
     agent = resolve_agent(args)
     env_name = get_agent(agent).session_id_env
@@ -113,7 +109,7 @@ def resolve_target(args: argparse.Namespace) -> tuple[dict[str, str], str]:
 
     raise SystemExit(
         f"Cannot determine the callback session: {env_name} is unset. "
-        f"Run from {agent_display_name(agent)} or pass --session <id>; use --last only as an explicit unsafe fallback."
+        f"Run from {agent_display_name(agent)} or pass --session <id>; ATC never guesses a target."
     )
 
 
@@ -126,36 +122,21 @@ def bind_target(args: argparse.Namespace) -> tuple[dict[str, str], str]:
     target, source = resolve_target(args)
     args._callback_target = target
     args._callback_target_source = source
-    if target["kind"] == "session":
-        print(
-            f"atc: callback bound to session {target['value']} via {source}",
-            file=sys.stderr,
-        )
-    else:
-        print(
-            "atc: warning: --last is not session-safe and may wake an unrelated active thread",
-            file=sys.stderr,
-        )
+    print(f"atc: callback bound to session {target['value']} via {source}", file=sys.stderr)
     return target, source
 
 
 def routing_text(request: dict[str, object]) -> str:
     target = request["target"]
     source = request["target_source"]
-    if isinstance(target, dict) and target.get("kind") == "session":
-        return "\n".join(
-            [
-                "Callback routing:",
-                f"- Bound session: {target['value']}",
-                f"- Binding source: {source}",
-                "- Resume only this session; never redirect this callback to --last or another active thread.",
-            ]
-        )
+    if not (isinstance(target, dict) and target.get("kind") == "session"):
+        raise ValueError("callback target must be an explicit session")
     return "\n".join(
         [
-            "Callback routing warning:",
-            f"- Target: most recently active {agent_display_name(request_agent(request))} session (--last)",
-            "- This unsafe fallback was explicitly requested and may reach an unrelated thread.",
+            "Callback routing:",
+            f"- Bound session: {target['value']}",
+            f"- Binding source: {source}",
+            "- Resume only this session; never redirect this callback to another thread.",
         ]
     )
 
@@ -515,6 +496,4 @@ def request_target(request: dict[str, object]) -> str:
     if target.get("kind") == "session":
         value = str(target.get("value", "unknown"))
         return f"session {value}"
-    if target.get("kind") == "last":
-        return "unsafe --last"
     return "unknown target"

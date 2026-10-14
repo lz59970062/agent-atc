@@ -37,7 +37,7 @@ def profile_dir() -> Path:
 
 def canonical_session(value: object) -> str:
     if not isinstance(value, str) or not value or not Path(value).is_absolute():
-        raise ValueError("Pi callbacks require an absolute session JSONL file, not --last or a partial ID")
+        raise ValueError("Pi callbacks require an absolute session JSONL file, not a partial ID")
     return os.path.normcase(str(Path(value).resolve()))
 
 

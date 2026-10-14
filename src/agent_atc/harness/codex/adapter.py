@@ -51,8 +51,7 @@ class CodexAdapter:
         queue_root = request.get("queue_dir")
         if isinstance(queue_root, str) and queue_root:
             cmd.extend(["-c", f"sandbox_workspace_write.writable_roots=[{json.dumps(queue_root)}]"])
-        kind, value = resume_target(request)
-        cmd.append(str(value) if kind == "session" else "--last")
+        cmd.append(resume_target(request))
         cmd.append("-")
         return cmd
 

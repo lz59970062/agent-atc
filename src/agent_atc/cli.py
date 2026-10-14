@@ -99,15 +99,9 @@ def add_common_flags(parser: argparse.ArgumentParser) -> None:
         choices=AGENT_NAMES,
         help="Agent to wake (default: auto-detect from $PI_SESSION_FILE/$PI_SESSION_ID, $CLAUDECODE/$CLAUDE_CODE_SESSION_ID or $CODEX_THREAD_ID)",
     )
-    target = parser.add_mutually_exclusive_group()
-    target.add_argument(
+    parser.add_argument(
         "--session",
         help=f"Agent session id to resume (default: ${PI_SESSION_FILE_ENV}, ${CLAUDE_THREAD_ID_ENV} or ${CODEX_THREAD_ID_ENV} from the launching agent thread)",
-    )
-    target.add_argument(
-        "--last",
-        action="store_true",
-        help="Unsafely resume the most recent agent session instead of binding the launching thread",
     )
     parser.add_argument("--cwd", default=os.getcwd(), help="Working directory for the task and resumed agent")
     parser.add_argument("--task", default="long task", help="Human-readable task name")
@@ -198,9 +192,7 @@ def main() -> int:
     doctor_parser.add_argument("--agent", choices=AGENT_NAMES, help="Callback Agent (default: detect current Agent)")
     doctor_parser.add_argument("--agent-worker", choices=CHILD_AGENT_NAMES, help="Child Agent for --operation agent")
     doctor_parser.add_argument("--callback-mode", choices=routes.MODES, default="auto")
-    doctor_target = doctor_parser.add_mutually_exclusive_group()
-    doctor_target.add_argument("--session", help="Original Agent session to preserve during repair")
-    doctor_target.add_argument("--last", action="store_true", help="Inspect an already explicitly chosen unsafe last-session target")
+    doctor_parser.add_argument("--session", help="Original Agent session to preserve during repair")
 
     prompt_policy_parser = sub.add_parser("prompt-policy", help="Show or set callback reminder intervals")
     prompt_policy_parser.add_argument("--system-every", type=reminder_policy.positive_prompt_interval, help="Show standard reminders every N distinct callbacks (default: 4)")

@@ -65,8 +65,8 @@ class PromptCadenceTests(unittest.TestCase):
         self.root = self.root.parent / "another-queue"
         self.assertEqual(self.allocate(self.request("e"))["sequence"], 1)
 
-    def test_unbound_last_target_preserves_full_without_counting(self):
-        self.assertIsNone(self.allocate({"id": "last", "agent": "codex", "target": {"kind": "last"}}))
+    def test_target_without_a_bound_session_preserves_full_without_counting(self):
+        self.assertIsNone(self.allocate({"id": "unbound", "agent": "codex", "target": {"kind": "future-unknown"}}))
         self.assertEqual(self.allocate(self.request("bound"))["sequence"], 1)
 
     def test_corrupt_counter_falls_back_instead_of_restarting_sequence(self):
@@ -229,7 +229,7 @@ class PromptCadenceTests(unittest.TestCase):
                 self.assertFalse(list((self.root / "prompt-counters").glob("*.json")))
         self.policy.unlink()
         payload = self.payload("unknown")
-        payload["request"]["target"] = {"kind": "last"}
+        payload["request"]["target"] = {"kind": "future-unknown"}
         selected = reminder_policy.select_delivery_prompt(payload)
         self.assertIn("FULL", selected)
         self.assertIn("USER HOOK", selected)

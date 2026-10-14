@@ -164,11 +164,11 @@ class SessionDirectoryTests(unittest.TestCase):
         self.write_session({"cwd": str(self.project)})
         claude = {"agent": "claude", "target": {"kind": "session", "value": SESSION}, "cwd": "/task/cwd"}
         codex = dict(claude, agent="codex")
-        last = dict(claude, target={"kind": "last"})
+        unrecorded = dict(claude, target={"kind": "session", "value": "session-without-a-transcript"})
         with mock.patch.dict(os.environ, self.environment):
             self.assertEqual(delivery_engine.resume_cwd(claude), str(self.project))
             self.assertEqual(delivery_engine.resume_cwd(codex), "/task/cwd")
-            self.assertEqual(delivery_engine.resume_cwd(last), "/task/cwd")
+            self.assertEqual(delivery_engine.resume_cwd(unrecorded), "/task/cwd")
 
 
 class LiveWaiterTests(unittest.TestCase):

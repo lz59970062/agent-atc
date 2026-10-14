@@ -252,8 +252,7 @@ Pi also implements the callback transport. Binding prefers `PI_SESSION_FILE`
 (absolute session JSONL) over `PI_SESSION_ID`, and PI takes detection precedence
 over inherited Codex/Claude markers because its session variables are injected
 only into a live PI shell tool. Delivery runs `pi --print --session <file>` with
-the callback prompt on stdin, appending one turn and exiting; `--last` maps to
-`--continue`. An ephemeral session (`--no-session`) has no file to resume, so ATC
+the callback prompt on stdin, appending one turn and exiting. An ephemeral session (`--no-session`) has no file to resume, so ATC
 asks for explicit `--session`. `atc setup --pi-bin` pins the daemon executable.
 
 Pi-only `--system-prompt-file` selects a separate nonempty UTF-8 system prompt

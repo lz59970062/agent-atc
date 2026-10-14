@@ -64,7 +64,5 @@ def render(request: Mapping[str, object], details_path: Path, ack_command: str) 
     target = request.get("target")
     if isinstance(target, dict) and target.get("kind") == "session":
         lines.append(f"Session: {target['value']} (only)")
-    else:
-        lines.append("WARNING: explicit --last target; may be an unrelated session.")
     lines.extend(["ACK after inspection:", ack_command])
     return "\n".join(lines)

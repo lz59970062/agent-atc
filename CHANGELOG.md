@@ -7,6 +7,8 @@
   `${ATC_HOME:-~/.atc}`, services and skills `agent-atc`, and the callback tag
   `[atc]`. Environment variables `CODEX_LONG_TASK_WAKEUP_*`, `LONG_TASK_WAKEUP_*`
   and `LTC_*` become `ATC_*`.
+- Remove `--last`. ATC only resumes an explicitly bound session and never
+  falls back to "the most recent session"; stored callbacks must name one.
 - Remove the `codex-long-task-wakeup` command alias and the automatic adoption
   of `${CODEX_HOME}/long-task-wakeup` state. Moving from LTC will be an explicit
   `atc migrate`.

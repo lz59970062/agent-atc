@@ -22,7 +22,7 @@ Code skills do not carry Pi-session instructions. If you previously linked the C
 ## Pi as the callback parent
 
 Inside Pi's shell, `atc run` binds the callback to the absolute `$PI_SESSION_FILE` (partial IDs
-and `--last` are rejected):
+are rejected):
 
 ```bash
 atc run --cwd "$PWD" --task "train model" -- python train.py

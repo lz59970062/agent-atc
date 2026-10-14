@@ -274,7 +274,7 @@ Inside an agent conversation, ATC binds automatically via `CODEX_THREAD_ID` (Cod
 atc done --agent claude --session <session-id> --cwd "$PWD" --task "external job" --exit-code 0
 ```
 
-If no target can be determined, ATC fails instead of guessing. (`--last` exists but always warns.)
+If no target can be determined, ATC fails instead of guessing; there is no "most recent session" fallback.
 
 ## 🔒 Guarantees and boundaries
 
