@@ -70,7 +70,7 @@ class PiLiveCallbackTests(unittest.TestCase):
 
     def test_automatic_steer_and_frozen_managed_callback_roundtrip(self):
         request, _, _, queue, _ = self.bound
-        args = argparse.Namespace(agent='pi', session=request['target']['value'], last=False,
+        args = argparse.Namespace(agent='pi', session=request['target']['session'], last=False,
                                   cwd=request['cwd'], task='fixture', callback_mode='cli')
         steer = dispatch.make_request(args, 'Steer with completed results')
         assert capabilities.PI_STEER in steer['requires'] and steer['pi_delivery'] == 'steer'
@@ -255,7 +255,7 @@ class PiLiveCallbackTests(unittest.TestCase):
         delivery = bridge.prepare_delivery(payload)
         assert not delivery.online
         assert delivery.command[-2:] == ['--extension', str(bridge.extension_path())]
-        assert queue_store.acquire_path_lock(bridge.writer_lock_path(request['target']['value']), blocking=False) is None
+        assert queue_store.acquire_path_lock(bridge.writer_lock_path(request['target']['session']), blocking=False) is None
         delivery.close()
 
 
@@ -316,11 +316,11 @@ class PiLiveCallbackTests(unittest.TestCase):
         tmp_path = self.directory
         request, _, _, _, _ = bound
         alias = tmp_path / 'alias.jsonl'
-        try: alias.symlink_to(request['target']['value'])
+        try: alias.symlink_to(request['target']['session'])
         except OSError: self.skipTest('symlink privilege unavailable')
-        other = dict(request, target={'kind': 'session', 'value': str(alias)})
+        other = dict(request, target={'kind': 'session', 'session': str(alias)})
         assert delivery_engine.target_lock_path(other) == delivery_engine.target_lock_path(request)
-        assert bridge.writer_lock_path(str(alias)) == bridge.writer_lock_path(request['target']['value'])
+        assert bridge.writer_lock_path(str(alias)) == bridge.writer_lock_path(request['target']['session'])
         for invalid in ('partial-id', '', None):
             with self.assertRaises(ValueError): bridge.canonical_session(invalid)
 
@@ -360,7 +360,7 @@ class PiLiveCallbackTests(unittest.TestCase):
         for option in ['--session', '--session=x', '--continue', '-c', '--resume', '-r', '--fork', '--no-session', '--session-dir']:
             with self.subTest(option=option):
                 request, _, _, _, _ = bound
-                args = argparse.Namespace(cwd=request['cwd'], session=request['target']['value'], pi_args=[option])
+                args = argparse.Namespace(cwd=request['cwd'], session=request['target']['session'], pi_args=[option])
                 with mock.patch.object(subprocess, 'Popen', side_effect=AssertionError('spawned')):
                     with self.assertRaises(ValueError): bridge.managed_pi(args)
 
@@ -372,7 +372,7 @@ class PiLiveCallbackTests(unittest.TestCase):
         request,owner,directory,_,_=bound
         dead_managed(owner,directory); owner['owner_identity']['machine_id']='foreign-machine'
         queue_store.write_request(directory/'owner.json',owner)
-        args=argparse.Namespace(cwd=request['cwd'],session=request['target']['value'],pi_args=[])
+        args=argparse.Namespace(cwd=request['cwd'],session=request['target']['session'],pi_args=[])
         with mock.patch.object(subprocess,'Popen',side_effect=AssertionError('spawned')):
             with self.assertRaisesRegex(ValueError, 'Cannot confirm'): bridge.managed_pi(args)
         assert bridge.read_record(directory/'owner.json')==owner

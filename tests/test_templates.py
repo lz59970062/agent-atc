@@ -60,7 +60,7 @@ class TemplateContractTests(unittest.TestCase):
         self.assertEqual(task["child_model"], "gpt-5.6-luna")
         self.assertEqual(task["child_reasoning_effort"], "max")
         self.assertEqual(task["agent"], "claude")
-        self.assertEqual(task["target"], {"kind": "session", "value": "parent-session"})
+        self.assertEqual(task["target"], {"kind": "session", "session": "parent-session"})
         command = task["wrapped_command"]
         self.assertEqual(command[command.index("--model") + 1], "gpt-5.6-luna")
         self.assertIn('model_reasoning_effort="max"', command)
@@ -192,7 +192,7 @@ class TemplateContractTests(unittest.TestCase):
                 report = Path(completed["agent_result_path"]).read_text(encoding="utf-8")
                 self.assertEqual(bool(report), exit_code == 0)
                 callback = json.loads((self.queue / "pending" / f"{ids.callback_id(task['id'])}.json").read_text(encoding="utf-8"))
-                self.assertEqual(callback["target"], {"kind": "session", "value": "parent-session"})
+                self.assertEqual(callback["target"], {"kind": "session", "session": "parent-session"})
                 self.assertEqual(callback["agent"], "claude")
                 self.assertEqual(callback["exit_code"], exit_code)
                 self.assertEqual(callback["agent_template"], "test")

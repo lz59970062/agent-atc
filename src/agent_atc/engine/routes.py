@@ -94,7 +94,7 @@ def inspect_route(request: dict[str, object], *, timeout: float = 2) -> dict[str
                                           "capabilities": {"experimentalApi": True}})
         connection.notify("initialized", {})
         target = request.get("target")
-        expected = target.get("value") if isinstance(target, dict) and target.get("kind") == "session" else None
+        expected = target.get("session") if isinstance(target, dict) and target.get("kind") == "session" else None
         cursor = None
         # Bounded pagination; failure to find a thread never proves it is free.
         for _ in range(8):

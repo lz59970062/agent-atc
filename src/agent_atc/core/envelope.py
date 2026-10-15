@@ -105,6 +105,6 @@ def render(request: Mapping[str, object], details_path: Path, ack_command: str) 
     lines.append(f"Details: {details_path}" + (" (read before acting)" if requires_details else " (as needed)"))
     target = request.get("target")
     if isinstance(target, dict) and target.get("kind") == "session":
-        lines.append(f"Session: {target['value']} (only)")
+        lines.append(f"Session: {target['session']} (only)")
     lines.append(f"ACK after inspection: {ack_command}")
     return "\n".join(lines)

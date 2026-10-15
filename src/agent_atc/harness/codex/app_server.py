@@ -54,8 +54,8 @@ def desktop_app_server_socket(request: dict[str, object]) -> Path | BridgeEndpoi
         or (not shell.truthy_env(DESKTOP_APP_SERVER_ENV) and request.get("callback_mode") not in ("cli", "desktop"))
         or not isinstance(target, dict)
         or target.get("kind") != "session"
-        or not isinstance(target.get("value"), str)
-        or not target["value"]
+        or not isinstance(target.get("session"), str)
+        or not target["session"]
     ):
         return None
     configured_bridge = (request.get("callback_bridge_file") or os.environ.get(APP_SERVER_BRIDGE_FILE_ENV)

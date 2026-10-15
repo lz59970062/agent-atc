@@ -409,7 +409,7 @@ def inspect(args: argparse.Namespace) -> dict[str, object]:
     if getattr(args, "callback_mode", "auto") != "auto":
         recheck.extend(["--callback-mode", args.callback_mode])
     if target is not None:
-        recheck.extend(["--session", target["value"]])
+        recheck.extend(["--session", target["session"]])
     if operation == "agent" and child_agent:
         recheck.extend(["--agent-worker", child_agent])
     for issue in issues:

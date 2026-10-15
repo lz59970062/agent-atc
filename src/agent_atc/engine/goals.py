@@ -11,7 +11,7 @@ import sys
 import time
 from pathlib import Path
 import yaml
-from ..core import capabilities, ids, records
+from ..core import capabilities, ids, records, targets
 from ..store import layout
 from .. import runtime as atc_runtime
 from ..store import records as queue_store
@@ -240,7 +240,9 @@ def process_goal_reminders(root: Path) -> bool:
                 "schema": records.CALLBACK_SCHEMA, "id": ids.callback_id(ids.goal_root(goal_id), sequence),
                 "created_at": now, "cwd": goal["cwd"], "callback_mode": "cli", "requires": [capabilities.CLI_RESUME],
                 "agent": goal.get("agent", "codex"),
-                "target": goal["target"], "target_source": goal.get("target_source", "goal"),
+                "target": goal["target"],
+                "origin": targets.origin(goal.get("agent", "codex"), str(targets.session_of(goal["target"])), goal["cwd"],
+                                         str(goal.get("target_source", "goal"))),
                 "goal_id": goal_id, "goal_reminder": True, "prompt": "",
             }
             goal_ack_command = atc_runtime.control_command("goal", "ack", "--queue-dir", str(root), "--id", goal_id)

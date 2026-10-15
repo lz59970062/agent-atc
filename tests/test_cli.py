@@ -189,7 +189,7 @@ class CliTests(unittest.TestCase):
             callbacks = list((root / "pending").glob("*.json"))
             self.assertEqual(len(callbacks), 1)
             callback = dispatch.load_request(callbacks[0])
-            self.assertEqual(callback["target"], {"kind": "session", "value": "test-thread"})
+            self.assertEqual(callback["target"], {"kind": "session", "session": "test-thread"})
             self.assertEqual(callbacks[0].stem, callback["id"])
 
     def test_run_dry_run_previews_without_screen_or_queue_writes(self) -> None:
@@ -641,7 +641,7 @@ class CliTests(unittest.TestCase):
             self.assertEqual(task["recovery_reason"], "interrupted_by_host_reboot")
             callback = dispatch.load_request(root / "pending" / f"{ids.callback_id(task['id'])}.json")
             self.assertEqual(callback["agent"], "claude")
-            self.assertEqual(callback["target"], {"kind": "session", "value": "test-thread"})
+            self.assertEqual(callback["target"], {"kind": "session", "session": "test-thread"})
             self.assertIn("not automatically restarted", callback["prompt"])
             self.assertIn("checkpoints", Path(callback["prompt_details_path"]).read_text())
             self.assertIn("read before acting", callback["prompt"])
@@ -866,8 +866,8 @@ class CliTests(unittest.TestCase):
         with self._env_without_claude(CODEX_THREAD_ID="thread-from-env"):
             request = dispatch.make_request(args, "wake up")
 
-        self.assertEqual(request["target"], {"kind": "session", "value": "thread-from-env"})
-        self.assertEqual(request["target_source"], "CODEX_THREAD_ID")
+        self.assertEqual(request["target"], {"kind": "session", "session": "thread-from-env"})
+        self.assertEqual(request["origin"]["binding"], "CODEX_THREAD_ID")
 
     def test_make_request_refuses_ambiguous_target(self) -> None:
         args = argparse.Namespace(
@@ -896,8 +896,8 @@ class CliTests(unittest.TestCase):
         with mock.patch.dict(os.environ, {"CODEX_THREAD_ID": "thread-from-env"}, clear=False):
             request = dispatch.make_request(args, "wake up")
 
-        self.assertEqual(request["target"], {"kind": "session", "value": "explicit-thread"})
-        self.assertEqual(request["target_source"], "--session")
+        self.assertEqual(request["target"], {"kind": "session", "session": "explicit-thread"})
+        self.assertEqual(request["origin"]["binding"], "--session")
 
     def test_bound_target_is_snapshotted_before_environment_changes(self) -> None:
         args = argparse.Namespace(
@@ -914,13 +914,13 @@ class CliTests(unittest.TestCase):
         with self._env_without_claude(CODEX_THREAD_ID="later-thread"):
             request = dispatch.make_request(args, "wake up")
 
-        self.assertEqual(request["target"], {"kind": "session", "value": "launch-thread"})
-        self.assertEqual(request["target_source"], "CODEX_THREAD_ID")
+        self.assertEqual(request["target"], {"kind": "session", "session": "launch-thread"})
+        self.assertEqual(request["origin"]["binding"], "CODEX_THREAD_ID")
 
     def test_resume_command_uses_auto_review_by_default(self) -> None:
         command = delivery_engine.resume_command(
             {
-                "target": {"kind": "session", "value": "session-1"},
+                "target": {"kind": "session", "session": "session-1"},
                 "cwd": "/tmp",
                 "prompt": "hello",
             }
@@ -975,7 +975,7 @@ class CliTests(unittest.TestCase):
     def test_resume_command_makes_queue_dir_writable(self) -> None:
         command = delivery_engine.resume_command(
             {
-                "target": {"kind": "session", "value": "codex-session-1"},
+                "target": {"kind": "session", "session": "codex-session-1"},
                 "cwd": "/tmp",
                 "prompt": "hello",
                 "queue_dir": "/tmp/callback-queue",
@@ -1020,8 +1020,8 @@ class CliTests(unittest.TestCase):
             request = dispatch.make_request(args, "wake up")
 
         self.assertEqual(request["agent"], "claude")
-        self.assertEqual(request["target"], {"kind": "session", "value": "claude-session-1"})
-        self.assertEqual(request["target_source"], "CLAUDE_CODE_SESSION_ID")
+        self.assertEqual(request["target"], {"kind": "session", "session": "claude-session-1"})
+        self.assertEqual(request["origin"]["binding"], "CLAUDE_CODE_SESSION_ID")
         self.assertEqual(request["permission_mode"], "auto")
 
     def test_claude_resume_command_shape(self) -> None:
@@ -1029,7 +1029,7 @@ class CliTests(unittest.TestCase):
             command = delivery_engine.resume_command(
                 {
                     "agent": "claude",
-                    "target": {"kind": "session", "value": "claude-session-1"},
+                    "target": {"kind": "session", "session": "claude-session-1"},
                     "cwd": "/tmp",
                     "prompt": "hello",
                     "queue_dir": "/tmp/callback-queue",
@@ -1053,7 +1053,7 @@ class CliTests(unittest.TestCase):
     def test_claude_resume_command_honors_overrides(self) -> None:
         request = {
             "agent": "claude",
-            "target": {"kind": "session", "value": "claude-session-1"},
+            "target": {"kind": "session", "session": "claude-session-1"},
             "cwd": "/tmp",
             "prompt": "hello",
             "permission_mode": "acceptEdits",
@@ -1082,7 +1082,7 @@ class CliTests(unittest.TestCase):
         payload = {
             "request": {
                 "agent": "claude",
-                "target": {"kind": "session", "value": "claude-session-1"},
+                "target": {"kind": "session", "session": "claude-session-1"},
                 "sandbox_mode": "workspace-write",
             },
             "timeout": 1.0,
@@ -1251,7 +1251,7 @@ class CliTests(unittest.TestCase):
 
     def test_move_request_collision_is_idempotent_only_for_same_valid_id(self) -> None:
         def payload(request_id: str, cwd: str, prompt: str) -> dict[str, object]:
-            return atc_records.callback_record(request_id, cwd, target={"kind": "session", "value": "fixture-session"}, prompt=prompt, created_at=1.0)
+            return atc_records.callback_record(request_id, cwd, target={"kind": "session", "session": "fixture-session"}, prompt=prompt, created_at=1.0)
 
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "queue"
@@ -1317,7 +1317,7 @@ class CliTests(unittest.TestCase):
                 root,
                 "queue-only-ack",
                 tmp,
-                target={"kind": "session", "value": "queue-only-session"},
+                target={"kind": "session", "session": "queue-only-session"},
             )
             queue_store.ensure_daemon_dirs(root)
             queue_store.move_request(layout.request_path(root, "pending", "queue-only-ack"), root / "running")
@@ -1337,7 +1337,7 @@ class CliTests(unittest.TestCase):
                 root,
                 "deferred-lease-ack",
                 tmp,
-                target={"kind": "session", "value": "deferred-lease-session"},
+                target={"kind": "session", "session": "deferred-lease-session"},
             )
             queue_store.ensure_daemon_dirs(root)
             queue_store.move_request(layout.request_path(root, "pending", "deferred-lease-ack"), root / "failed")
@@ -1367,7 +1367,7 @@ class CliTests(unittest.TestCase):
     def test_late_ack_reconciles_failed_request_to_done(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "queue"
-            target = {"kind": "session", "value": "late-ack-thread"}
+            target = {"kind": "session", "session": "late-ack-thread"}
             self._write_request(root, "late-failed-ack", tmp, target=target)
             queue_store.ensure_daemon_dirs(root)
             queue_store.move_request(
@@ -1391,7 +1391,7 @@ class CliTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root_a = Path(tmp) / "queue-a"
             root_b = Path(tmp) / "queue-b"
-            target = {"kind": "session", "value": "late-ack-thread"}
+            target = {"kind": "session", "session": "late-ack-thread"}
             self._write_request(root_a, "late-failed-ack", tmp, target=target)
             queue_store.ensure_daemon_dirs(root_a)
             queue_store.move_request(layout.request_path(root_a, "pending", "late-failed-ack"), root_a / "failed")
@@ -1411,7 +1411,7 @@ class CliTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root_a = Path(tmp) / "queue-a"
             root_b = Path(tmp) / "queue-b"
-            target = {"kind": "session", "value": "restart-thread"}
+            target = {"kind": "session", "session": "restart-thread"}
             self._write_request(root_a, "reconciled", tmp, target=target)
             queue_store.ensure_daemon_dirs(root_a)
             queue_store.move_request(layout.request_path(root_a, "pending", "reconciled"), root_a / "done")
@@ -1427,7 +1427,7 @@ class CliTests(unittest.TestCase):
     def test_marker_reconciliation_blocks_while_transaction_lock_is_held(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "queue"
-            target = {"kind": "session", "value": "reconcile-thread"}
+            target = {"kind": "session", "session": "reconcile-thread"}
             self._write_request(root, "reconciled", tmp, target=target)
             request = dispatch.load_request(layout.request_path(root, "pending", "reconciled"))
 
@@ -1445,7 +1445,7 @@ class CliTests(unittest.TestCase):
     def test_ack_releases_timeout_marker_while_parent_still_marks_running(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "queue"
-            target = {"kind": "session", "value": "timeout-thread"}
+            target = {"kind": "session", "session": "timeout-thread"}
             self._write_request(root, "timeout-ack", tmp, target=target)
             queue_store.ensure_daemon_dirs(root)
             queue_store.move_request(layout.request_path(root, "pending", "timeout-ack"), root / "running")
@@ -1462,7 +1462,7 @@ class CliTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "queue"
             request_id = "final-transition-ack"
-            self._write_request(root, request_id, tmp, target={"kind": "session", "value": "race-thread"})
+            self._write_request(root, request_id, tmp, target={"kind": "session", "session": "race-thread"})
             args = argparse.Namespace(retries=0, retry_delay=0.0, retry_backoff=2.0)
             original_move = queue_store.move_request
 
@@ -1493,7 +1493,7 @@ class CliTests(unittest.TestCase):
     def test_ack_releases_queue_for_other_session_but_keeps_same_session_lease(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "queue"
-            self._write_request(root, "a-running", tmp, target={"kind": "session", "value": "session-a"})
+            self._write_request(root, "a-running", tmp, target={"kind": "session", "session": "session-a"})
             fake_codex = self._fake_codex(
                 Path(tmp),
                 ack=True,
@@ -1510,8 +1510,8 @@ class CliTests(unittest.TestCase):
             self.assertTrue(layout.request_path(root, "running", "a-running").exists())
             self.assertTrue(queue_store.delivery_lock_is_held(root, "a-running"))
 
-            self._write_request(root, "b-same", tmp, target={"kind": "session", "value": "session-a"})
-            self._write_request(root, "c-other", tmp, target={"kind": "session", "value": "session-b"})
+            self._write_request(root, "b-same", tmp, target={"kind": "session", "session": "session-a"})
+            self._write_request(root, "c-other", tmp, target={"kind": "session", "session": "session-b"})
             self.assertEqual(delivery_engine.select_pending(root, time.time()).stem, "c-other")
 
             delivery_engine.recover_running(root)
@@ -1526,7 +1526,7 @@ class CliTests(unittest.TestCase):
     def test_delivery_rechecks_ack_after_lock_before_spawning_worker(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "queue"
-            self._write_request(root, "ack-race", tmp, target={"kind": "session", "value": "race-session"})
+            self._write_request(root, "ack-race", tmp, target={"kind": "session", "session": "race-session"})
             request = dispatch.load_request(layout.request_path(root, "pending", "ack-race"))
             args = argparse.Namespace(resume_timeout=10.0)
             original_acquire = queue_store.acquire_owner_lock
@@ -1556,13 +1556,13 @@ class CliTests(unittest.TestCase):
     def test_canceled_live_delivery_retains_target_lease_after_memory_loss(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "queue"
-            self._write_request(root, "held-canceled", tmp, target={"kind": "session", "value": "held-session"})
+            self._write_request(root, "held-canceled", tmp, target={"kind": "session", "session": "held-session"})
             queue_store.ensure_daemon_dirs(root)
             queue_store.move_request(layout.request_path(root, "pending", "held-canceled"), root / "canceled")
             delivery_lock = queue_store.acquire_owner_lock(root, layout.delivery_lock_id("held-canceled"), blocking=False)
             self.assertIsNotNone(delivery_lock)
             try:
-                self._write_request(root, "same-target", tmp, target={"kind": "session", "value": "held-session"})
+                self._write_request(root, "same-target", tmp, target={"kind": "session", "session": "held-session"})
                 delivery_engine._BACKGROUND_RESUMES.clear()
                 self.assertIsNone(delivery_engine.select_pending(root, time.time()))
             finally:
@@ -1573,7 +1573,7 @@ class CliTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root_a = Path(tmp) / "queue-a"
             root_b = Path(tmp) / "queue-b"
-            target = {"kind": "session", "value": "shared-session"}
+            target = {"kind": "session", "session": "shared-session"}
             self._write_request(root_a, "owner", tmp, target=target)
             owner = dispatch.load_request(layout.request_path(root_a, "pending", "owner"))
             self._write_request(root_b, "a-same", tmp, target=target)
@@ -1581,7 +1581,7 @@ class CliTests(unittest.TestCase):
                 root_b,
                 "b-other",
                 tmp,
-                target={"kind": "session", "value": "other-session"},
+                target={"kind": "session", "session": "other-session"},
             )
 
             with mock.patch.dict(
@@ -1603,7 +1603,7 @@ class CliTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root_a = Path(tmp) / "queue-a"
             root_b = Path(tmp) / "queue-b"
-            target = {"kind": "session", "value": "race-session"}
+            target = {"kind": "session", "session": "race-session"}
             self._write_request(root_a, "owner", tmp, target=target)
             owner = dispatch.load_request(layout.request_path(root_a, "pending", "owner"))
             self._write_request(root_b, "contender", tmp, target=target)
@@ -1635,7 +1635,7 @@ class CliTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root_a = Path(tmp) / "queue-a"
             root_b = Path(tmp) / "queue-b"
-            target = {"kind": "session", "value": "stale-selection-session"}
+            target = {"kind": "session", "session": "stale-selection-session"}
             failed = atc_records.callback_record("desktop-unknown", tmp, target=target, prompt="wake up", created_at=1.0, retain_target_lease=True)
             queue_store.ensure_daemon_dirs(root_a)
             queue_store.write_request(layout.request_path(root_a, "failed", "desktop-unknown"), failed)
@@ -1664,7 +1664,7 @@ class CliTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root_a = Path(tmp) / "queue-a"
             root_b = Path(tmp) / "queue-b"
-            target = {"kind": "session", "value": "worker-session"}
+            target = {"kind": "session", "session": "worker-session"}
             self._write_request(root_a, "owner", tmp, target=target)
             fake_codex = self._fake_codex(
                 Path(tmp),
@@ -1720,7 +1720,7 @@ class CliTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "queue"
             launch_log = Path(tmp) / "resume-launches.log"
-            self._write_request(root, "restart-lease", tmp, target={"kind": "session", "value": "restart-session"})
+            self._write_request(root, "restart-lease", tmp, target={"kind": "session", "session": "restart-session"})
             fake_codex = self._fake_codex(
                 Path(tmp),
                 ack=False,
@@ -1796,7 +1796,7 @@ class CliTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "queue"
             descendant_pid_path = Path(tmp) / "descendant.pid"
-            self._write_request(root, "no-fd-leak", tmp, target={"kind": "session", "value": "fd-session"})
+            self._write_request(root, "no-fd-leak", tmp, target={"kind": "session", "session": "fd-session"})
             fake_codex = self._fake_codex(
                 Path(tmp),
                 ack=False,
@@ -2326,7 +2326,7 @@ class CliTests(unittest.TestCase):
             (root / "running").mkdir(parents=True)
             (root / "running" / "running-one.json").write_text(
                 json.dumps(
-                    atc_records.callback_record("running-one", tmp, target={"kind": "session", "value": "fixture-session"}, prompt="wake up", created_at=1.0)
+                    atc_records.callback_record("running-one", tmp, target={"kind": "session", "session": "fixture-session"}, prompt="wake up", created_at=1.0)
                 )
                 + "\n",
                 encoding="utf-8",
@@ -2343,7 +2343,7 @@ class CliTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "queue"
             (root / "pending").mkdir(parents=True)
-            request = atc_records.callback_record("pending-id", tmp, target={"kind": "session", "value": "thread-1"}, prompt="[atc]\nTask: train model\n", created_at=1.0)
+            request = atc_records.callback_record("pending-id", tmp, target={"kind": "session", "session": "thread-1"}, prompt="[atc]\nTask: train model\n", created_at=1.0)
             (root / "pending" / "pending-id.json").write_text(json.dumps(request), encoding="utf-8")
             args = argparse.Namespace(queue_dir=str(root), state=None, limit=5, quiet_empty=False, shell_hook=True)
 
@@ -2402,7 +2402,7 @@ class CliTests(unittest.TestCase):
             self.assertEqual(
                 dispatch.enqueue_existing_request(
                     root,
-                    atc_records.callback_record("terminal-callback", tmp, target={"kind": "session", "value": "thread-1"}, prompt="Task: stale callback", created_at=time.time(), target_source="--session", goal_id="terminal-goal"),
+                    atc_records.callback_record("terminal-callback", tmp, target={"kind": "session", "session": "thread-1"}, prompt="Task: stale callback", created_at=time.time(), target_source="--session", goal_id="terminal-goal"),
                     "Task: stale callback",
                 ),
                 1,
@@ -2532,7 +2532,7 @@ class CliTests(unittest.TestCase):
                     "id": "legacy-goal",
                     "task": "legacy task",
                     "cwd": tmp,
-                    "target": {"kind": "session", "value": "thread-1"},
+                    "target": {"kind": "session", "session": "thread-1"},
                     "state": "active",
                     "created_at": time.time(),
                     "last_external_callback_at": time.time(),
@@ -2608,7 +2608,7 @@ class CliTests(unittest.TestCase):
             callback_time = time.time()
             queue_store.write_request(
                 root / "pending" / "crash-window.json",
-                atc_records.callback_record("crash-window", tmp, target={"kind": "session", "value": "thread-1"}, prompt="Task: callback persisted before goal timestamp", created_at=callback_time, goal_id="recovery-goal"),
+                atc_records.callback_record("crash-window", tmp, target={"kind": "session", "session": "thread-1"}, prompt="Task: callback persisted before goal timestamp", created_at=callback_time, goal_id="recovery-goal"),
             )
 
             self.assertFalse(goals.process_goal_reminders(root))
@@ -2773,7 +2773,7 @@ class CliTests(unittest.TestCase):
                 return socket_path, thread, messages, errors
 
             request = {
-                "target": {"kind": "session", "value": "desktop-thread"},
+                "target": {"kind": "session", "session": "desktop-thread"},
                 "queue_dir": str(Path(tmp) / "queue"),
                 "sandbox_mode": "workspace-write",
                 "approval_policy": "on-request",
@@ -2903,7 +2903,7 @@ class CliTests(unittest.TestCase):
             connection = RejectedConnection()
             payload = {
                 "request": {
-                    "target": {"kind": "session", "value": "desktop-thread"},
+                    "target": {"kind": "session", "session": "desktop-thread"},
                     "queue_dir": str(Path(tmp) / "queue"),
                     "sandbox_mode": "workspace-write",
                 },
@@ -2956,7 +2956,7 @@ class CliTests(unittest.TestCase):
             with self.assertRaises(app_server.AppServerProtocolError):
                 connection._receive_json(deadline)
 
-        request = {"target": {"kind": "session", "value": "desktop-thread"}}
+        request = {"target": {"kind": "session", "session": "desktop-thread"}}
         with (
             mock.patch.dict(
                 os.environ,
@@ -3027,7 +3027,7 @@ class CliTests(unittest.TestCase):
 
             delivery = IncompleteDelivery()
             queue_root = Path(tmp) / "queue"
-            request = atc_records.callback_record("desktop-timeout", tmp, target={"kind": "session", "value": "desktop-thread"}, prompt="wake up", created_at=1.0)
+            request = atc_records.callback_record("desktop-timeout", tmp, target={"kind": "session", "session": "desktop-thread"}, prompt="wake up", created_at=1.0)
             payload = {
                 "command": ["unused"],
                 "prompt": "wake up",
@@ -3078,7 +3078,7 @@ class CliTests(unittest.TestCase):
                     pass
 
             queue_root = Path(tmp) / "queue"
-            request = atc_records.callback_record("desktop-late-ack", tmp, target={"kind": "session", "value": "desktop-thread"}, prompt="wake up", created_at=1.0)
+            request = atc_records.callback_record("desktop-late-ack", tmp, target={"kind": "session", "session": "desktop-thread"}, prompt="wake up", created_at=1.0)
             ack = Path(tmp) / "acks" / "callback.json"
             payload = {
                 "command": ["unused"],
@@ -3125,7 +3125,7 @@ class CliTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "queue"
             queue_store.ensure_daemon_dirs(root)
-            request = atc_records.callback_record("desktop-unknown", tmp, target={"kind": "session", "value": "desktop-thread"}, prompt="wake up", created_at=1.0, retain_target_lease=True)
+            request = atc_records.callback_record("desktop-unknown", tmp, target={"kind": "session", "session": "desktop-thread"}, prompt="wake up", created_at=1.0, retain_target_lease=True)
             queue_store.write_request(layout.request_path(root, "failed", "desktop-unknown"), request)
             with mock.patch.dict(os.environ, {layout.TARGET_LOCK_DIR_ENV: str(Path(tmp) / "target-locks")}, clear=False):
                 delivery_engine.retain_target_lease(root, request)
@@ -3137,7 +3137,7 @@ class CliTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root_a = Path(tmp) / "queue-a"
             root_b = Path(tmp) / "queue-b"
-            target = {"kind": "session", "value": "desktop-thread"}
+            target = {"kind": "session", "session": "desktop-thread"}
             failed = atc_records.callback_record("desktop-unknown", tmp, target=target, prompt="wake up", created_at=1.0, retain_target_lease=True)
             queue_store.ensure_daemon_dirs(root_a)
             queue_store.write_request(layout.request_path(root_a, "failed", "desktop-unknown"), failed)
@@ -3151,7 +3151,7 @@ class CliTests(unittest.TestCase):
     def test_cancel_releases_timeout_marker_while_parent_still_marks_running(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "queue"
-            target = {"kind": "session", "value": "timeout-thread"}
+            target = {"kind": "session", "session": "timeout-thread"}
             self._write_request(root, "timeout-cancel", tmp, target=target)
             queue_store.ensure_daemon_dirs(root)
             queue_store.move_request(layout.request_path(root, "pending", "timeout-cancel"), root / "running")
@@ -3171,7 +3171,7 @@ class CliTests(unittest.TestCase):
         target: dict[str, str] | None = None,
     ) -> None:
         (root / "pending").mkdir(parents=True, exist_ok=True)
-        request = atc_records.callback_record(request_id, cwd, target=target or {"kind": "session", "value": "fixture-session"}, prompt="wake up", created_at=1.0)
+        request = atc_records.callback_record(request_id, cwd, target=target or {"kind": "session", "session": "fixture-session"}, prompt="wake up", created_at=1.0)
         (root / "pending" / f"{request_id}.json").write_text(
             json.dumps(request) + "\n",
             encoding="utf-8",

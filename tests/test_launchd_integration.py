@@ -122,7 +122,7 @@ class RealLaunchdTests(unittest.TestCase):
                 self.assertEqual(macos.job_status(task_owner), (OwnerState.ABSENT, None, False))
                 self.assertEqual(executions.read_text().splitlines(), ["executed"])
                 self.assertEqual(len(list((root / "pending").glob("*.json"))), 1)
-                self.assertEqual(dispatch.load_request(callback_path)["target"], {"kind": "session", "value": "fixture-no-real-agent"})
+                self.assertEqual(dispatch.load_request(callback_path)["target"], {"kind": "session", "session": "fixture-no-real-agent"})
             finally:
                 self.remove_job(task_owner)
                 self.remove_job(coordinator_owner)

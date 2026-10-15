@@ -145,7 +145,7 @@ class NativeTaskLifecycleTests(unittest.TestCase):
         callback = dispatch.load_request(pending[0])
         self.assertEqual(callback["id"], ids.callback_id(task["id"]))
         self.assertEqual(callback["exit_code"], 7)
-        self.assertEqual(callback["target"], {"kind": "session", "value": "bound-native-session"})
+        self.assertEqual(callback["target"], {"kind": "session", "session": "bound-native-session"})
 
     def test_callback_runtime_excludes_queue_and_delivery_delays(self) -> None:
         path = self.submit()

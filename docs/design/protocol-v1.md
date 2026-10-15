@@ -125,11 +125,11 @@ ATC 需要的六项能力：
 
 ```json
 "origin": {"harness": "codex", "session": "019a…", "cwd": "/work/repo", "binding": "CODEX_THREAD_ID"},
-"target": {"kind": "session", "harness": "codex", "session": "019a…", "cwd": "/work/repo", "locator": null}
+"target": {"kind": "session", "session": "019a…"}
 ```
 
 - `origin`：谁提交的任务。只记录，不参与投递。
-- `target`：回调投给谁。`session` 是不透明字符串；`cwd` 给需要按工作目录恢复的 Harness 用；`locator` 放 Harness 特有的定位信息，例如 Pi 的会话文件路径。
+- `target`：回调投给谁。`session` 是不透明字符串（Pi 的会话直接用会话文件的绝对路径）。Harness 和工作目录就是记录里的 `agent` 和 `cwd`，所以 v1 的 target 不重复存放；以后 `--notify` 把回调发给另一个 Harness 时，再在 target 里加 `harness`、`cwd` 和 `locator`。
 
 | `target.kind` | v1 | 含义 |
 |---|---|---|

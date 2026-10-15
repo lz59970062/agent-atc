@@ -26,7 +26,7 @@ class CallbackRecordTests(unittest.TestCase):
         return path
 
     def record(self, ident: str = "1a2b3c4d-c1", **fields: object) -> dict[str, object]:
-        return atc_records.callback_record(ident, str(self.root), target={"kind": "session", "value": "s"},
+        return atc_records.callback_record(ident, str(self.root), target={"kind": "session", "session": "s"},
                                            prompt="wake up", **fields)
 
     def test_routes_declare_what_delivery_depends_on(self):
@@ -69,3 +69,28 @@ class CallbackRecordTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AddressTests(unittest.TestCase):
+    def test_a_session_target_names_only_the_bound_session(self):
+        from agent_atc.core import targets
+
+        self.assertEqual(targets.session("019a"), {"kind": "session", "session": "019a"})
+        self.assertEqual(targets.session_of({"kind": "session", "session": "019a"}), "019a")
+        for target in (None, {}, {"kind": "session", "session": ""}, {"kind": "profile", "session": "x"}):
+            self.assertIsNone(targets.session_of(target))
+        with self.assertRaises(ValueError):
+            targets.session("")
+
+    def test_callbacks_record_who_submitted_them(self):
+        import argparse
+        from unittest import mock
+
+        with tempfile.TemporaryDirectory() as tmp:
+            args = argparse.Namespace(queue_dir=tmp, cwd=tmp, agent="claude", session="claude-1", task="t",
+                                      exit_code=0, message=None, callback_mode="manual")
+            with mock.patch("sys.stderr"):
+                request = dispatch.make_request(args, "prompt")
+        self.assertEqual(request["target"], {"kind": "session", "session": "claude-1"})
+        self.assertEqual(request["origin"], {"harness": "claude", "session": "claude-1", "cwd": tmp, "binding": "--session"})
+        self.assertNotIn("target_source", request)

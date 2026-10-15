@@ -15,7 +15,7 @@ from ..harness.base import DEFAULT_APPROVALS_REVIEWER, DEFAULT_APPROVAL_POLICY, 
 from ..runtime import worker_command
 from ..owners import LaunchError, OwnerState, ScreenBackend, SystemdUserBackend, LaunchdBackend
 from ..owners.windows import WindowsBackend
-from ..core import ids, results
+from ..core import ids, results, targets
 from ..store import layout
 from ..owners import host
 from ..store import records as queue_store
@@ -129,7 +129,7 @@ def managed_task_namespace(task: dict[str, object]) -> argparse.Namespace:
         command=str(task["command"]),
         exit_code=task.get("exit_code"),
         message=task.get("message"),
-        session=target.get("value") if isinstance(target, dict) and target.get("kind") == "session" else None,
+        session=target.get("session") if isinstance(target, dict) and target.get("kind") == "session" else None,
         agent=str(task.get("agent", "codex")),
         queue_dir=str(task["queue_dir"]),
         goal_id=task.get("goal_id"),
@@ -142,7 +142,7 @@ def managed_task_namespace(task: dict[str, object]) -> argparse.Namespace:
         wrapped_command=[str(part) for part in task["wrapped_command"]],
         _callback_id=ids.callback_id(str(task["id"])),
         _callback_target=target,
-        _callback_target_source=str(task.get("target_source", "managed-task")),
+        _callback_target_source=targets.binding_of(task, "managed-task"),
         _callback_agent=str(task.get("agent", "codex")),
         callback_format=str(task.get("callback_format", "compact")),
         _callback_route={k: task[k] for k in routes.ROUTE_FIELDS if k in task},

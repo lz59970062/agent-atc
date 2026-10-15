@@ -158,7 +158,7 @@ class WindowsServiceTests(unittest.TestCase):
     def test_draining_finds_orphan_delivery_after_ack_moved_callback_to_done(self):
         queue_store.ensure_daemon_dirs(self.root)
         request_id = "acknowledged-orphan"
-        queue_store.write_request(layout.request_path(self.root, "done", request_id), atc_records.callback_record(request_id, str(self.directory), target={"kind": "session", "value": "fixture-session"}, prompt="fixture", agent="codex"))
+        queue_store.write_request(layout.request_path(self.root, "done", request_id), atc_records.callback_record(request_id, str(self.directory), target={"kind": "session", "session": "fixture-session"}, prompt="fixture", agent="codex"))
         lock = queue_store.acquire_owner_lock(self.root, layout.delivery_lock_id(request_id), blocking=False)
         self.assertIsNotNone(lock)
         try:

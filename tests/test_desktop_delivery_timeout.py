@@ -36,7 +36,7 @@ class DesktopDeliveryTimeoutTests(unittest.TestCase):
         self.root = self.directory / "queue"
         self.events = self.directory / "rpc-events.jsonl"
         self.cli_calls = self.directory / "cli-calls"
-        self.request = atc_records.callback_record("desktop-fixture", str(self.directory), target={"kind": "session", "value": "fixture-original-session"}, prompt="Model-free Desktop delivery fixture", created_at=time.time(), agent="codex", queue_dir=str(self.root), target_source="explicit", sandbox_mode="workspace-write", attempts=0)
+        self.request = atc_records.callback_record("desktop-fixture", str(self.directory), target={"kind": "session", "session": "fixture-original-session"}, prompt="Model-free Desktop delivery fixture", created_at=time.time(), agent="codex", queue_dir=str(self.root), target_source="explicit", sandbox_mode="workspace-write", attempts=0)
         self.stack = contextlib.ExitStack()
         self.addCleanup(self.stack.close)
         self.stack.enter_context(mock.patch.dict(os.environ, {

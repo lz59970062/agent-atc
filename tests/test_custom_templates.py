@@ -216,7 +216,7 @@ class CustomTemplateTests(unittest.TestCase):
         self.assertEqual(callback["agent_template_version"], 8)
         self.assertEqual(callback["agent_template_source"], str(path.resolve()))
         self.assertEqual(callback["agent_template_handoff"], "ORIGINAL HANDOFF")
-        self.assertEqual(callback["target"], {"kind": "session", "value": "custom-parent"})
+        self.assertEqual(callback["target"], {"kind": "session", "session": "custom-parent"})
         self.assertEqual(callback["agent"], "claude")
         details = Path(callback["prompt_details_path"]).read_text()
         self.assertIn("ORIGINAL HANDOFF", details)

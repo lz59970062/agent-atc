@@ -25,7 +25,7 @@ class FixtureAdapter:
         return environment.get("FIXTURE_EXECUTABLE", "fixture-agent")
 
     def resume_command(self, request, environment):
-        return [self.executable(environment), "resume", request["target"]["value"]]
+        return [self.executable(environment), "resume", request["target"]["session"]]
 
     def child_command(self, options, environment):
         return [self.executable(environment), "run", "--cwd", options.cwd]
@@ -46,7 +46,7 @@ class AgentRegistryTests(unittest.TestCase):
         self.assertEqual(registry.detect(environment), "fixture-agent")
         self.assertEqual(
             registry.get("fixture-agent").resume_command(
-                {"target": {"kind": "session", "value": "bound-future-session"}}, environment
+                {"target": {"kind": "session", "session": "bound-future-session"}}, environment
             ),
             ["fixture-agent", "resume", "bound-future-session"],
         )
@@ -90,10 +90,10 @@ class AgentRegistryTests(unittest.TestCase):
         for name in AGENTS.names:
             adapter = get_agent(name)
             with self.subTest(agent=name):
-                command = adapter.resume_command({"target": {"kind": "session", "value": "bound-session"}}, {})
+                command = adapter.resume_command({"target": {"kind": "session", "session": "bound-session"}}, {})
                 self.assertIn("bound-session", command)
                 self.assertNotIn("--last", command)
-            for target in (None, {}, {"kind": "session", "value": ""}, {"kind": "future-unknown"}):
+            for target in (None, {}, {"kind": "session", "session": ""}, {"kind": "future-unknown"}):
                 with self.subTest(agent=name, target=target), self.assertRaises(ValueError):
                     adapter.resume_command({"target": target}, {})
 

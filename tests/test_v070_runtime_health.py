@@ -49,7 +49,7 @@ class HealthArtifacts:
             "machine_id": "this-machine", "boot_id": "this-boot", "submission_boot_id": "this-boot",
             "launch_requested_at": 100.0, "started_at": 101.0,
             "cwd": str(self.directory), "task": "SECRET_TASK_CONTENT", "command": "SECRET_COMMAND_CONTENT",
-            "target": {"kind": "session", "value": "bound-fixture-session"},
+            "target": {"kind": "session", "session": "bound-fixture-session"},
         }
         task.update(updates)
         self.write_json(layout.managed_task_path(self.root, task_id), task)
@@ -60,7 +60,7 @@ class HealthArtifacts:
         self.write_json(layout.managed_result_path(self.root, task["id"]), result)
 
     def callback(self, callback_id=ids.callback_id("fixture-task"), state="pending", **updates):
-        value = atc_records.callback_record(callback_id, str(self.directory), target={"kind": "session", "value": "bound-fixture-session"}, prompt="SECRET_CALLBACK_CONTENT", agent="codex", last_error="SECRET_EXCEPTION_CONTENT")
+        value = atc_records.callback_record(callback_id, str(self.directory), target={"kind": "session", "session": "bound-fixture-session"}, prompt="SECRET_CALLBACK_CONTENT", agent="codex", last_error="SECRET_EXCEPTION_CONTENT")
         value.update(updates)
         self.write_json(layout.request_path(self.root, state, callback_id), value)
         return value

@@ -73,7 +73,7 @@ class WindowsLifecycleTests(unittest.TestCase):
         return managed_tasks.load_managed_task(path)
 
     def request(self, root, ident, state="pending"):
-        request = atc_records.callback_record(ident, str(self.directory), target={"kind": "session", "value": "windows-original-session"}, prompt="Model-free Windows lifecycle fixture", created_at=time.time(), agent="codex", target_source="explicit", queue_dir=str(root), lifecycle_state=state, attempts=0)
+        request = atc_records.callback_record(ident, str(self.directory), target={"kind": "session", "session": "windows-original-session"}, prompt="Model-free Windows lifecycle fixture", created_at=time.time(), agent="codex", target_source="explicit", queue_dir=str(root), lifecycle_state=state, attempts=0)
         queue_store.ensure_daemon_dirs(root)
         queue_store.write_request(layout.request_path(root, state, ident), request)
         return request
@@ -181,7 +181,7 @@ class WindowsLifecycleTests(unittest.TestCase):
         callback = dispatch.load_request(callbacks[0])
         self.assertEqual(callback["id"], ids.callback_id(task["id"]))
         self.assertEqual(callback["exit_code"], 7)
-        self.assertEqual(callback["target"], {"kind": "session", "value": "windows-original-session"})
+        self.assertEqual(callback["target"], {"kind": "session", "session": "windows-original-session"})
 
     def test_ack_is_durable_when_global_retained_lease_is_not_writable(self):
         request = self.request(self.root, "queue-only-ack", state="failed")

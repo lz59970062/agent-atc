@@ -77,7 +77,7 @@ def resume_target(request: Mapping[str, object]) -> str:
         raise ValueError("request target must be an object")
     if target.get("kind") != "session":
         raise ValueError("request target kind must be 'session'")
-    value = target.get("value")
+    value = target.get("session")
     if not isinstance(value, str) or not value:
         raise ValueError("session target requires a non-empty value")
     return value

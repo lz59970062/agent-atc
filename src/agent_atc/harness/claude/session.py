@@ -196,7 +196,7 @@ def resume_cwd(request: Mapping[str, object], environment: Mapping[str, str]) ->
     target = request.get("target")
     if not isinstance(target, dict) or target.get("kind") != "session":
         return None
-    value = target.get("value")
+    value = target.get("session")
     return session_project_cwd(value, environment) if isinstance(value, str) else None
 
 
@@ -218,7 +218,7 @@ def _session_of(request: Mapping[str, object]) -> str | None:
     target = request.get("target")
     if request.get("agent") != "claude" or not isinstance(target, dict) or target.get("kind") != "session":
         return None
-    value = target.get("value")
+    value = target.get("session")
     return value if isinstance(value, str) and value else None
 
 

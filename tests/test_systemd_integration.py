@@ -140,7 +140,7 @@ class RealSystemdIsolationTests(unittest.TestCase):
                 self.assertEqual(executions.read_text().splitlines(), ["executed"])
                 self.assertEqual(len(list((root / "pending").glob("*.json"))), 1)
                 callback = dispatch.load_request(callback_path)
-                self.assertEqual(callback["target"], {"kind": "session", "value": "fixture-no-real-agent-session"})
+                self.assertEqual(callback["target"], {"kind": "session", "session": "fixture-no-real-agent-session"})
                 self.assertEqual(callback["exit_code"], 7)
                 self.assertTrue(Path(callback["prompt_details_path"]).is_file())
             finally:

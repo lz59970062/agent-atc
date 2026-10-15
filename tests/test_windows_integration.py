@@ -114,7 +114,7 @@ class WindowsIntegrationTests(unittest.TestCase):
             self.assertEqual(result["observed"]["exit_code"], 7)
             self.assertEqual(managed_tasks.load_managed_task(task_path)["state"], "completed")
             self.assertIn("completed after coordinator exit", Path(task["log_path"]).read_text(encoding="utf-8"))
-            self.assertEqual(json.loads(callback.read_text(encoding="utf-8"))["target"]["value"], "fixture-no-model")
+            self.assertEqual(json.loads(callback.read_text(encoding="utf-8"))["target"]["session"], "fixture-no-model")
             self.wait_until(lambda: WindowsBackend().probe(self.owners[0]) == OwnerState.ABSENT,
                             "runner failed to exit")
             managed_tasks.recover_managed_tasks(self.root)

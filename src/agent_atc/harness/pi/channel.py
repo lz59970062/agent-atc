@@ -56,7 +56,7 @@ def validate_route(request: dict) -> None:
     if request.get("pi_delivery", "follow-up") not in ("follow-up", "steer"):
         raise ValueError("Pi delivery must be follow-up or steer")
     target = request.get("target")
-    canonical_session(target.get("value") if isinstance(target, dict) and target.get("kind") == "session" else None)
+    canonical_session(target.get("session") if isinstance(target, dict) and target.get("kind") == "session" else None)
     for field in ("pi_channel_root", "pi_profile_dir"):
         value = request.get(field)
         if not isinstance(value, str) or not Path(value).is_absolute():
@@ -112,7 +112,7 @@ def session_header(session: str) -> dict:
 def owner_record(request: dict) -> tuple[Path, dict]:
     validate_route(request)
     target = request.get("target")
-    session = canonical_session(target.get("value") if isinstance(target, dict) and target.get("kind") == "session" else None)
+    session = canonical_session(target.get("session") if isinstance(target, dict) and target.get("kind") == "session" else None)
     root = request.get("pi_channel_root")
     profile = request.get("pi_profile_dir")
     directory = channel_dir(session, Path(root))
@@ -433,7 +433,7 @@ def prepare_delivery(payload: dict) -> PiDelivery:
     request = payload["request"]
     try:
         directory, owner = owner_record(request)
-        session = canonical_session(request["target"]["value"])
+        session = canonical_session(request["target"]["session"])
         request_id = str(request["id"])
         queue = Path(payload["queue_dir"]).resolve()
         if not _SAFE_ID.fullmatch(request_id):

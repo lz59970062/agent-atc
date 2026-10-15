@@ -6,13 +6,16 @@ only these builders change.
 """
 from __future__ import annotations
 
-from agent_atc.core import capabilities, records
+from agent_atc.core import capabilities, records, targets
 
 
 def callback_record(request_id: str, cwd: str, *, target: dict[str, str], prompt: str, **fields: object) -> dict[str, object]:
+    binding = str(fields.pop("target_source", "fixture"))
     record: dict[str, object] = {"schema": records.CALLBACK_SCHEMA, "id": request_id, "cwd": cwd,
                                  "target": target, "prompt": prompt, "callback_mode": "cli"}
     record.update(fields)
+    if "origin" not in record and targets.session_of(target):
+        record["origin"] = targets.origin(str(record.get("agent", "codex")), str(targets.session_of(target)), cwd, binding)
     record.setdefault("requires", capabilities.required_for(record))
     return record
 

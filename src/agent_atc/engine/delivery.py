@@ -111,7 +111,7 @@ def callback_target_key(request: dict[str, object]) -> str | None:
     if not isinstance(target, dict):
         return None
     kind = target.get("kind")
-    value = target.get("value")
+    value = target.get("session")
     if kind == "session" and isinstance(value, str) and value:
         if dispatch.request_agent(request) == "pi":
             value = pi_channel.canonical_session(value)
@@ -427,7 +427,7 @@ def start_desktop_app_server_turn(payload: dict[str, object]) -> app_server.Desk
     target = request.get("target")
     sandbox_policy = app_server.desktop_sandbox_policy(request)
     explicit_desktop = request.get("callback_mode") == "desktop" or isinstance(socket_path, (BridgeEndpoint, UnixBridgeEndpoint))
-    if socket_path is None or sandbox_policy is None or not isinstance(target, dict) or not isinstance(target.get("value"), str):
+    if socket_path is None or sandbox_policy is None or not isinstance(target, dict) or not isinstance(target.get("session"), str):
         if explicit_desktop:
             raise app_server.CallbackTransportBlocked("Desktop callbacks require a bound session, shared Core and workspace-write callback policy")
         return None
@@ -444,13 +444,13 @@ def start_desktop_app_server_turn(payload: dict[str, object]) -> app_server.Desk
             },
         )
         connection.notify("initialized", {})
-        resumed = connection.request("thread/resume", {"threadId": target["value"], "excludeTurns": True})
+        resumed = connection.request("thread/resume", {"threadId": target["session"], "excludeTurns": True})
         thread = resumed.get("thread") if isinstance(resumed, dict) else None
         status = thread.get("status") if isinstance(thread, dict) else None
         if isinstance(status, dict) and status.get("type") == "active":
             raise app_server.CallbackTargetBusy("original session still has an active turn")
         turn_params: dict[str, object] = {
-            "threadId": target["value"],
+            "threadId": target["session"],
             "cwd": str(payload["cwd"]),
             "input": [{"type": "text", "text": str(payload["prompt"])}],
             "sandboxPolicy": sandbox_policy,
@@ -474,7 +474,7 @@ def start_desktop_app_server_turn(payload: dict[str, object]) -> app_server.Desk
                     # ACK/cancel is authoritative even when global cleanup is
                     # unavailable. Do not fall through to another transport.
                     print(f"atc: acknowledged/canceled Desktop intent cleanup deferred: {cleanup_error}", file=sys.stderr)
-                return app_server.DesktopAppServerDelivery(None, target["value"], None)
+                return app_server.DesktopAppServerDelivery(None, target["session"], None)
         turn_start_submitted = True
         started = connection.request("turn/start", turn_params)
         turn_id = None
@@ -488,8 +488,8 @@ def start_desktop_app_server_turn(payload: dict[str, object]) -> app_server.Desk
                 file=sys.stderr,
             )
             connection.close()
-            return app_server.DesktopAppServerDelivery(None, target["value"], None)
-        delivery = app_server.DesktopAppServerDelivery(connection, target["value"], turn_id)
+            return app_server.DesktopAppServerDelivery(None, target["session"], None)
+        delivery = app_server.DesktopAppServerDelivery(connection, target["session"], turn_id)
         connection = None
         return delivery
     except app_server.AppServerRpcError as exc:
@@ -505,7 +505,7 @@ def start_desktop_app_server_turn(payload: dict[str, object]) -> app_server.Desk
                         "waiting for ACK or manual recovery without CLI fallback",
                         file=sys.stderr,
                     )
-                    return app_server.DesktopAppServerDelivery(None, target["value"], None)
+                    return app_server.DesktopAppServerDelivery(None, target["session"], None)
             if explicit_desktop:
                 raise app_server.CallbackTransportBlocked("explicit Desktop bridge rejected the callback; CLI fallback disabled") from exc
             print(
@@ -524,7 +524,7 @@ def start_desktop_app_server_turn(payload: dict[str, object]) -> app_server.Desk
                 "waiting for ACK or timeout without CLI fallback",
                 file=sys.stderr,
             )
-            return app_server.DesktopAppServerDelivery(None, target["value"], None)
+            return app_server.DesktopAppServerDelivery(None, target["session"], None)
         if explicit_desktop:
             raise app_server.CallbackTransportBlocked("explicit Desktop bridge is unavailable; CLI fallback disabled") from exc
         print(f"atc: desktop App Server delivery unavailable: {exc}; falling back to CLI", file=sys.stderr)

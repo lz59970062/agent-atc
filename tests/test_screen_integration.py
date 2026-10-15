@@ -222,7 +222,7 @@ class RealStandaloneScreenTests(unittest.TestCase):
                     self.assertEqual(len(list((root / "pending").glob("*.json"))), 1)
                     callback = dispatch.load_request(callback_path)
                     self.assertEqual(callback["exit_code"], 7)
-                    self.assertEqual(callback["target"], {"kind": "session", "value": "fixture-no-real-agent-session"})
+                    self.assertEqual(callback["target"], {"kind": "session", "session": "fixture-no-real-agent-session"})
                     self.assertTrue(Path(callback["prompt_details_path"]).is_file())
                 finally:
                     if process is not None and process.poll() is None:

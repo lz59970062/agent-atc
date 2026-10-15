@@ -125,7 +125,7 @@ class ExecutableDiscoveryTests(unittest.TestCase):
                          claude_session.Executable(str(standalone), "standalone"))
 
     def test_resume_command_uses_discovered_binary(self) -> None:
-        request = {"agent": "claude", "target": {"kind": "session", "value": SESSION}, "cwd": "/tmp", "prompt": "x"}
+        request = {"agent": "claude", "target": {"kind": "session", "session": SESSION}, "cwd": "/tmp", "prompt": "x"}
         with mock.patch.object(cli.claude_session, "discover_executable",
                                return_value=claude_session.Executable("/found/claude", "standalone")):
             self.assertEqual(delivery_engine.resume_command(request)[0], "/found/claude")
@@ -162,9 +162,9 @@ class SessionDirectoryTests(unittest.TestCase):
 
     def test_daemon_resumes_claude_where_the_session_started(self) -> None:
         self.write_session({"cwd": str(self.project)})
-        claude = {"agent": "claude", "target": {"kind": "session", "value": SESSION}, "cwd": "/task/cwd"}
+        claude = {"agent": "claude", "target": {"kind": "session", "session": SESSION}, "cwd": "/task/cwd"}
         codex = dict(claude, agent="codex")
-        unrecorded = dict(claude, target={"kind": "session", "value": "session-without-a-transcript"})
+        unrecorded = dict(claude, target={"kind": "session", "session": "session-without-a-transcript"})
         with mock.patch.dict(os.environ, self.environment):
             self.assertEqual(delivery_engine.resume_cwd(claude), str(self.project))
             self.assertEqual(delivery_engine.resume_cwd(codex), "/task/cwd")
@@ -211,7 +211,7 @@ class LiveWaiterTests(unittest.TestCase):
             callback_commands.ack(argparse.Namespace(queue_dir=str(self.root), id=ident, message=None))
 
     def test_watcher_registration_is_visible_only_for_claude_and_stale_files_are_cleaned(self) -> None:
-        claude = {"agent": "claude", "target": {"kind": "session", "value": SESSION}}
+        claude = {"agent": "claude", "target": {"kind": "session", "session": SESSION}}
         codex = dict(claude, agent="codex")
         self.assertFalse(claude_session.live_watcher_is_held(claude))
         watcher = claude_session.register_live_watcher(SESSION)
@@ -299,7 +299,7 @@ class LiveWaiterTests(unittest.TestCase):
 
     def test_wait_skips_callbacks_the_daemon_is_delivering(self) -> None:
         self.enqueue("cb-busy")
-        target_lock = delivery_engine.acquire_target_lock({"target": {"kind": "session", "value": SESSION}}, blocking=False)
+        target_lock = delivery_engine.acquire_target_lock({"target": {"kind": "session", "session": SESSION}}, blocking=False)
         try:
             self.assertEqual(self.run_wait(timeout=0.2)[0], 3)
         finally:
@@ -314,7 +314,7 @@ class LiveWaiterTests(unittest.TestCase):
              "--poll-interval", "0.05", "--timeout", "30"],
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=environment,
         )
-        request = {"agent": "claude", "target": {"kind": "session", "value": SESSION}}
+        request = {"agent": "claude", "target": {"kind": "session", "session": SESSION}}
         try:
             deadline = time.monotonic() + 10
             while not claude_session.live_watcher_is_held(request):

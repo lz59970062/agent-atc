@@ -72,7 +72,7 @@ class BridgeClientTests(unittest.TestCase):
         self.assertEqual(endpoint.pid, os.getpid())
 
     def test_windows_requires_explicit_bridge_and_pins_it_for_service(self):
-        request = {"target": {"kind": "session", "value": "original-session"}}
+        request = {"target": {"kind": "session", "session": "original-session"}}
         with mock.patch.dict(os.environ, {app_server.DESKTOP_APP_SERVER_ENV: "1"}, clear=True):
             self.assertIsNone(app_server.desktop_app_server_socket(request))
         self.write_metadata()
@@ -172,7 +172,7 @@ class BridgeClientTests(unittest.TestCase):
                 errors.append(error)
         thread = threading.Thread(target=serve)
         thread.start()
-        payload = {"request": {"target": {"kind": "session", "value": "original-session"},
+        payload = {"request": {"target": {"kind": "session", "session": "original-session"},
                                "sandbox_mode": "workspace-write", "queue_dir": str(self.directory / "queue")},
                    "cwd": str(self.directory), "prompt": "fixture callback", "timeout": 2}
         with mock.patch.object(app_server, "desktop_app_server_socket", return_value=endpoint):
@@ -188,7 +188,7 @@ class BridgeClientTests(unittest.TestCase):
         self.assertEqual(methods, ["initialize", "initialized", "thread/resume", "turn/start"])
 
     def test_explicit_bridge_unavailability_never_falls_back_to_cli(self):
-        payload = {"request": {"target": {"kind": "session", "value": "original-session"},
+        payload = {"request": {"target": {"kind": "session", "session": "original-session"},
                                "sandbox_mode": "workspace-write", "queue_dir": str(self.directory / "queue")},
                    "cwd": str(self.directory), "prompt": "fixture callback", "timeout": 1}
         endpoint = BridgeEndpoint(49152, os.getpid(), self.identity)

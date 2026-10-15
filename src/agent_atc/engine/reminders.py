@@ -81,11 +81,11 @@ def allocate_prompt_cadence(
     target = request.get("target")
     request_id = request.get("id")
     if (not isinstance(target, dict) or target.get("kind") != "session"
-            or not isinstance(target.get("value"), str) or not target["value"]
+            or not isinstance(target.get("session"), str) or not target["session"]
             or not isinstance(request_id, str) or not request_id):
         return None  # Without a bound session there is no conversation counter.
     agent = dispatch.request_agent(request)
-    session = target["value"]
+    session = target["session"]
     digest = hashlib.sha256(json.dumps([agent, session]).encode("utf-8")).hexdigest()
     path = root / "prompt-counters" / f"{digest}.json"
     lock = None

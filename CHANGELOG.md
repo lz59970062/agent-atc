@@ -29,6 +29,9 @@
   report to `$ATC_REPORT_FILE` (opt out with `--no-report`); it is validated
   and bounded, and the envelope shows it as `Report: … (claimed, unverified)`.
   A missing report never fails a task.
+- Callback and task records name their target as `{"kind": "session",
+  "session": …}` and record who submitted the work in `origin` (harness,
+  session, directory and binding source), replacing `target_source`.
 - Remove `--last`. ATC only resumes an explicitly bound session and never
   falls back to "the most recent session"; stored callbacks must name one.
 - Remove the `codex-long-task-wakeup` command alias and the automatic adoption

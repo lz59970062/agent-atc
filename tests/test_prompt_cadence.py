@@ -21,7 +21,7 @@ from test_cli import patch_inprocess_delivery_worker
 
 def _allocate_in_process(root, policy, callback_id, results):
     request = {"id": callback_id, "agent": "codex",
-               "target": {"kind": "session", "value": "concurrent-session"}}
+               "target": {"kind": "session", "session": "concurrent-session"}}
     try:
         results.put(reminder_policy.allocate_prompt_cadence(Path(root), request, Path(policy)))
     except Exception as exc:
@@ -38,7 +38,7 @@ class PromptCadenceTests(unittest.TestCase):
 
     def request(self, ident, session="parent", agent="codex"):
         return {"id": ident, "agent": agent, "target_source": "--session",
-                "target": {"kind": "session", "value": session}}
+                "target": {"kind": "session", "session": session}}
 
     def allocate(self, request):
         return reminder_policy.allocate_prompt_cadence(self.root, request, policy_path=self.policy)

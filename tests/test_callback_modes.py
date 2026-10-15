@@ -37,7 +37,7 @@ class CallbackModeTests(unittest.TestCase):
         self.stack.enter_context(contextlib.redirect_stderr(io.StringIO()))
 
     def request(self, mode="manual"):
-        return atc_records.callback_record("fixture", str(self.root), target={"kind": "session", "value": "original"}, prompt="inspect the saved fixture", agent="codex", target_source="fixture", callback_mode=mode, attempts=1)
+        return atc_records.callback_record("fixture", str(self.root), target={"kind": "session", "session": "original"}, prompt="inspect the saved fixture", agent="codex", target_source="fixture", callback_mode=mode, attempts=1)
 
     def test_auto_desktop_is_distinct_from_cli_and_manual(self):
         args = argparse.Namespace(agent="codex", callback_mode="auto")

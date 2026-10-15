@@ -76,17 +76,17 @@ class PiAdapterContractTests(unittest.TestCase):
         session = ("/home/user/.pi/agent/sessions/--data-proj--/"
                    "2026-10-03T14-37-07-412Z_01a10232-83d4-700f-a8a1-691db3724158.jsonl")
         self.assertEqual(
-            get_agent("pi").resume_command({"target": {"kind": "session", "value": session}}, {}),
+            get_agent("pi").resume_command({"target": {"kind": "session", "session": session}}, {}),
             ["pi", "--print", "--session", session],
         )
         with mock.patch.dict(os.environ, {"ATC_PI_BIN": "/opt/my Pi/bin/pi"}, clear=False):
             self.assertEqual(
-                delivery_engine.resume_command({"agent": "pi", "target": {"kind": "session", "value": session}}),
+                delivery_engine.resume_command({"agent": "pi", "target": {"kind": "session", "session": session}}),
                 ["/opt/my Pi/bin/pi", "--print", "--session", session],
             )
         self.assertNotIn("--no-session", get_agent("pi").resume_command(
-            {"target": {"kind": "session", "value": session}}, {}))
-        for target in (None, {}, {"kind": "session", "value": ""}, {"kind": "last"}, {"kind": "future-unknown"}):
+            {"target": {"kind": "session", "session": session}}, {}))
+        for target in (None, {}, {"kind": "session", "session": ""}, {"kind": "last"}, {"kind": "future-unknown"}):
             with self.subTest(target=target), self.assertRaises(ValueError):
                 get_agent("pi").resume_command({"target": target}, {})
 
@@ -102,8 +102,8 @@ class PiAdapterContractTests(unittest.TestCase):
             self.assertEqual(dispatch.resolve_agent(args), "pi")
             prompt = dispatch.build_prompt(args)
         self.assertEqual(request["agent"], "pi")
-        self.assertEqual(request["target"], {"kind": "session", "value": session})
-        self.assertEqual(request["target_source"], "PI_SESSION_FILE")
+        self.assertEqual(request["target"], {"kind": "session", "session": session})
+        self.assertEqual(request["origin"]["binding"], "PI_SESSION_FILE")
         self.assertIn("called back into PI Agent", prompt)
         acknowledgement = dispatch.build_acknowledgement_text("atc ack --queue-dir /q --id abc", agent="pi")
         self.assertIn("original PI Agent process through its native message API", acknowledgement)
@@ -318,7 +318,7 @@ class PiAgentContractTests(unittest.TestCase):
                 self.assertIsNone(task.get("agent_system_prompt_source"))
                 self.assertNotIn("--system-prompt", task["wrapped_command"])
                 self.assertEqual(task["agent"], parent)
-                self.assertEqual(task["target"], {"kind": "session", "value": f"parent-{parent}"})
+                self.assertEqual(task["target"], {"kind": "session", "session": f"parent-{parent}"})
                 self.assertEqual(Path(task["agent_prompt_path"]).read_bytes(), atc_records.agent_prompt(prompt, task).encode("utf-8"))
                 self.assertNotIn(prompt, path.read_text(encoding="utf-8"))
                 assert_private_file(self, Path(task["agent_prompt_path"]))
@@ -483,7 +483,7 @@ class PiAgentContractTests(unittest.TestCase):
         self.assertEqual(len(pending), 1)
         request = dispatch.load_request(pending[0])
         self.assertEqual(request["agent"], "pi")
-        self.assertEqual(request["target"], {"kind": "session", "value": str(session)})
+        self.assertEqual(request["target"], {"kind": "session", "session": str(session)})
         self.assertIn("Bound session: " + str(session),
                       Path(str(request["prompt_details_path"])).read_text(encoding="utf-8"))
 
@@ -586,7 +586,7 @@ class PiAgentContractTests(unittest.TestCase):
         self.assertEqual(callback["child_reasoning_effort"], "high")
         self.assertEqual(callback["agent_template_handoff"], "ORIGINAL HANDOFF requires parent inspection.")
         self.assertEqual(callback["agent"], "claude")
-        self.assertEqual(callback["target"], {"kind": "session", "value": "parent-claude"})
+        self.assertEqual(callback["target"], {"kind": "session", "session": "parent-claude"})
         details = Path(callback["prompt_details_path"]).read_text(encoding="utf-8")
         self.assertIn("ORIGINAL HANDOFF", details)
         self.assertNotIn("REPLACEMENT", details)
@@ -735,7 +735,7 @@ class PiAgentContractTests(unittest.TestCase):
                 assert_private_file(self, snapshot)
                 callback = dispatch.load_request(self.queue / "pending" / f"{ids.callback_id(task['id'])}.json")
                 self.assertEqual(callback["agent"], "claude")
-                self.assertEqual(callback["target"], {"kind": "session", "value": "parent-claude"})
+                self.assertEqual(callback["target"], {"kind": "session", "session": "parent-claude"})
                 self.assertEqual(callback["exit_code"], 0)
 
     def test_worker_refuses_missing_or_blank_private_system_prompt_before_starting_pi(self):

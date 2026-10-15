@@ -10,7 +10,7 @@ import sys
 import time
 from datetime import datetime
 from pathlib import Path
-from ..core import capabilities, envelope, ids, records, results
+from ..core import capabilities, envelope, ids, records, results, targets
 from . import routes
 from ..harness.claude import session as claude_session
 from ..harness.pi import channel as pi_channel
@@ -96,7 +96,7 @@ def request_agent(request: dict[str, object]) -> str:
 def resolve_target(args: argparse.Namespace) -> tuple[dict[str, str], str]:
     if args.session:
         value = pi_channel.canonical_session(args.session) if resolve_agent(args) == "pi" else args.session
-        return {"kind": "session", "value": value}, "--session"
+        return targets.session(value), "--session"
 
     agent = resolve_agent(args)
     env_name = get_agent(agent).session_id_env
@@ -104,7 +104,7 @@ def resolve_target(args: argparse.Namespace) -> tuple[dict[str, str], str]:
     if session:
         if agent == "pi":
             session = pi_channel.canonical_session(session)
-        return {"kind": "session", "value": session}, env_name
+        return targets.session(session), env_name
 
     raise SystemExit(
         f"Cannot determine the callback session: {env_name} is unset. "
@@ -121,19 +121,19 @@ def bind_target(args: argparse.Namespace) -> tuple[dict[str, str], str]:
     target, source = resolve_target(args)
     args._callback_target = target
     args._callback_target_source = source
-    print(f"atc: callback bound to session {target['value']} via {source}", file=sys.stderr)
+    print(f"atc: callback bound to session {target['session']} via {source}", file=sys.stderr)
     return target, source
 
 
 def routing_text(request: dict[str, object]) -> str:
     target = request["target"]
-    source = request["target_source"]
+    source = targets.binding_of(request)
     if not (isinstance(target, dict) and target.get("kind") == "session"):
         raise ValueError("callback target must be an explicit session")
     return "\n".join(
         [
             "Callback routing:",
-            f"- Bound session: {target['value']}",
+            f"- Bound session: {target['session']}",
             f"- Binding source: {source}",
             "- Resume only this session; never redirect this callback to another thread.",
         ]
@@ -169,7 +169,7 @@ def make_request(
         "cwd": args.cwd,
         "agent": agent,
         "target": target,
-        "target_source": target_source,
+        "origin": targets.origin(agent, target["session"], args.cwd, target_source),
         "prompt": prompt,
         "prompt_format": envelope.FORMAT if getattr(args, "callback_format", "compact") == "compact" else "full",
         "task": getattr(args, "task", "Task update"),
@@ -426,7 +426,7 @@ def submit_managed_run(args: argparse.Namespace) -> int:
         "queue_dir": str(root),
         "agent": resolve_agent(args),
         "target": target,
-        "target_source": target_source,
+        "origin": targets.origin(resolve_agent(args), target["session"], os.path.abspath(args.cwd), target_source),
         "goal_id": getattr(args, "goal_id", None),
         "approvals_reviewer": getattr(args, "approvals_reviewer", None) or DEFAULT_APPROVALS_REVIEWER,
         "approval_policy": getattr(args, "approval_policy", None) or DEFAULT_APPROVAL_POLICY,
@@ -493,7 +493,7 @@ def submit_managed_run(args: argparse.Namespace) -> int:
     if agent_system_prompt_path is not None:
         print(f"atc: agent system prompt: {agent_system_prompt_path}", file=sys.stderr)
     if task["agent"] == "claude" and target.get("kind") == "session":
-        if claude_session.channel_is_held(str(target.get("value"))):
+        if claude_session.channel_is_held(str(target.get("session"))):
             print("atc: Claude Code live callback: arrives through the atc channel; no `atc wait` needed",
                   file=sys.stderr)
         else:
@@ -517,6 +517,6 @@ def request_target(request: dict[str, object]) -> str:
     if not isinstance(target, dict):
         return "unknown target"
     if target.get("kind") == "session":
-        value = str(target.get("value", "unknown"))
+        value = str(target.get("session", "unknown"))
         return f"session {value}"
     return "unknown target"
