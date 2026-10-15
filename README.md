@@ -148,6 +148,19 @@ package-context bridge is still experimental.
 
 </details>
 
+### Coming from Long Task Callback (`ltc`)
+
+ATC does not read LTC's records. Move over in one explicit step:
+
+```bash
+atc migrate            # shows what would change; changes nothing
+atc migrate --apply    # archives ~/.ltc, removes the old service, skills and hooks
+atc setup --force --enable --now
+```
+
+`atc migrate` refuses while LTC still has callbacks to deliver or tasks running; add `--wait`
+to let the old daemon finish them first. The LTC state directory is renamed, never deleted.
+
 ## 🧭 How it works
 
 <p align="center">

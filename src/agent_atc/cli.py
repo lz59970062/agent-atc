@@ -328,6 +328,9 @@ def main() -> int:
     unregister_parser.add_argument("--dry-run", action="store_true")
     unregister_parser.add_argument("--json", action="store_true")
 
+    migrate_parser = sub.add_parser("migrate", help="Move from Long Task Callback (LTC): shows the plan; --apply makes it")
+    migrate_parser.add_argument("--apply", action="store_true", help="Archive LTC state and remove its service, skills and hooks")
+    migrate_parser.add_argument("--wait", action="store_true", help="Wait for LTC's daemon to finish its callbacks and tasks first")
     setup_parser = sub.add_parser("setup", help="Install the bundled skill and user-level wakeup daemon")
     setup_parser.add_argument("--backend", choices=("auto", "systemd", "launchd", "windows-task", "screen"), default=os.environ.get("ATC_EXECUTION_BACKEND", "auto"))
     setup_parser.add_argument("--callback-only", action="store_true",
@@ -463,6 +466,9 @@ def main() -> int:
     shell_hook_parser.add_argument("--command", help="Executable path embedded in the hook")
 
     args = parser.parse_args()
+    if args.mode == "migrate":
+        from .install import migrate
+        return migrate.command(args)
     if args.mode == "desktop":
         from .harness.codex.desktop import launcher as desktop_launcher
         return desktop_launcher.command(args)
