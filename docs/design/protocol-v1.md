@@ -314,6 +314,64 @@ ACK after inspection: atc ack 8e4f0c12-c1
 - 和 A2A 的实际桥接（只对齐状态取值）
 - CLI 和 daemon 之间的 socket 协议（第 5 步单独设计，届时增加 `atc.daemon/1`）
 
+## 11. 上下文、节点与专家（v0.9 设计，2026-10-15 拍板）
+
+### 11.1 概念
+
+| 概念 | 含义 | 怎么寻址 |
+|---|---|---|
+| 节点（node） | 一次 `atc agent` 任务及它结束时子代理会话的状态 | 任务 ID（`1a2b3c4d`）或路径名（`research/review`） |
+| 上下文（context） | 一条线性的节点链，链上每一步都基于上一步的会话 | 链上第一个节点的任务 ID |
+| 专家（expert） | 预先配置的"Harness + 模型 + 推理强度 + 系统提示词"组合 | 专家名（`writer`） |
+
+**每个节点都有自己的 Harness 会话。** 续写和分叉都是"从某个节点的会话分叉出新会话，再执行新提示词"：Claude 用 `--resume <会话> --fork-session --session-id <新 UUID>`，Codex 用 `codex exec fork <会话> -` 并从 `--json` 事件读出新会话 ID，Pi 用 `--fork <会话文件> --session-dir <节点目录>`。任务结束后，它的会话不再被任何人写入，天然就是那个时刻的检查点，所以可以从任意历史节点精确地分叉，不需要单独冻结检查点。代价是每个节点各存一份会话历史。
+
+### 11.2 统一入口
+
+```bash
+atc agent codex --name research -- "调研 X"              # 新上下文
+atc agent --continue research --name review -- "写评审"     # 接在链末尾：research/review
+atc agent --fork research --name plan -- "做规划"           # 从 research 节点分出新上下文：research/plan
+atc agent --expert writer --name draft -- "写初稿"           # 按专家配置新建上下文
+```
+
+- `--continue` 和 `--fork` 沿用原节点的 Harness、模型、专家和工作目录，不必重复写。
+- `--continue` 只能接在链的末尾；从中间节点接着干必须用 `--fork`，并起新名字。
+- 节点的任务还没结束时，不能从它续写或分叉。
+- 只有子代理任务产生节点；`atc run` 和 `atc done` 不产生。
+
+### 11.3 名字是必填字段
+
+- 每个节点都有一段名字：`--name` 给出；没给时取 `--task` 的前几个词；两者都没有时拒绝提交。一段名字不含 `/` 和空白，最长 32 个字符，可以是中文。
+- **节点的完整名字是血缘路径**：续写和分叉都在父节点的完整名字后面加一段，例如 `research`、`research/review`、`research/plan`。不看 ID，只看名字，就知道这个子代理之前做了什么、后来做了什么。
+- 完整名字全局唯一，同一个父节点下不允许重名。
+
+### 11.4 读摘要，不读原始会话
+
+`atc context list` 和 `atc context show` 只显示每个节点的名字、Harness、模型、状态、观察到的结果和子代理报告的摘要。原始会话文件只给出路径，ATC 从不把它的内容打印出来：父 Agent 读子代理的完整会话会占满自己的上下文，`result.json` 里的报告摘要才是给它看的。
+
+### 11.5 记录
+
+- 任务记录新增 `node`：`{"name": "research/review", "context": "1a2b3c4d", "lineage": {"from": "<节点ID>", "mode": "new" | "continue" | "fork"}}`。
+- `result.json` 的 `worker.session` 写入这个节点自己的 Harness 会话（Pi 为会话文件路径），`lineage` 与任务记录一致。
+- 上下文记录 `atc.context/1` 存在 `~/.atc/contexts/<上下文ID>.json`：`{"schema", "id", "harness", "cwd", "model", "expert", "nodes": [节点ID...], "parent": {"context", "node"} | null, "archived": false}`。
+
+### 11.6 专家配置文件
+
+- 位置：`~/.atc/experts.yaml`，schema 为 `atc.experts/1`；可以用 `--experts <文件>` 临时指定别的文件。
+- `atc expert export > experts.yaml` 把系统提示词文件内联进去，生成一个自包含的文件，拷到别的机器上用 `atc expert import experts.yaml` 导入。
+- 每个专家：`description`、`harness`、`model`、`reasoning`、`system_prompt`（或相对于配置文件的 `system_prompt_file`）、`report`（默认 true）。
+- 现有的 `atc template` 由专家取代。
+
+### 11.7 管理命令
+
+| 命令 | 作用 |
+|---|---|
+| `atc context list` | 以树状列出上下文和节点（名字、Harness、模型、状态、报告状态） |
+| `atc context show <节点>` | 一个上下文的完整链：每个节点的结果和报告摘要 |
+| `atc context archive <节点>` | 归档整个上下文，不再出现在列表里 |
+| `atc expert list` / `show` / `import` / `export` | 管理专家配置 |
+
 ## 参考资料
 
 - Codex App Server：https://developers.openai.com/codex/app-server
