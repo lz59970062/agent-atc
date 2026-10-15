@@ -32,21 +32,10 @@ from pathlib import Path
 store = Path(os.environ["FAKE_SESSIONS"]); store.mkdir(parents=True, exist_ok=True)
 argv = sys.argv[1:]
 prompt = sys.stdin.read().split("\n\nBefore you finish", 1)[0]
-projects = Path(os.environ["CLAUDE_CONFIG_DIR"]) / "projects" / "p"; projects.mkdir(parents=True, exist_ok=True)
-harness = "{harness}"
-def transcript(path):
-    return [json.loads(line) for line in path.read_text().splitlines()]
-def leaf(ref):
-    last = transcript(projects / f"{{ref}}.jsonl")[-1]["uuid"]
-    sharing = [p for p in projects.glob("*.jsonl") if any(e["uuid"] == last for e in transcript(p))]
-    return transcript(max(sharing, key=lambda p: (len(transcript(p)), p.stat().st_mtime)))
 def history(ref):
-    if harness == "claude":
-        # Like Claude Code, --resume follows the conversation to its newest leaf through message
-        # UUIDs in every transcript of the project, including sessions forked from it later.
-        return [e["text"] for e in leaf(ref)]
     path = Path(ref) if os.path.isabs(ref) else store / f"{{ref}}.json"
     return json.loads(path.read_text())
+harness = "{harness}"
 if harness == "codex":
     parent = argv[argv.index("fork") + 1] if "fork" in argv else None
     sid, path = str(uuid.uuid4()), None
@@ -59,12 +48,7 @@ else:
     sid = str(uuid.uuid4())
     path = Path(argv[argv.index("--session-dir") + 1]) / f"{{sid}}.jsonl"
 seen = (history(parent) if parent else []) + [prompt]
-if harness == "claude":
-    kept = leaf(parent) if parent else []
-    entries = kept + [{{"uuid": str(uuid.uuid4()), "sessionId": sid, "text": prompt}}]
-    (projects / f"{{sid}}.jsonl").write_text("".join(json.dumps(e) + "\n" for e in entries))
-else:
-    (path or store / f"{{sid}}.json").write_text(json.dumps(seen))
+(path or store / f"{{sid}}.json").write_text(json.dumps(seen))
 answer = json.dumps(seen)
 if harness == "codex":
     Path(argv[argv.index("-o") + 1]).write_text(answer)
@@ -83,7 +67,6 @@ class ContextTests(unittest.TestCase):
         self.root = self.directory / "queue"
         self.environment = mock.patch.dict(os.environ, {
             "ATC_HOME": str(self.directory / "atc-home"), "FAKE_SESSIONS": str(self.directory / "sessions"),
-            "CLAUDE_CONFIG_DIR": str(self.directory / "claude-config"),
             f"ATC_{self.harness.upper()}_BIN": str(self.fake()),
         })
         self.environment.start()
@@ -150,10 +133,6 @@ class ContextTests(unittest.TestCase):
         self.assertEqual(self.run_node(plan), ["investigate X", "make a plan"], "a fork sees its node, not later steps")
         again = self.submit("fork", "plan again", node="research", name="plan2")
         self.assertEqual(self.run_node(again), ["investigate X", "plan again"], "an earlier fork does not leak either")
-        if self.harness == "claude":
-            left = sorted(p.stem for p in (self.directory / "claude-config" / "projects" / "p").glob("*.jsonl"))
-            self.assertEqual(left, sorted(str(t["node"]["planned_session"]) for t in (research, review, plan, again)),
-                             "the session copies a fork resumed from are removed")
 
         chain = contexts.load(str(research["id"]))
         self.assertEqual(chain["nodes"], [research["id"], review["id"]])

@@ -14,7 +14,6 @@ import re
 import uuid
 
 from ..core import ids, nodes, results
-from ..harness.claude import session as claude_session
 from ..store import contexts, layout
 from . import tasks as managed_tasks
 
@@ -100,8 +99,6 @@ def node_record(plan_: dict[str, object], task_id: str, task_directory: Path, wo
         "context": plan_["context"] or task_id,
         "lineage": {"from": parent["id"] if parent else None, "mode": plan_["mode"]},
         "fork_from": plan_["fork_from"],
-        # Claude resumes a private copy of the parent's session, made just before the child runs.
-        "fork_copy": str(uuid.uuid4()) if worker == "claude" and plan_["fork_from"] else None,
         "session": None,
         "planned_session": str(uuid.uuid4()) if worker == "claude" else None,
         "session_dir": str(task_directory / SESSION_DIR_NAME),
@@ -123,14 +120,6 @@ def record(root: Path, task: dict[str, object]) -> None:
         context = contexts.new(str(task["id"]), harness=str(task["agent_worker"]), cwd=str(task["cwd"]),
                                model=task.get("child_model"), expert=task.get("expert"), parent=parent)
     contexts.save(context)
-
-
-def prepare_fork(task: dict[str, object], environment: dict[str, str]) -> Path | None:
-    """Make the session copy a Claude node forks from; the caller removes it once the child exits."""
-    node = task["node"]
-    if not node.get("fork_copy"):
-        return None
-    return claude_session.isolated_copy(str(node["fork_from"]), str(node["fork_copy"]), environment)
 
 
 def captures_events(task: dict[str, object]) -> bool:
