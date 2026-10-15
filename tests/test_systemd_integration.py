@@ -22,7 +22,7 @@ from agent_atc.commands import work as work_commands
 from agent_atc.engine import dispatch
 from agent_atc.engine import tasks as managed_tasks
 from agent_atc.store import layout
-from agent_atc.owners import OwnerState, SystemdUserBackend
+from agent_atc.owners import OwnerState, SystemdUserBackend, linux
 from agent_atc.core import ids
 
 
@@ -41,13 +41,14 @@ class RealSystemdIsolationTests(unittest.TestCase):
         subprocess.run(
             ["systemctl", "--user", "stop", *units], stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=10, check=False,
+            env=linux.user_manager_environment(),
         )
 
     def control_group(self, owner: str) -> str:
         result = subprocess.run(
             ["systemctl", "--user", "show", "--property=ControlGroup", "--value", owner],
             stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-            text=True, timeout=10, check=True,
+            text=True, timeout=10, check=True, env=linux.user_manager_environment(),
         )
         return result.stdout.strip()
 
