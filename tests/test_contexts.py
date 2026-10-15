@@ -191,3 +191,34 @@ class ContextViewTests(ContextTests):
         self.assertEqual(self.view("archive_context", node="research/plan").count("Archived"), 1)
         self.assertNotIn("research/plan", self.view("list_contexts", all=False, json=False))
         self.assertIn("research/plan", self.view("list_contexts", all=True, json=False))
+
+
+class AgentCommandLineTests(unittest.TestCase):
+    """The real parser: options after a node or expert name must not become prompt text."""
+
+    def parse(self, *argv: str) -> argparse.Namespace:
+        from agent_atc import cli
+        captured = {}
+        def fake_agent(args):
+            captured["args"] = args
+            return 0
+        with mock.patch.object(work_commands, "agent", side_effect=fake_agent), \
+                mock.patch.object(sys, "argv", ["atc", *argv]), mock.patch("sys.stderr"):
+            self.assertEqual(cli.main(), 0)
+        return captured["args"]
+
+    def test_lineage_and_expert_options_are_parsed_before_the_prompt(self):
+        for argv, positional in ((["agent", "continue", "research"], "node"), (["agent", "fork", "1a2b3c4d-c1"], "node"),
+                                 (["agent", "expert", "writer"], "expert")):
+            with self.subTest(argv=argv):
+                args = self.parse(*argv, "--session", "s1", "--name", "review", "--no-report", "--",
+                                  "Review", "--name", "inside the prompt")
+                self.assertEqual(getattr(args, positional), argv[-1])
+                self.assertEqual(args.name, "review")
+                self.assertTrue(args.no_report)
+                self.assertEqual(managed_tasks.agent_prompt_text(list(args.agent_prompt)), "Review --name inside the prompt")
+
+    def test_harness_subcommands_keep_their_prompt_after_the_separator(self):
+        args = self.parse("agent", "claude", "--session", "s1", "--name", "research", "--", "Survey", "X")
+        self.assertEqual((args.agent_worker, args.name), ("claude", "research"))
+        self.assertEqual(managed_tasks.agent_prompt_text(list(args.agent_prompt)), "Survey X")

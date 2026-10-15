@@ -261,7 +261,8 @@ def main() -> int:
     expert_child.add_argument("--experts", help="Use another experts file")
     expert_child.add_argument("--name", help="Short name for this node (required unless --task is given)")
     expert_child.add_argument("--no-report", action="store_true", help="Do not ask the child for a structured report")
-    expert_child.add_argument("agent_prompt", nargs=argparse.REMAINDER)
+    # nargs="*" after "--", not REMAINDER: REMAINDER after a positional would swallow --name and the other options.
+    expert_child.add_argument("agent_prompt", nargs="*")
     for mode, help_text in (("continue", "Continue a finished node's agent at the end of its chain"),
                             ("fork", "Start a new chain from any finished node's agent")):
         lineage_parser = agent_sub.add_parser(mode, help=help_text)
@@ -271,7 +272,7 @@ def main() -> int:
         lineage_parser.add_argument("--model", dest="child_model", help="Use another model than the parent node")
         lineage_parser.add_argument("--no-report", action="store_true",
                                     help="Do not ask the child for a structured report (ATC_REPORT_FILE)")
-        lineage_parser.add_argument("agent_prompt", nargs=argparse.REMAINDER)
+        lineage_parser.add_argument("agent_prompt", nargs="*")
 
     screen_worker_parser = sub.add_parser("_screen-worker", help=argparse.SUPPRESS)
     screen_worker_parser.add_argument("--task-file", required=True)
