@@ -284,6 +284,10 @@ class HealthReportTests(unittest.TestCase):
             report = diagnostics.inspect(args)
         self.assertIn("callback_agent_unavailable", self.issue_codes(report))
         self.assertNotIn("child_agent_unavailable", self.issue_codes(report))
+        args.callback_mode = "manual"
+        with mock.patch.object(diagnostics.shutil, "which", side_effect=lambda name: None if name == "fixture-codex" else "/fixture/claude"):
+            report = diagnostics.inspect(args)
+        self.assertNotIn("callback_agent_unavailable", self.issue_codes(report), "manual callbacks resume no Agent CLI")
 
     def test_unbound_session_reports_capture_requirement_without_inventing_last_target(self):
         report = diagnostics.inspect(self.arguments(session=None))

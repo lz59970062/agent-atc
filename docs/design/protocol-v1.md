@@ -326,6 +326,8 @@ ACK after inspection: atc ack 8e4f0c12-c1
 
 **每个节点都有自己的 Harness 会话。** 续写和分叉都是"从某个节点的会话分叉出新会话，再执行新提示词"：Claude 用 `--resume <会话> --fork-session --session-id <新 UUID>`，Codex 用 `codex exec fork <会话> -` 并从 `--json` 事件读出新会话 ID，Pi 用 `--fork <会话文件> --session-dir <节点目录>`。任务结束后，它的会话不再被任何人写入，天然就是那个时刻的检查点，所以可以从任意历史节点精确地分叉，不需要单独冻结检查点。代价是每个节点各存一份会话历史。
 
+Claude Code 有一个例外要处理：`--resume` 会顺着消息 UUID 走到对话树里最新的叶子，连之后从它分叉出去的会话也算在内，所以直接 resume 一个已被分叉过的节点会把后续节点的内容带进来（真机实测：从 research 分叉出的 branch 记得只在 research/recall 里出现过的词）。因此 Claude 节点续写或分叉时，worker 先把父会话的记录复制成一个新会话 ID，并把其中的消息 UUID 全部换新，子进程从这份副本分叉，结束后删除副本。原节点的文件从不改动。
+
 ### 11.2 统一入口
 
 ```bash

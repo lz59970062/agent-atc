@@ -356,7 +356,8 @@ def inspect(args: argparse.Namespace) -> dict[str, object]:
     adapter = get_agent(callback_agent)
     executables: dict[str, str] = {}
     callback_executable = shutil.which(adapter.executable(delivery_engine.agent_environment(callback_agent)))
-    if callback_executable is None:
+    # Manual callbacks are read and ACKed from the bound session; no Agent CLI resumes it.
+    if callback_executable is None and getattr(args, "callback_mode", None) != "manual":
         issues.append({"code": "callback_agent_unavailable", "action": "Make the selected callback Agent CLI available in the coordinator's environment."})
     else:
         executables[callback_agent] = callback_executable

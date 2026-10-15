@@ -652,7 +652,7 @@ def agent_wrapped_command(
         reasoning_effort=reasoning_effort,
         system_prompt_path=system_prompt_path,
         keep_session=node is not None,
-        fork_from=node.get("fork_from") if node else None,
+        fork_from=(node.get("fork_copy") or node.get("fork_from")) if node else None,
         session_id=node.get("planned_session") if node else None,
         session_dir=Path(str(node["session_dir"])) if node else None,
     )

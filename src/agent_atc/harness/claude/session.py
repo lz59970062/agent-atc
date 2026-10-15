@@ -19,10 +19,12 @@ import secrets
 import shutil
 import sys
 import time
+import uuid
 from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import NamedTuple, Optional
 
+from ...system import files
 from .adapter import CLAUDE_BIN_ENV, CLAUDE_THREAD_ID_ENV as SESSION_ENV
 
 EXECPATH_ENV = "CLAUDE_CODE_EXECPATH"
@@ -163,6 +165,34 @@ def find_session_file(session_id: str, environment: Mapping[str, str]) -> Path |
     if not matches:
         return None
     return max(matches, key=lambda path: path.stat().st_mtime)
+
+
+def isolated_copy(session_id: str, copy_id: str, environment: Mapping[str, str]) -> Path:
+    """Copy a session's transcript under ``copy_id`` with fresh message UUIDs.
+
+    ``--resume`` follows a conversation to its newest leaf through the message
+    UUIDs of every transcript in the project, including sessions forked from it
+    later, so resuming a node that was already forked can pick up the fork's
+    turns. A copy whose UUIDs appear nowhere else resumes exactly the messages
+    it holds, which keeps a finished node an exact checkpoint.
+    """
+    source = find_session_file(session_id, environment)
+    if source is None:
+        raise ValueError(f"Claude session {session_id} has no transcript under {config_dir(environment) / 'projects'}")
+    text = source.read_text(encoding="utf-8")
+    renamed = {session_id: copy_id}
+    for line in text.splitlines():
+        try:
+            entry = json.loads(line)
+        except ValueError:
+            continue
+        message = entry.get("uuid") if isinstance(entry, dict) else None
+        if isinstance(message, str) and message:
+            renamed.setdefault(message, str(uuid.uuid4()))
+    pattern = re.compile("|".join(re.escape(old) for old in sorted(renamed, key=len, reverse=True)))
+    target = source.with_name(f"{copy_id}.jsonl")
+    files.write_private_text(target, pattern.sub(lambda match: renamed[match.group(0)], text), preserve_newlines=True)
+    return target
 
 
 def session_project_cwd(session_id: str, environment: Mapping[str, str]) -> str | None:

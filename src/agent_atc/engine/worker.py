@@ -186,7 +186,12 @@ def run_managed_worker_locked(root: Path, task: dict[str, object]) -> int:
             events = contexts_engine.captures_events(task)
             if captures_stdout or events:
                 run_kwargs["stdout"] = subprocess.PIPE
-            completed = subprocess.run(command, **run_kwargs)
+            fork_copy = contexts_engine.prepare_fork(task, child_environment) if isinstance(task.get("node"), dict) else None
+            try:
+                completed = subprocess.run(command, **run_kwargs)
+            finally:
+                if fork_copy is not None:
+                    fork_copy.unlink(missing_ok=True)
             if events:
                 # Codex --json events: keep them in the task log and read the thread id from them.
                 child_events = completed.stdout if isinstance(completed.stdout, str) else ""
