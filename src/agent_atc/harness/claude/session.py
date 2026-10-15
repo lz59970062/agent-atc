@@ -151,6 +151,11 @@ def is_desktop_session(environment: Mapping[str, str]) -> bool:
     return environment.get(ENTRYPOINT_ENV, "").strip() == DESKTOP_ENTRYPOINT
 
 
+def background_tasks_disabled(environment: Mapping[str, str]) -> bool:
+    """Whether Claude Code runs without background Bash, so a session cannot hold a background ``atc wait``."""
+    return environment.get("CLAUDE_CODE_DISABLE_BACKGROUND_TASKS", "").strip().lower() in ("1", "true", "yes", "on")
+
+
 def config_dir(environment: Mapping[str, str]) -> Path:
     configured = environment.get("CLAUDE_CONFIG_DIR", "").strip()
     return Path(configured).expanduser() if configured else _home(environment) / ".claude"

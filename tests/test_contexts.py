@@ -140,6 +140,16 @@ class ContextTests(unittest.TestCase):
         self.assertEqual(branch["parent"], {"context": research["id"], "node": research["id"]})
         self.refused("fork", "dup", "already exists", node="research", name="plan")
 
+    def test_claude_callback_hint_follows_background_support(self):
+        import contextlib, io
+        for number, (environment, expected) in enumerate((({}, "run in the background (run_in_background)"),
+                                                          ({"CLAUDE_CODE_DISABLE_BACKGROUND_TASKS": "1"}, "end your turn"))):
+            with self.subTest(environment=environment), mock.patch.dict(os.environ, environment), \
+                    mock.patch.object(managed_tasks, "screen_binary", return_value="/usr/bin/screen"), \
+                    contextlib.redirect_stderr(io.StringIO()) as errors:
+                work_commands.agent(self.args(self.harness, "x", name=f"hint{number}", agent="claude"))
+            self.assertIn(expected, errors.getvalue())
+
     def test_every_node_is_named(self):
         self.refused(self.harness, "unnamed", "--name")
         self.refused(self.harness, "bad", "cannot contain '/'", name="a/b")

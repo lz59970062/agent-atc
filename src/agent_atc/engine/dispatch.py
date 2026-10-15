@@ -510,6 +510,9 @@ def submit_managed_run(args: argparse.Namespace) -> int:
         if claude_session.channel_is_held(str(target.get("session"))):
             print("atc: Claude Code live callback: arrives through the atc channel; no `atc wait` needed",
                   file=sys.stderr)
+        elif claude_session.background_tasks_disabled(os.environ):
+            print("atc: Claude Code background tasks are disabled here, so do not run `atc wait`: end your turn; "
+                  "ATC resumes this session with the callback when the task ends", file=sys.stderr)
         else:
             wait = atc_runtime.control_command("wait", "--queue-dir", str(root), "--task", task_id)
             print(f"atc: Claude Code live callback: run in the background (run_in_background): {wait}",

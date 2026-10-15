@@ -41,6 +41,11 @@ differs from this page about callback delivery, this page applies to Claude Code
    not poll its output. Then tell the user what is running and end your turn, or carry on with other
    work.
 
+   If the Bash tool has no `run_in_background` (background tasks are disabled; `atc run` then says
+   so instead of printing a wait command), skip the wait: tell the user what is running and end your
+   turn. When the job finishes, ATC resumes this session headlessly and the callback arrives as the
+   next message.
+
 3. **Wake up** — when the job finishes, the background command exits and prints a callback:
 
    ```text
