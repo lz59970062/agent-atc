@@ -13,3 +13,4 @@ site/
 .committee-reviews/
 packaging/out/
 src/agent_atc/_build.txt
+.experiments/
