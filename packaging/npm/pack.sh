@@ -25,7 +25,7 @@ fs.writeFileSync(mainFile, JSON.stringify(main, null, 2) + "\n");
 fs.writeFileSync(path.join(stage, platform, "package.json"), JSON.stringify({
   name: `@agent-atc/${platform}`,
   version,
-  description: `Prebuilt atc binary for ${platform}`,
+  description: `Prebuilt ATC (Agent Traffic Control) binary for ${platform}`,
   license: "MIT",
   os: [os],
   cpu: [cpu],

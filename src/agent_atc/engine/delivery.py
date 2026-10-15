@@ -890,6 +890,13 @@ def process_one(root: Path, args: argparse.Namespace) -> bool:
         if layout.ack_path(root, request_id).exists():
             queue_store.move_request(running, root / "done")
             return True
+        deferred_until = request.get("next_attempt_at")
+        if isinstance(deferred_until, (int, float)) and deferred_until > time.time():
+            # select_pending saw it due, but it was deferred before this claim:
+            # `atc wait` can deliver it to the live session and exit in between.
+            # Delivering it now would duplicate that delivery.
+            queue_store.move_request(running, root / "pending")
+            return True
         attempts = int(request.get("attempts", 0)) + 1
         request["attempts"] = attempts
         request.pop("next_attempt_at", None)

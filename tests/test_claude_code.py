@@ -306,25 +306,54 @@ class LiveWaiterTests(unittest.TestCase):
             queue_store.release_owner_lock(target_lock, remove=False)
         self.assertEqual(self.run_wait()[0], 0)
 
+    def test_daemon_does_not_redeliver_a_callback_live_delivered_after_selection(self) -> None:
+        self.enqueue("cb-raced")
+        select_pending = delivery_engine.select_pending
+
+        def waiter_delivers_after_selection(root: Path, now: float) -> Path | None:
+            selected = select_pending(root, now)
+            self.assertIsNotNone(selected)  # No waiter yet: the daemon picks it.
+            self.assertEqual(self.run_wait()[0], 0)  # `atc wait` delivers it and exits.
+            return selected
+
+        args = argparse.Namespace(resume_timeout=1, retries=3, retry_delay=0, retry_backoff=1)
+        with mock.patch.object(delivery_engine, "select_pending", side_effect=waiter_delivers_after_selection), \
+                mock.patch.object(delivery_engine, "run_resume_until_exit_or_ack") as resume:
+            self.assertTrue(delivery_engine.process_one(self.root, args))
+        resume.assert_not_called()
+        request = dispatch.load_request(layout.request_path(self.root, "pending", "cb-raced"))
+        self.assertIn("live_delivered_at", request)
+        self.assertGreater(float(request["next_attempt_at"]), time.time())
+        self.assertEqual(request.get("attempts", 0), 0)
+
     def test_background_waiter_process_wakes_when_callback_arrives(self) -> None:
         environment = dict(os.environ, PYTHONPATH=SRC + os.pathsep + os.environ.get("PYTHONPATH", ""),
                            CLAUDE_CODE_SESSION_ID=SESSION, CLAUDECODE="1")
+        # Generous real-time bounds for a loaded host; they only end a hung waiter.
         process = subprocess.Popen(
             [sys.executable, "-m", "agent_atc", "wait", "--queue-dir", str(self.root),
-             "--poll-interval", "0.05", "--timeout", "30"],
+             "--poll-interval", "0.05", "--timeout", "300"],
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=environment,
         )
         request = {"agent": "claude", "target": {"kind": "session", "session": SESSION}}
         try:
-            deadline = time.monotonic() + 10
+            deadline = time.monotonic() + 120
             while not claude_session.live_watcher_is_held(request):
                 if process.poll() is not None:
                     self.fail("waiter exited early: " + process.communicate()[1])
                 self.assertLess(time.monotonic(), deadline, "waiter never registered")
                 time.sleep(0.05)
-            self.enqueue("cb-async")
-            self.assertIsNone(delivery_engine.select_pending(self.root, time.time()))
-            stdout, stderr = process.communicate(timeout=20)
+            # Hold the callback's delivery lock so the waiter cannot claim it yet:
+            # the daemon must skip it because the waiter is live, not because
+            # the waiter happened to be mid-claim or already done.
+            delivery_lock = queue_store.acquire_owner_lock(self.root, layout.delivery_lock_id("cb-async"), blocking=False)
+            try:
+                self.enqueue("cb-async")
+                self.assertIsNone(delivery_engine.select_pending(self.root, time.time()))
+                self.assertIsNone(process.poll())
+            finally:
+                queue_store.release_owner_lock(delivery_lock, remove=False)
+            stdout, stderr = process.communicate(timeout=120)
         finally:
             if process.poll() is None:
                 process.kill()
