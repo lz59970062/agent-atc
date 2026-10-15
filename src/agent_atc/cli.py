@@ -253,7 +253,18 @@ def main() -> int:
         )
         child_parser.add_argument("--no-report", action="store_true",
                                   help="Do not ask the child for a structured report (ATC_REPORT_FILE)")
+        child_parser.add_argument("--name", help="Short name for this node, for example research (required unless --task is given)")
         child_parser.add_argument("agent_prompt", nargs=argparse.REMAINDER)
+    for mode, help_text in (("continue", "Continue a finished node's agent at the end of its chain"),
+                            ("fork", "Start a new chain from any finished node's agent")):
+        lineage_parser = agent_sub.add_parser(mode, help=help_text)
+        add_common_flags(lineage_parser)
+        lineage_parser.add_argument("node", help="Task ID or full node name, for example research/review")
+        lineage_parser.add_argument("--name", help="Short name for the new node; the full name becomes <node>/<name>")
+        lineage_parser.add_argument("--model", dest="child_model", help="Use another model than the parent node")
+        lineage_parser.add_argument("--no-report", action="store_true",
+                                    help="Do not ask the child for a structured report (ATC_REPORT_FILE)")
+        lineage_parser.add_argument("agent_prompt", nargs=argparse.REMAINDER)
 
     screen_worker_parser = sub.add_parser("_screen-worker", help=argparse.SUPPRESS)
     screen_worker_parser.add_argument("--task-file", required=True)
@@ -336,6 +347,18 @@ def main() -> int:
     unregister_parser.add_argument("--dry-run", action="store_true")
     unregister_parser.add_argument("--json", action="store_true")
 
+    context_parser = sub.add_parser("context", help="List, inspect or archive chains of named agent nodes")
+    context_actions = context_parser.add_subparsers(dest="context_action", required=True)
+    context_list = context_actions.add_parser("list", help="Contexts and their nodes, as summaries")
+    context_list.add_argument("--all", action="store_true", help="Include archived contexts")
+    context_show = context_actions.add_parser("show", help="One node's chain: tasks, results and report summaries")
+    context_show.add_argument("node", help="Task ID or full node name")
+    context_archive = context_actions.add_parser("archive", help="Hide a node's context from the list")
+    context_archive.add_argument("node", help="Task ID or full node name")
+    for action in (context_list, context_show, context_archive):
+        action.add_argument("--queue-dir", help="Queue directory (default: the ATC home queue)")
+    for action in (context_list, context_show):
+        action.add_argument("--json", action="store_true", help="Machine-readable summaries")
     migrate_parser = sub.add_parser("migrate", help="Move from Long Task Callback (LTC): shows the plan; --apply makes it")
     migrate_parser.add_argument("--apply", action="store_true", help="Archive LTC state and remove its service, skills and hooks")
     migrate_parser.add_argument("--wait", action="store_true", help="Wait for LTC's daemon to finish its callbacks and tasks first")
@@ -479,6 +502,10 @@ def main() -> int:
         forwarded = canonical.forward(sys.argv[1:])
         if forwarded is not None:
             return forwarded
+    if args.mode == "context":
+        from .commands import contexts as context_commands
+        return {"list": context_commands.list_contexts, "show": context_commands.show_context,
+                "archive": context_commands.archive_context}[args.context_action](args)
     if args.mode == "migrate":
         from .install import migrate
         return migrate.command(args)

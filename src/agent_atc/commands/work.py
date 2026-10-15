@@ -2,8 +2,14 @@
 from __future__ import annotations
 
 import argparse
+import sys
 import os
 from pathlib import Path
+
+from ..engine import contexts as contexts_engine
+from ..store import contexts
+from ..store import layout
+from ..store import records as queue_store
 from ..harness import get_child_agent
 from ..templates import load_template
 from ..system import shell
@@ -39,7 +45,54 @@ def run(args: argparse.Namespace) -> int:
     return dispatch.submit_managed_run(args)
 
 
+DEFAULT_TASK_TITLE = "long task"
+
+
 def agent(args: argparse.Namespace) -> int:
+    """atc agent <harness>|continue|fork: every agent task is a named node."""
+    root = layout.queue_dir(args).expanduser().absolute()
+    lock = None
+    if not args.dry_run:  # a dry run checks the rules but writes nothing
+        queue_store.ensure_daemon_dirs(root)
+        lock = queue_store.acquire_owner_lock(root, contexts.lock_id(), blocking=True)
+    try:
+        mode = args.agent_worker if args.agent_worker in ("continue", "fork") else "new"
+        title = args.task if getattr(args, "task", None) not in (None, DEFAULT_TASK_TITLE) else None
+        try:
+            node_plan = contexts_engine.plan(root, mode=mode, ref=getattr(args, "node", None),
+                                             name=getattr(args, "name", None), task_title=title)
+        except ValueError as exc:
+            raise SystemExit(f"atc: {exc}") from exc
+        if node_plan["parent"] is not None:
+            _inherit(args, node_plan["parent"])
+        if title is None:
+            args.task = node_plan["name"]
+        args._node_plan = node_plan
+        status = _submit_agent(args)
+        submitted = getattr(args, "_submitted_task_id", None)
+        if status == 0 and submitted and not args.dry_run:
+            task = managed_tasks.load_managed_task(layout.managed_task_path(root, str(submitted)))
+            contexts_engine.record(root, task)
+            print(f"atc: node {node_plan['name']} ({submitted}) in context {task['node']['context']}", file=sys.stderr)
+        return status
+    finally:
+        if lock is not None:
+            queue_store.release_owner_lock(lock, remove=False)
+
+
+def _inherit(args: argparse.Namespace, parent: dict[str, object]) -> None:
+    """A continued or forked node runs where and as its parent did."""
+    args.agent_worker = str(parent["agent_worker"])
+    args.cwd = str(parent["cwd"])
+    args.child_model = getattr(args, "child_model", None) or parent.get("child_model")
+    args.child_reasoning_effort = parent.get("child_reasoning_effort")
+    args.permission_mode = str(parent.get("permission_mode") or getattr(args, "permission_mode", "auto"))
+    args.sandbox_mode = str(parent.get("sandbox_mode") or getattr(args, "sandbox_mode", "workspace-write"))
+    system_prompt = parent.get("agent_system_prompt_path")
+    args._inherited_system_prompt = str(system_prompt) if system_prompt else None
+
+
+def _submit_agent(args: argparse.Namespace) -> int:
     args.agent_prompt_text = managed_tasks.agent_prompt_text(list(args.agent_prompt))
     args.template = getattr(args, "template", None)
     args.template_file = getattr(args, "template_file", None)
@@ -48,7 +101,7 @@ def agent(args: argparse.Namespace) -> int:
     args.template_handoff = None
     args.child_model = getattr(args, "child_model", None)
     args.child_reasoning_effort = getattr(args, "child_reasoning_effort", None)
-    system_prompt_file = getattr(args, "system_prompt_file", None)
+    system_prompt_file = getattr(args, "system_prompt_file", None) or getattr(args, "_inherited_system_prompt", None)
     args.agent_system_prompt_source = None
     args.agent_system_prompt_text = None
     if system_prompt_file is not None and not str(system_prompt_file).strip():

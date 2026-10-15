@@ -68,8 +68,9 @@ differs from this page about callback delivery, this page applies to Pi.
 
 ## Other entry points
 
-- `atc agent codex|claude|pi --cwd "$PWD" --task "..." -- "<prompt>"` — a fresh child agent; its
-  result comes back as a callback here.
+- `atc agent codex|claude|pi --cwd "$PWD" --name <name> -- "<prompt>"` — a child agent; its result
+  comes back as a callback here. `atc agent continue <node>` or `fork <node>` reuses what that child
+  learned; `atc context show <node>` gives summaries (never read its raw session).
 - `atc done --cwd "$PWD" --task "..." --exit-code 0` — report work you are already supervising.
 - `atc status --state pending --state running` — inspect tasks and callbacks.
 

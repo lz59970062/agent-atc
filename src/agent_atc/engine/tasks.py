@@ -237,6 +237,8 @@ def managed_callback_request(
     for key in ("report_status", "report_artifact_count", "report_error"):
         if key in task:
             request[key] = task[key]
+    if isinstance(task.get("node"), dict):
+        request["node_name"] = task["node"].get("name")
     if isinstance(task.get("exit_code"), int):
         request["exit_code"] = task["exit_code"]
     if task.get("recovery_reason"):
@@ -639,6 +641,7 @@ def agent_wrapped_command(
     model: str | None = None,
     reasoning_effort: str | None = None,
     system_prompt_path: Path | None = None,
+    node: dict[str, object] | None = None,
 ) -> list[str]:
     options = ChildOptions(
         cwd=cwd,
@@ -648,6 +651,10 @@ def agent_wrapped_command(
         model=model,
         reasoning_effort=reasoning_effort,
         system_prompt_path=system_prompt_path,
+        keep_session=node is not None,
+        fork_from=node.get("fork_from") if node else None,
+        session_id=node.get("planned_session") if node else None,
+        session_dir=Path(str(node["session_dir"])) if node else None,
     )
     return get_child_agent(worker).child_command(options, delivery_engine.agent_environment(worker))
 

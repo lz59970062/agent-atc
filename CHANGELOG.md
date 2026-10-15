@@ -46,6 +46,13 @@
   to it. `atc --version` shows a build ID (a digest of the package, or the
   commit for release builds) and `atc doctor` reports a coordinator running a
   different build. Version is now 0.8.0.dev0.
+- Child agents are named nodes that keep their sessions. `atc agent continue
+  <node>` reuses a finished child with what it learned; `atc agent fork <node>`
+  branches from any finished node and sees exactly what it knew then. Each node
+  forks its parent's session, so finished nodes never change. Names are
+  required (`--name`) and compose along the lineage (`research/review`).
+  `atc context list|show|archive` shows chains as summaries and never prints a
+  raw session.
 - Remove `--last`. ATC only resumes an explicitly bound session and never
   falls back to "the most recent session"; stored callbacks must name one.
 - Remove the `codex-long-task-wakeup` command alias and the automatic adoption

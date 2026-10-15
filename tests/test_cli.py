@@ -264,7 +264,7 @@ class CliTests(unittest.TestCase):
                 [
                     "/opt/codex/bin/codex",
                     "exec",
-                    "--ephemeral",
+                    "--json",
                     "-C",
                     tmp,
                     "-s",
@@ -355,7 +355,8 @@ class CliTests(unittest.TestCase):
                 [
                     *([sys.executable] if os.name == "nt" else []), str(fake_claude),
                     "-p",
-                    "--no-session-persistence",
+                    "--session-id",
+                    task["node"]["planned_session"],
                     "--permission-mode",
                     "auto",
                     "--output-format",

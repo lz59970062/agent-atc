@@ -111,6 +111,7 @@ def exited(task: Mapping[str, object], *, exit_code: int, started_at: float | No
     """The result of a task whose process ATC saw exit."""
     duration = ended_at - started_at if isinstance(started_at, (int, float)) else None
     agent = task.get("task_kind") == "agent"
+    node = task.get("node") if isinstance(task.get("node"), dict) else {}
     return {
         "schema": RESULT_SCHEMA,
         "root": task["id"],
@@ -130,10 +131,11 @@ def exited(task: Mapping[str, object], *, exit_code: int, started_at: float | No
             "harness": task.get("agent_worker"),
             "model": task.get("child_model"),
             "profile": task.get("agent_template"),
-            "session": None,
+            "session": node.get("session"),
             "checkpoint": None,
         } if agent else None,
-        "lineage": None,
+        "lineage": node.get("lineage"),
+        "node": node.get("name"),
         "text_result": text_result,
         "report": report,
         "report_source": "report-file" if report is not None else None,

@@ -329,14 +329,14 @@ ACK after inspection: atc ack 8e4f0c12-c1
 ### 11.2 统一入口
 
 ```bash
-atc agent codex --name research -- "调研 X"              # 新上下文
-atc agent --continue research --name review -- "写评审"     # 接在链末尾：research/review
-atc agent --fork research --name plan -- "做规划"           # 从 research 节点分出新上下文：research/plan
-atc agent --expert writer --name draft -- "写初稿"           # 按专家配置新建上下文
+atc agent codex --name research -- "调研 X"            # 新上下文
+atc agent continue research --name review -- "写评审"    # 接在链末尾：research/review
+atc agent fork research --name plan -- "做规划"          # 从 research 节点分出新上下文：research/plan
+atc agent expert writer --name draft -- "写初稿"         # 按专家配置新建上下文
 ```
 
-- `--continue` 和 `--fork` 沿用原节点的 Harness、模型、专家和工作目录，不必重复写。
-- `--continue` 只能接在链的末尾；从中间节点接着干必须用 `--fork`，并起新名字。
+- 写成子命令，读起来像一句话（`atc agent continue research`）。`continue` 和 `fork` 沿用原节点的 Harness、模型、专家和工作目录，不必重复写。
+- `continue` 只能接在链的末尾；从中间节点接着干必须用 `fork`，并起新名字。
 - 节点的任务还没结束时，不能从它续写或分叉。
 - 只有子代理任务产生节点；`atc run` 和 `atc done` 不产生。
 

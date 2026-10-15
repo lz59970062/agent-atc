@@ -53,7 +53,13 @@ class ClaudeAdapter:
     ) -> list[str]:
         if options.reasoning_effort:
             raise ValueError("--reasoning-effort is supported only for Codex children")
-        cmd = [self.executable(environment), "-p", "--no-session-persistence"]
+        cmd = [self.executable(environment), "-p"]
+        if not options.keep_session:
+            cmd.append("--no-session-persistence")
+        if options.fork_from:
+            cmd.extend(["--resume", options.fork_from, "--fork-session"])
+        if options.keep_session and options.session_id:
+            cmd.extend(["--session-id", options.session_id])
         if options.model:
             cmd.extend(["--model", options.model])
         cmd.extend(["--permission-mode", options.permission_mode, "--output-format", "text"])

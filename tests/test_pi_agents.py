@@ -329,7 +329,7 @@ class PiAgentContractTests(unittest.TestCase):
                 self.assertEqual(received["prompt"], atc_records.agent_prompt(prompt, task))
                 self.assertIsNone(received["system_prompt"])
                 self.assertEqual(received["cwd"], str(self.directory))
-                self.assertEqual(received["argv"], ["--print", "--mode", "text", "--no-session",
+                self.assertEqual(received["argv"], ["--print", "--mode", "text", "--session-dir", task["node"]["session_dir"],
                                                     "--model", "fixture/provider-model", "--thinking", "high"])
                 for marker in SESSION_MARKERS:
                     self.assertIsNone(received["environment"][marker], marker)
@@ -575,7 +575,7 @@ class PiAgentContractTests(unittest.TestCase):
         self.assertEqual(self.run_worker(path, task), 0)
         received = json.loads(capture.read_text(encoding="utf-8"))
         self.assertEqual(received["prompt"], submitted_prompt)
-        self.assertEqual(received["argv"], ["--print", "--mode", "text", "--no-session",
+        self.assertEqual(received["argv"], ["--print", "--mode", "text", "--session-dir", task["node"]["session_dir"],
                                             "--model", "original-provider/original-model", "--thinking", "high"])
         self.assertEqual(managed_tasks.load_managed_task(path)["wrapped_command"], submitted_command)
         callback = dispatch.load_request(self.queue / "pending" / f"{ids.callback_id(task['id'])}.json")

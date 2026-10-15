@@ -52,6 +52,8 @@ def source_text(request: Mapping[str, object]) -> str:
             parts.append(f"model {request['child_model']}")
         if request.get("agent_template"):
             parts.append(f"template {request['agent_template']}")
+        if request.get("node_name"):
+            parts.append(f"node {request['node_name']}")
         return ", ".join(parts)
     if request.get("managed_task_id"):
         backend = request.get("execution_backend")

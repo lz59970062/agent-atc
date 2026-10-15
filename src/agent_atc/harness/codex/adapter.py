@@ -58,7 +58,8 @@ class CodexAdapter:
     def child_command(
         self, options: ChildOptions, environment: Mapping[str, str]
     ) -> list[str]:
-        cmd = [self.executable(environment), "exec", "--ephemeral"]
+        # A kept session is forked by later nodes; --json reports its thread id.
+        cmd = [self.executable(environment), "exec", "--json" if options.keep_session else "--ephemeral"]
         if options.model:
             cmd.extend(["--model", options.model])
         if options.reasoning_effort:
@@ -71,6 +72,8 @@ class CodexAdapter:
             "-c", f"approvals_reviewer={json.dumps(DEFAULT_APPROVALS_REVIEWER)}",
             "-c", f"approval_policy={json.dumps(DEFAULT_APPROVAL_POLICY)}",
             "-o", str(options.result_path),
-            "-",
         ])
+        if options.fork_from:
+            cmd.extend(["fork", options.fork_from])
+        cmd.append("-")
         return cmd

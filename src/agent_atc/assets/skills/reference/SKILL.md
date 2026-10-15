@@ -381,21 +381,36 @@ the work needs independent ownership, durable artifacts, or a completion callbac
 fits an in-turn native subagent, ATC is unnecessary.
 
 ```bash
-atc agent claude \
-  --cwd "$PWD" \
-  --task "review parser edge cases" \
+atc agent claude --cwd "$PWD" --name parser-review \
   -- "Inspect parser.py and its tests. Report concrete defects and suggested fixes."
 
-atc agent codex \
-  --cwd "$PWD" \
-  --task "implement parser fixes" \
+atc agent codex --cwd "$PWD" --name parser-fix \
   -- "Fix the confirmed parser defects and run the relevant tests."
 
-atc agent pi \
-  --cwd "$PWD" \
-  --task "review parser edge cases" \
+atc agent pi --cwd "$PWD" --name parser-review \
   -- "Inspect parser.py and its tests. Report concrete defects and suggested fixes."
 ```
+
+### Name, continue and fork child agents
+
+Every child agent task is a node with a required short name (`--name`, or an explicit `--task`;
+no `/` or spaces). ATC keeps the child's session, so the same agent can keep working with what it
+already learned. Address nodes only by ATC's task ID or full name, never by harness session IDs:
+
+```bash
+atc agent codex --name research -- "Survey approaches to X."
+atc agent continue research --name review -- "Using your survey, review design.md."   # research/review
+atc agent fork research --name plan -- "Using your survey, draft a plan."             # research/plan
+atc context list                      # chains, states and report status
+atc context show research/review      # each step's task, result and report summary
+```
+
+- `continue` appends to the end of a chain and reuses its harness, model and directory. To build
+  on an earlier node, `fork` it with a new name; that branch sees exactly what the node knew when it
+  finished, not later steps.
+- Wait for a node's callback before continuing or forking it.
+- Read results and report summaries (`atc context show`, the callback, `result.json`). Do not read a
+  child's raw session file into your own context; it can be very large.
 
 The `codex|claude|pi` subcommand selects the child process. The existing `--agent` option still
 selects the parent agent to wake when explicit callback binding is needed. The text after `--` is
@@ -415,11 +430,12 @@ and other custom values must be available in the submission environment; never p
 
 For Pi, use `atc doctor --operation agent --agent-worker pi` to check child readiness.
 `ATC_PI_BIN` overrides the executable. ATC runs
-`pi --print --mode text --no-session` with prompt stdin and captures assistant text
-in the managed private result artifact. Keep the submission-time Pi profile,
+`pi --print --mode text --session-dir <task dir>/session` with prompt stdin and captures assistant
+text in the managed private result artifact; the session stays in the task directory so the node
+can be continued or forked. Keep the submission-time Pi profile,
 authentication, API, proxy and extension configuration; remove Codex/Claude parent
 markers plus `PI_SESSION_ID`, `PI_SESSION_FILE` and `PI_CODING_AGENT`. Do not put
-credentials in prompts or persist a child session.
+credentials in prompts.
 `--model` accepts Pi's model notation, including `provider/model`; `--reasoning-effort`
 maps to `--thinking` and accepts `off`, `minimal`, `low`, `medium`, `high`, `xhigh`,
 and `max`, but rejects `ultra`. Tool permissions and project extension trust follow

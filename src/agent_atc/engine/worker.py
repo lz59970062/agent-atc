@@ -16,6 +16,7 @@ from ..store import layout
 from ..owners import host
 from ..store import records as queue_store
 from ..system import shell
+from . import contexts as contexts_engine
 from . import tasks as managed_tasks
 
 
@@ -167,6 +168,8 @@ def run_managed_worker_locked(root: Path, task: dict[str, object]) -> int:
                 # system text or silently falls back to its default prompt.
                 managed_tasks.read_agent_system_prompt(expected)
             child_environment = managed_tasks.child_agent_environment(environment)
+            if isinstance(task.get("node"), dict):
+                queue_store.private_directory(Path(str(task["node"]["session_dir"])))
             report_path = Path(str(task["report_path"])) if task.get("report_path") else None
             if report_path is not None:
                 report_path.unlink(missing_ok=True)  # never read a report left by an earlier attempt
@@ -180,9 +183,16 @@ def run_managed_worker_locked(root: Path, task: dict[str, object]) -> int:
                 }
             )
             captures_stdout = get_child_agent(str(task["agent_worker"])).child_result_mode == "stdout"
-            if captures_stdout:
+            events = contexts_engine.captures_events(task)
+            if captures_stdout or events:
                 run_kwargs["stdout"] = subprocess.PIPE
             completed = subprocess.run(command, **run_kwargs)
+            if events:
+                # Codex --json events: keep them in the task log and read the thread id from them.
+                child_events = completed.stdout if isinstance(completed.stdout, str) else ""
+                sys.stdout.write(child_events)
+                sys.stdout.flush()
+                task["node"]["session"] = contexts_engine.discover_session(task, child_events)
             if captures_stdout:
                 output = completed.stdout if isinstance(completed.stdout, str) else ""
                 queue_store.write_private_text(result_path, output)
@@ -202,6 +212,8 @@ def run_managed_worker_locked(root: Path, task: dict[str, object]) -> int:
             completed = subprocess.run(command, **run_kwargs)
         exit_code = completed.returncode
         completed_at = time.time()
+        if isinstance(task.get("node"), dict) and not contexts_engine.captures_events(task):
+            task["node"]["session"] = contexts_engine.discover_session(task)
         report = report_error = None
         if task.get("report_path"):
             try:

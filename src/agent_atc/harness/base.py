@@ -34,6 +34,11 @@ class ChildOptions:
     model: str | None = None
     reasoning_effort: str | None = None
     system_prompt_path: Path | None = None
+    # Context mode: keep the child's session so later nodes can fork it.
+    keep_session: bool = False
+    fork_from: str | None = None          # harness session (Pi: session file) to fork before running
+    session_id: str | None = None         # preassigned new session id, where the harness accepts one
+    session_dir: Path | None = None       # where the harness stores this node's session, if configurable
 
 
 class ChildAgentAdapter(Protocol):

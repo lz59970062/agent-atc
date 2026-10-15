@@ -68,9 +68,14 @@ differs from this page about callback delivery, this page applies to Claude Code
 - **Fresh child agent** (independent review, test authoring, a parallel fix):
 
   ```bash
-  atc agent claude --cwd "$PWD" --task "review parser" -- "Inspect parser.py and report concrete defects."
-  atc agent codex --template test --task "write parser tests" -- "Test the contract in docs/parser.md."
+  atc agent claude --cwd "$PWD" --name parser-review -- "Inspect parser.py and report concrete defects."
+  atc agent codex --template test --name parser-tests -- "Test the contract in docs/parser.md."
+  atc agent continue parser-review --name recheck -- "I fixed those; review parser.py again."
   ```
+
+  Every child needs `--name`. `atc agent continue <node>` reuses the same child with what it already
+  learned; `atc agent fork <node>` branches from it. See `atc context show <node>` for summaries;
+  never read a child's raw session.
 
   Then background `atc wait --task <id>` exactly as for `atc run`. The child's result path is in the
   callback. A Claude child needs a standalone `claude` CLI that is signed in (`claude auth status`);

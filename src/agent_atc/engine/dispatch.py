@@ -24,6 +24,7 @@ from .. import runtime as atc_runtime
 from ..store import records as queue_store
 from ..system import shell
 from . import delivery as delivery_engine
+from . import contexts as contexts_engine
 from . import goals
 from . import tasks as managed_tasks
 
@@ -382,6 +383,7 @@ def submit_managed_run(args: argparse.Namespace) -> int:
         print(f"atc: refusing to submit task because its durable record could not be written: {exc}", file=sys.stderr)
         return 125
     args._health_work = {"state": "unknown", "id": task_id}
+    args._submitted_task_id = task_id
     environment_path = task_directory / "environment.json"
     log_path = task_directory / "attempt-1.log"
     task_kind = str(getattr(args, "task_kind", "command"))
@@ -394,6 +396,9 @@ def submit_managed_run(args: argparse.Namespace) -> int:
         agent_result_path = task_directory / managed_tasks.AGENT_RESULT_FILE_NAME
         if getattr(args, "agent_system_prompt_text", None) is not None:
             agent_system_prompt_path = task_directory / managed_tasks.AGENT_SYSTEM_PROMPT_FILE_NAME
+        node_plan = getattr(args, "_node_plan", None)
+        node = (contexts_engine.node_record(node_plan, task_id, task_directory, str(args.agent_worker))
+                if node_plan else None)
         wrapped_command = managed_tasks.agent_wrapped_command(
             str(args.agent_worker),
             cwd=os.path.abspath(args.cwd),
@@ -403,7 +408,10 @@ def submit_managed_run(args: argparse.Namespace) -> int:
             model=getattr(args, "child_model", None),
             reasoning_effort=getattr(args, "child_reasoning_effort", None),
             system_prompt_path=agent_system_prompt_path,
+            node=node,
         )
+    else:
+        node = None
     environment = {
         name: value
         for name, value in os.environ.items()
@@ -459,6 +467,8 @@ def submit_managed_run(args: argparse.Namespace) -> int:
                 "agent_result_path": str(agent_result_path),
             }
         )
+        if node is not None:
+            task["node"] = node
         if not getattr(args, "no_report", False):
             # The child writes its claims here; the worker validates them into result.json.
             task["report_path"] = str(task_directory / results.REPORT_FILE_NAME)

@@ -65,8 +65,15 @@ class PiAdapter:
             raise ValueError(f"unsupported PI Agent reasoning effort {options.reasoning_effort!r}")
         # Text print mode reserves stdout for the final answer and reports
         # assistant errors/aborts with a nonzero exit, unlike JSON event mode.
-        # stdin carries the prompt; --no-session creates a fresh in-memory session.
-        cmd = [self.executable(environment), "--print", "--mode", "text", "--no-session"]
+        # stdin carries the prompt. Without a context, --no-session keeps nothing;
+        # with one, the node's session file lives in its own directory.
+        cmd = [self.executable(environment), "--print", "--mode", "text"]
+        if options.keep_session and options.session_dir is not None:
+            cmd.extend(["--session-dir", str(options.session_dir)])
+            if options.fork_from:
+                cmd.extend(["--fork", options.fork_from])
+        else:
+            cmd.append("--no-session")
         if options.model:
             cmd.extend(["--model", options.model])
         if options.reasoning_effort:
