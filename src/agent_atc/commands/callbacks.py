@@ -147,7 +147,7 @@ def status(args: argparse.Namespace) -> int:
     items = queued_items(root, states)
     if not items:
         if not args.quiet_empty:
-            print(f"No pending long-task callbacks in {root}")
+            print(f"No callbacks need attention in {root}")
         return 0
 
     counts = {state: sum(1 for item in items if item[0] == state) for state in states}

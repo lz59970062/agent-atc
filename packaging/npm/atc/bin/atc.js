@@ -23,11 +23,25 @@ function fail(message) {
   process.exit(1);
 }
 
+const PIP_INSTALL = 'python3 -m pip install "git+https://github.com/lz59970062/agent-atc.git"';
+
+// The Linux binaries link against glibc; musl systems such as Alpine cannot load them.
+function isMusl() {
+  if (process.platform !== "linux") return false;
+  try {
+    const report = process.report && process.report.getReport();
+    return !(report && report.header && report.header.glibcVersionRuntime);
+  } catch {
+    return false;
+  }
+}
+
 function binaryPath() {
   if (process.env.ATC_BINARY) return process.env.ATC_BINARY;
+  if (isMusl()) fail(`no prebuilt binary for musl-based Linux (such as Alpine); install from source: ${PIP_INSTALL}`);
   const key = `${process.platform}-${process.arch}`;
   const name = PLATFORM_PACKAGES[key];
-  if (!name) fail(`no prebuilt binary for ${key}; install with pip instead`);
+  if (!name) fail(`no prebuilt binary for ${key}; install from source: ${PIP_INSTALL}`);
   let root;
   try {
     root = path.dirname(require.resolve(`${name}/package.json`));
