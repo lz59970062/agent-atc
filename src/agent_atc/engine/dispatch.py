@@ -487,6 +487,11 @@ def submit_managed_run(args: argparse.Namespace) -> int:
             queue_store.write_private_text(agent_prompt_path, prompt_text)
         if agent_system_prompt_path is not None:
             queue_store.write_private_text(agent_system_prompt_path, args.agent_system_prompt_text)
+        stdin_data = managed_tasks.piped_input() if task_kind == "command" else None
+        if stdin_data is not None:
+            stdin_path = task_directory / managed_tasks.STDIN_FILE_NAME
+            managed_tasks.write_private_bytes(stdin_path, stdin_data)
+            task["stdin_path"] = str(stdin_path)
         queue_store.write_request(environment_path, {"version": 1, "environment": environment})
         managed_tasks.write_managed_task(root, task)
     except OSError as exc:
@@ -502,6 +507,9 @@ def submit_managed_run(args: argparse.Namespace) -> int:
         print(f"atc: screen session: {task['screen_session']}", file=sys.stderr)
         print("atc: screen fallback: service-stop survival depends on its containing service", file=sys.stderr)
     print(f"atc: task log: {log_path}", file=sys.stderr)
+    if task.get("stdin_path"):
+        print(f"atc: task stdin: the input piped into atc ({Path(str(task['stdin_path'])).stat().st_size} bytes)",
+              file=sys.stderr)
     if agent_result_path is not None:
         print(f"atc: agent result: {agent_result_path}", file=sys.stderr)
     if agent_system_prompt_path is not None:

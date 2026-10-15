@@ -209,7 +209,10 @@ def run_managed_worker_locked(root: Path, task: dict[str, object]) -> int:
             else:
                 queue_store.write_private_text(result_path, "")
         else:
-            completed = subprocess.run(command, **run_kwargs)
+            # Never the worker's terminal: a command reading stdin would otherwise wait there forever.
+            stdin_path = task.get("stdin_path")
+            with open(str(stdin_path), "rb") if stdin_path else open(os.devnull, "rb") as stdin:
+                completed = subprocess.run(command, stdin=stdin, **run_kwargs)
         exit_code = completed.returncode
         completed_at = time.time()
         if isinstance(task.get("node"), dict) and not contexts_engine.captures_events(task):

@@ -100,6 +100,8 @@ differs from this page about callback delivery, this page applies to Claude Code
 
 ## Rules
 
+- **Heredoc scripts work**: input piped into `atc run` (`-- python3 - <<'EOF'`) becomes the task's
+  stdin. Without piped input the task's stdin is empty.
 - **Session binding is automatic** from `CLAUDE_CODE_SESSION_ID`. Never invent a session id. `atc wait` refuses to run without a session.
 - **One wait, one wake-up.** A wait exits after printing what it found; start a new one for the next
   task. Every unacknowledged callback of this session keeps coming back until you ACK it.

@@ -31,6 +31,48 @@ MANAGED_LAUNCH_RETRY_BACKOFF = 2.0
 SCREEN_BIN_ENV = "ATC_SCREEN_BIN"
 AGENT_PROMPT_FILE_NAME = "agent-prompt.txt"
 AGENT_RESULT_FILE_NAME = "agent-result.txt"
+STDIN_FILE_NAME = "stdin"
+STDIN_WAIT_SECONDS = 0.2
+
+
+def piped_input(stream=None, wait: float = STDIN_WAIT_SECONDS) -> bytes | None:
+    """Data piped or redirected into this submission, such as a heredoc script, or None.
+
+    ``atc run -- python3 - <<EOF`` hands the script to atc, not to the task, so atc
+    keeps it for the task's stdin. A terminal, an empty input, or an open pipe that
+    stays silent is not input and is left unread.
+    """
+    stream = sys.stdin if stream is None else stream
+    try:
+        if stream is None or stream.isatty():
+            return None
+        descriptor = stream.fileno()
+    except (AttributeError, OSError, ValueError):
+        return None
+    if os.name == "nt":
+        return None  # select() cannot wait on Windows pipes
+    import select
+    try:
+        ready, _, _ = select.select([descriptor], [], [], wait)
+    except (OSError, ValueError):
+        return None
+    if not ready:
+        return None
+    chunks = []
+    while True:
+        chunk = os.read(descriptor, 1 << 16)
+        if not chunk:
+            break
+        chunks.append(chunk)
+    return b"".join(chunks) or None
+
+
+def write_private_bytes(path: Path, data: bytes) -> None:
+    descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(descriptor, "wb") as handle:
+        handle.write(data)
+        handle.flush()
+        os.fsync(handle.fileno())
 AGENT_SYSTEM_PROMPT_FILE_NAME = "agent-system-prompt.md"
 CHILD_AGENT_PARENT_ENV_NAMES = tuple(
     dict.fromkeys(env_name for name in CHILD_AGENT_NAMES for env_name in get_child_agent(name).parent_env_names)

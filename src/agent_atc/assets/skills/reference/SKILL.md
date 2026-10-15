@@ -374,6 +374,10 @@ tail -f ~/.atc/tasks/<task-id>/attempt-1.log
 
 Detaching with `Ctrl-a d` leaves the task running.
 
+Input piped into `atc run`, such as a heredoc script (`atc run --task scan -- python3 - <<'EOF'`),
+is saved with the task and becomes the command's stdin. Without piped input the command's stdin is
+empty, so a command that reads stdin ends instead of waiting for a terminal.
+
 ## Agent: submit a durable fresh child agent
 
 Use `atc agent` when a fresh Codex, Claude Code or Pi process should perform an independent task and

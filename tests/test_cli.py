@@ -816,6 +816,43 @@ class CliTests(unittest.TestCase):
             self.assertEqual(callback["outcome"], "unknown")
             self.assertIn("wrapped_command_launch_failed", callback["prompt"])
 
+    def run_command_task(self, tmp: str, root: Path, command: list[str], stdin) -> dict:
+        args = self._run_args(tmp, root, command)
+        with mock.patch.object(managed_tasks, "screen_binary", return_value="/usr/bin/screen"), \
+                mock.patch.object(sys, "stdin", stdin), contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(dispatch.submit_managed_run(args), 0)
+        task_path = next(layout.managed_tasks_root(root).glob("*/task.json"))
+        task = managed_tasks.load_managed_task(task_path)
+        task["state"] = "launching"
+        managed_tasks.write_managed_task(root, task)
+        worker = argparse.Namespace(task_file=str(task_path), token=task["token"])
+        with mock.patch.dict(os.environ, {"STY": "screen-session"}, clear=True), contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(task_worker.run_screen_worker(worker), 0)
+        return managed_tasks.load_managed_task(task_path)
+
+    def test_input_piped_into_atc_run_becomes_the_task_stdin(self) -> None:
+        # atc run -- python3 - <<EOF: the heredoc reaches atc, so atc must hand it to the task.
+        read_end, write_end = os.pipe()
+        with tempfile.TemporaryDirectory() as tmp, os.fdopen(read_end, "rb") as piped:
+            output = Path(tmp) / "out.txt"
+            os.write(write_end, f"open({str(output)!r}, 'w').write(str(6 * 7))\n".encode())
+            os.close(write_end)
+            task = self.run_command_task(tmp, Path(tmp) / "queue", [sys.executable, "-"], piped)
+            self.assertEqual(output.read_text(), "42")
+            assert_private_file(self, Path(task["stdin_path"]))
+
+    def test_task_without_piped_input_reads_an_empty_stdin_instead_of_waiting(self) -> None:
+        read_end, write_end = os.pipe()  # open and silent, like an agent's tool shell
+        try:
+            with tempfile.TemporaryDirectory() as tmp, os.fdopen(read_end, "rb") as silent:
+                output = Path(tmp) / "out.txt"
+                script = f"import sys; open({str(output)!r}, 'w').write(repr(sys.stdin.read()))"
+                task = self.run_command_task(tmp, Path(tmp) / "queue", [sys.executable, "-c", script], silent)
+                self.assertNotIn("stdin_path", task)
+                self.assertEqual(output.read_text(), "''")
+        finally:
+            os.close(write_end)
+
     def test_recover_active_preserves_stranded_completed_result(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "queue"
