@@ -184,8 +184,7 @@ def runtime_issues(root: Path) -> list[dict[str, object]]:
             result = json.loads(path.read_text(encoding="utf-8"))
         except FileNotFoundError:
             return None
-        results.observed_exit(result, str(task["id"]))
-        return result
+        return results.validate(result, str(task["id"]))
 
     def handoff(task: dict[str, object], result: dict[str, object] | None, record_path: Path) -> None:
         task_id = str(task["id"])

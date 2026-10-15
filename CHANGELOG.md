@@ -29,6 +29,9 @@
   report to `$ATC_REPORT_FILE` (opt out with `--no-report`); it is validated
   and bounded, and the envelope shows it as `Report: … (claimed, unverified)`.
   A missing report never fails a task.
+  Interrupted, launch-failed and unrecoverable tasks also get a result,
+  with `observed.state` and the recovery reason; an observed exit is never
+  overwritten.
 - Callback and task records name their target as `{"kind": "session",
   "session": …}` and record who submitted the work in `origin` (harness,
   session, directory and binding source), replacing `target_source`.

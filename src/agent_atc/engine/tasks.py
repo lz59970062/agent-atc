@@ -278,6 +278,14 @@ def queue_managed_task_callback(root: Path, task: dict[str, object]) -> bool:
     return True
 
 
+def record_unfinished_result(root: Path, task: dict[str, object], state: str, reason: str, at: float) -> None:
+    """Write the result of a task ATC never saw exit; an observed exit is never overwritten."""
+    path = layout.managed_result_path(root, str(task["id"]))
+    if path.exists():
+        return
+    queue_store.write_request(path, results.ended(task, state=state, recovery_reason=reason, at=at))
+
+
 def mark_managed_task_interrupted(
     root: Path,
     task: dict[str, object],
@@ -289,6 +297,7 @@ def mark_managed_task_interrupted(
     task["interrupted_at"] = time.time()
     task.pop("exit_code", None)
     write_managed_task(root, task)
+    record_unfinished_result(root, task, "unknown" if "unknown" in reason else "interrupted", reason, task["interrupted_at"])
     return queue_managed_task_callback(root, task)
 
 
@@ -299,6 +308,7 @@ def mark_managed_task_foreign_host(root: Path, task: dict[str, object]) -> None:
     task["interrupted_at"] = time.time()
     task.pop("exit_code", None)
     write_managed_task(root, task)
+    record_unfinished_result(root, task, "unknown", "cross_host_recovery_unsupported", task["interrupted_at"])
     print(
         f"atc: task {task['id']} belongs to another host; "
         "cross-host launch and callback recovery are unsupported",
@@ -339,6 +349,7 @@ def mark_managed_task_launch_failed(root: Path, task: dict[str, object], reason:
     task.pop("exit_code", None)
     discard_managed_launch_credentials(task)
     write_managed_task(root, task)
+    record_unfinished_result(root, task, "launch_failed", reason, task["launch_failed_at"])
     queue_managed_task_callback(root, task)
     return True
 

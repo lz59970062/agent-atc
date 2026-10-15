@@ -156,3 +156,38 @@ class ReportParsingTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class UnfinishedResultTests(unittest.TestCase):
+    def setUp(self) -> None:
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name) / "queue"
+        layout.managed_task_dir(self.root, "1a2b3c4d").mkdir(parents=True)
+        self.task = {"id": "1a2b3c4d", "execution_backend": "systemd-user", "started_at": 100.0}
+
+    def result(self) -> dict[str, object]:
+        return json.loads(layout.managed_result_path(self.root, "1a2b3c4d").read_text(encoding="utf-8"))
+
+    def test_interruptions_are_recorded_with_their_reason(self):
+        for reason, state in (("interrupted_by_host_reboot", "interrupted"),
+                              ("execution_launch_outcome_unknown", "unknown")):
+            with self.subTest(reason=reason):
+                layout.managed_result_path(self.root, "1a2b3c4d").unlink(missing_ok=True)
+                managed_tasks.record_unfinished_result(self.root, self.task, state, reason, 200.0)
+                result = results.validate(self.result(), "1a2b3c4d")
+                self.assertEqual(result["observed"]["state"], state)
+                self.assertEqual(result["observed"]["recovery_reason"], reason)
+                self.assertIsNone(result["observed"]["exit_code"])
+                with self.assertRaisesRegex(ValueError, "observed exit"):
+                    results.observed_exit(result, "1a2b3c4d")
+
+    def test_an_observed_exit_is_never_overwritten(self):
+        exited = atc_records.result_record(self.task, exit_code=3, ended_at=150.0)
+        layout.managed_result_path(self.root, "1a2b3c4d").write_text(json.dumps(exited), encoding="utf-8")
+        managed_tasks.record_unfinished_result(self.root, self.task, "interrupted", "late_reboot", 200.0)
+        self.assertEqual(results.observed_exit(self.result(), "1a2b3c4d"), 3)
+
+    def test_unfinished_states_are_closed(self):
+        with self.assertRaises(ValueError):
+            results.ended(self.task, state="exited", recovery_reason="x", at=1.0)

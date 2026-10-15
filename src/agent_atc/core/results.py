@@ -141,10 +141,42 @@ def exited(task: Mapping[str, object], *, exit_code: int, started_at: float | No
     }
 
 
-def observed_exit(result: object, task_id: str) -> int:
-    """The exit code from a result that belongs to ``task_id``, or ValueError."""
+UNFINISHED_STATES = ("interrupted", "launch_failed", "unknown")
+
+
+def ended(task: Mapping[str, object], *, state: str, recovery_reason: str, at: float) -> dict[str, object]:
+    """The result of a task whose process ATC never saw exit."""
+    if state not in UNFINISHED_STATES:
+        raise ValueError(f"an unfinished task's state is one of {', '.join(UNFINISHED_STATES)}")
+    agent = task.get("task_kind") == "agent"
+    return {
+        "schema": RESULT_SCHEMA,
+        "root": task["id"],
+        "kind": "agent" if agent else "command",
+        "observed": {
+            "state": state, "exit_code": None, "attempt": None,
+            "started_at": timestamp(task.get("started_at")), "ended_at": timestamp(at), "duration_seconds": None,
+            "backend": task.get("execution_backend"), "recovery_reason": recovery_reason,
+            "log": None,
+        },
+        "worker": {"harness": task.get("agent_worker"), "model": task.get("child_model"),
+                   "profile": task.get("agent_template"), "session": None, "checkpoint": None} if agent else None,
+        "lineage": None, "text_result": None, "report": None, "report_source": None, "report_error": None,
+    }
+
+
+def validate(result: object, task_id: str) -> dict[str, object]:
+    """A result that belongs to ``task_id``, or ValueError."""
     if not isinstance(result, dict) or result.get("schema") != RESULT_SCHEMA or result.get("root") != task_id:
         raise ValueError("invalid managed result identity")
+    if not isinstance(result.get("observed"), dict):
+        raise ValueError("managed result has no observed section")
+    return result
+
+
+def observed_exit(result: object, task_id: str) -> int:
+    """The exit code from a result that belongs to ``task_id``, or ValueError."""
+    validate(result, task_id)
     observed = result.get("observed")
     if not isinstance(observed, dict) or observed.get("state") != "exited" or type(observed.get("exit_code")) is not int:
         raise ValueError("managed result does not record an observed exit")
