@@ -13,7 +13,7 @@ from pathlib import Path
 import re
 import uuid
 
-from ..core import nodes, results
+from ..core import ids, nodes, results
 from ..store import contexts, layout
 from . import tasks as managed_tasks
 
@@ -36,8 +36,9 @@ def node_tasks(root: Path) -> list[dict[str, object]]:
 
 
 def resolve(root: Path, ref: str) -> dict[str, object]:
-    """The task record of the node named by task ID or full lineage name."""
-    matches = [task for task in node_tasks(root) if task["id"] == ref or task["node"].get("name") == ref]
+    """The task record of the node named by task ID, a callback ID of that task, or full lineage name."""
+    root_id = ids.root_of(ref)  # 1a2b3c4d-c1, as copied from a callback, names node 1a2b3c4d
+    matches = [task for task in node_tasks(root) if task["id"] in (ref, root_id) or task["node"].get("name") == ref]
     if not matches:
         raise ValueError(f"no agent node named {ref!r}; see atc context list")
     return matches[0]
