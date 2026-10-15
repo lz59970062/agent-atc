@@ -6,6 +6,7 @@ import sys
 import os
 from pathlib import Path
 
+from ..core import experts as expert_rules
 from ..engine import contexts as contexts_engine
 from ..store import contexts
 from ..store import layout
@@ -65,6 +66,8 @@ def agent(args: argparse.Namespace) -> int:
             raise SystemExit(f"atc: {exc}") from exc
         if node_plan["parent"] is not None:
             _inherit(args, node_plan["parent"])
+        elif args.agent_worker == "expert":
+            _apply_expert(args)
         if title is None:
             args.task = node_plan["name"]
         args._node_plan = node_plan
@@ -88,12 +91,29 @@ def _inherit(args: argparse.Namespace, parent: dict[str, object]) -> None:
     args.child_reasoning_effort = parent.get("child_reasoning_effort")
     args.permission_mode = str(parent.get("permission_mode") or getattr(args, "permission_mode", "auto"))
     args.sandbox_mode = str(parent.get("sandbox_mode") or getattr(args, "sandbox_mode", "workspace-write"))
+    args.expert = parent.get("expert")  # recorded only; its instructions are already in the session
     system_prompt = parent.get("agent_system_prompt_path")
     args._inherited_system_prompt = str(system_prompt) if system_prompt else None
 
 
+def _apply_expert(args: argparse.Namespace) -> None:
+    """A new chain run by a configured expert: its harness, model, effort and instructions."""
+    from . import experts as expert_commands
+    try:
+        expert = expert_commands.get(args.expert, Path(args.experts).expanduser() if getattr(args, "experts", None) else None)
+    except ValueError as exc:
+        raise SystemExit(f"atc: {exc}") from exc
+    args.agent_worker = str(expert["harness"])
+    args.child_model = expert.get("model")
+    args.child_reasoning_effort = expert.get("reasoning")
+    args.no_report = bool(getattr(args, "no_report", False) or not expert.get("report", True))
+    args._expert_settings = expert
+
+
 def _submit_agent(args: argparse.Namespace) -> int:
     args.agent_prompt_text = managed_tasks.agent_prompt_text(list(args.agent_prompt))
+    if getattr(args, "_expert_settings", None) is not None and args.agent_prompt_text.strip():
+        args.agent_prompt_text = expert_rules.prompt(args._expert_settings, args.agent_prompt_text)
     args.template = getattr(args, "template", None)
     args.template_file = getattr(args, "template_file", None)
     args.template_version = None

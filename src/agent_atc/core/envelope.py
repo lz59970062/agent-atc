@@ -48,6 +48,8 @@ def source_text(request: Mapping[str, object]) -> str:
     """Who did the work: the managed command's owner, a child agent, or an external job."""
     if request.get("task_kind") == "agent":
         parts = [f"agent {request.get('agent_worker') or 'unknown'}"]
+        if request.get("expert"):
+            parts.append(f"expert {request['expert']}")
         if request.get("child_model"):
             parts.append(f"model {request['child_model']}")
         if request.get("agent_template"):

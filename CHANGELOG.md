@@ -53,6 +53,10 @@
   required (`--name`) and compose along the lineage (`research/review`).
   `atc context list|show|archive` shows chains as summaries and never prints a
   raw session.
+- Add expert agents: `~/.atc/experts.yaml` (`atc.experts/1`) names presets of
+  harness, model, reasoning effort and instructions. `atc agent expert <name>`
+  runs one; `atc expert list|show|export|import` manage the file, and export
+  inlines instruction files so the file moves to another machine unchanged.
 - Remove `--last`. ATC only resumes an explicitly bound session and never
   falls back to "the most recent session"; stored callbacks must name one.
 - Remove the `codex-long-task-wakeup` command alias and the automatic adoption

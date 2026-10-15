@@ -255,6 +255,13 @@ def main() -> int:
                                   help="Do not ask the child for a structured report (ATC_REPORT_FILE)")
         child_parser.add_argument("--name", help="Short name for this node, for example research (required unless --task is given)")
         child_parser.add_argument("agent_prompt", nargs=argparse.REMAINDER)
+    expert_child = agent_sub.add_parser("expert", help="Start a new chain with a configured expert agent")
+    add_common_flags(expert_child)
+    expert_child.add_argument("expert", help="Expert name from ~/.atc/experts.yaml")
+    expert_child.add_argument("--experts", help="Use another experts file")
+    expert_child.add_argument("--name", help="Short name for this node (required unless --task is given)")
+    expert_child.add_argument("--no-report", action="store_true", help="Do not ask the child for a structured report")
+    expert_child.add_argument("agent_prompt", nargs=argparse.REMAINDER)
     for mode, help_text in (("continue", "Continue a finished node's agent at the end of its chain"),
                             ("fork", "Start a new chain from any finished node's agent")):
         lineage_parser = agent_sub.add_parser(mode, help=help_text)
@@ -347,6 +354,18 @@ def main() -> int:
     unregister_parser.add_argument("--dry-run", action="store_true")
     unregister_parser.add_argument("--json", action="store_true")
 
+    expert_parser = sub.add_parser("expert", help="Manage the portable expert agents file")
+    expert_actions = expert_parser.add_subparsers(dest="expert_action", required=True)
+    expert_actions.add_parser("list", help="Configured experts")
+    expert_show = expert_actions.add_parser("show", help="One expert's settings")
+    expert_show.add_argument("name")
+    expert_export = expert_actions.add_parser("export", help="Print a self-contained experts file")
+    expert_export.add_argument("names", nargs="*", help="Only these experts")
+    expert_import = expert_actions.add_parser("import", help="Add experts from a file (for example from another machine)")
+    expert_import.add_argument("file")
+    expert_import.add_argument("--replace", action="store_true", help="Replace all configured experts")
+    for action in expert_actions.choices.values():
+        action.add_argument("--experts", help="Experts file (default: ~/.atc/experts.yaml)")
     context_parser = sub.add_parser("context", help="List, inspect or archive chains of named agent nodes")
     context_actions = context_parser.add_subparsers(dest="context_action", required=True)
     context_list = context_actions.add_parser("list", help="Contexts and their nodes, as summaries")
@@ -502,6 +521,9 @@ def main() -> int:
         forwarded = canonical.forward(sys.argv[1:])
         if forwarded is not None:
             return forwarded
+    if args.mode == "expert":
+        from .commands import experts as expert_commands
+        return expert_commands.command(args)
     if args.mode == "context":
         from .commands import contexts as context_commands
         return {"list": context_commands.list_contexts, "show": context_commands.show_context,

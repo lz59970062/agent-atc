@@ -247,7 +247,7 @@ def managed_callback_request(
         request["task_kind"] = "agent"
         request["agent_worker"] = task.get("agent_worker")
         request["agent_result_path"] = task.get("agent_result_path")
-        for key in ("agent_template", "agent_template_version", "agent_template_source",
+        for key in ("expert", "agent_template", "agent_template_version", "agent_template_source",
                     "agent_template_handoff", "child_model", "child_reasoning_effort",
                     "agent_system_prompt_path", "agent_system_prompt_source"):
             if key in task:

@@ -117,7 +117,7 @@ def record(root: Path, task: dict[str, object]) -> None:
             parent_task = resolve(root, str(lineage["from"]))
             parent = {"context": str(parent_task["node"]["context"]), "node": str(parent_task["id"])}
         context = contexts.new(str(task["id"]), harness=str(task["agent_worker"]), cwd=str(task["cwd"]),
-                               model=task.get("child_model"), expert=task.get("agent_template"), parent=parent)
+                               model=task.get("child_model"), expert=task.get("expert"), parent=parent)
     contexts.save(context)
 
 

@@ -360,7 +360,8 @@ atc agent expert writer --name draft -- "写初稿"         # 按专家配置新
 
 - 位置：`~/.atc/experts.yaml`，schema 为 `atc.experts/1`；可以用 `--experts <文件>` 临时指定别的文件。
 - `atc expert export > experts.yaml` 把系统提示词文件内联进去，生成一个自包含的文件，拷到别的机器上用 `atc expert import experts.yaml` 导入。
-- 每个专家：`description`、`harness`、`model`、`reasoning`、`system_prompt`（或相对于配置文件的 `system_prompt_file`）、`report`（默认 true）。
+- 每个专家：`description`、`harness`、`model`、`reasoning`、`instructions`（或相对于配置文件的 `instructions_file`）、`report`（默认 true）。
+- `instructions` 加在任务提示词前面，而不是作为各 Harness 的系统提示词传入：三个 Harness 设置系统提示词的方式各不相同，统一放进提示词，同一份配置在任何 Harness 上表现一致。续写和分叉不会重复添加，它们已经在会话里了。
 - 现有的 `atc template` 由专家取代。
 
 ### 11.7 管理命令

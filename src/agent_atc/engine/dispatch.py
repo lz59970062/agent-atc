@@ -458,6 +458,7 @@ def submit_managed_run(args: argparse.Namespace) -> int:
                 "task_kind": "agent",
                 "agent_worker": str(args.agent_worker),
                 "agent_template": getattr(args, "template", None),
+                "expert": getattr(args, "expert", None),
                 "agent_template_version": getattr(args, "template_version", None),
                 "agent_template_source": getattr(args, "template_source", None),
                 "agent_template_handoff": getattr(args, "template_handoff", None),

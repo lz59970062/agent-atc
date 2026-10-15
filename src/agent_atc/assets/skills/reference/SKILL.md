@@ -412,6 +412,14 @@ atc context show research/review      # each step's task, result and report summ
 - Read results and report summaries (`atc context show`, the callback, `result.json`). Do not read a
   child's raw session file into your own context; it can be very large.
 
+Configured expert agents fix the harness, model, effort and instructions for a kind of task:
+
+```bash
+atc expert list                                          # experts in ~/.atc/experts.yaml
+atc agent expert writer --name draft -- "Draft the 0.8 release notes."
+atc expert export > experts.yaml                         # self-contained; atc expert import on another machine
+```
+
 The `codex|claude|pi` subcommand selects the child process. The existing `--agent` option still
 selects the parent agent to wake when explicit callback binding is needed. The text after `--` is
 the child's task, not a shell command. State the objective, relevant paths or context, expected
