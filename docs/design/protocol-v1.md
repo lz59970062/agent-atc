@@ -320,7 +320,7 @@ ACK after inspection: atc ack 8e4f0c12-c1
 
 | 概念 | 含义 | 怎么寻址 |
 |---|---|---|
-| 节点（node） | 一次 `atc agent` 任务及它结束时子代理会话的状态 | 任务 ID（`1a2b3c4d`）或路径名（`research/review`） |
+| 节点（node） | 一次 `atc agent` 任务及它结束时子代理会话的状态 | 任务 ID（`1a2b3c4d`）、该任务的回调 ID（`1a2b3c4d-c1`）或路径名（`research/review`）；命令里优先用 ID，名字给人看 |
 | 上下文（context） | 一条线性的节点链，链上每一步都基于上一步的会话 | 链上第一个节点的任务 ID |
 | 专家（expert） | 预先配置的"Harness + 模型 + 推理强度 + 系统提示词"组合 | 专家名（`writer`） |
 

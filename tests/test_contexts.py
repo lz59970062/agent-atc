@@ -120,6 +120,7 @@ class ContextTests(unittest.TestCase):
         callback = dispatch.load_request(layout.request_path(self.root, "pending", ids.callback_id(str(research["id"]))))
         self.assertIn(f"From: agent {self.harness}, node research", callback["prompt_compact"])
 
+        self.assertEqual(contexts_engine.resolve(self.root, ids.callback_id(str(research["id"])))["id"], research["id"])
         review = self.submit("continue", "write a review", node="research", name="review")
         self.assertEqual(review["node"]["name"], "research/review")
         self.assertEqual(review["node"]["lineage"], {"from": research["id"], "mode": "continue"})

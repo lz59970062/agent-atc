@@ -395,14 +395,17 @@ atc agent pi --cwd "$PWD" --name parser-review \
 
 Every child agent task is a node with a required short name (`--name`, or an explicit `--task`;
 no `/` or spaces). ATC keeps the child's session, so the same agent can keep working with what it
-already learned. Address nodes only by ATC's task ID or full name, never by harness session IDs:
+already learned. Address a node by its task ID (`1a2b3c4d`), the callback ID you acknowledged
+(`1a2b3c4d-c1`), or its full name (`research/review`); never by a harness session ID. Prefer IDs
+in commands you run: they are short and exact. Names are for showing people what an agent did.
 
 ```bash
 atc agent codex --name research -- "Survey approaches to X."
-atc agent continue research --name review -- "Using your survey, review design.md."   # research/review
-atc agent fork research --name plan -- "Using your survey, draft a plan."             # research/plan
-atc context list                      # chains, states and report status
-atc context show research/review      # each step's task, result and report summary
+#   atc: node research (1a2b3c4d) in context 1a2b3c4d
+atc agent continue 1a2b3c4d --name review -- "Using your survey, review design.md."   # research/review
+atc agent fork 1a2b3c4d --name plan -- "Using your survey, draft a plan."             # research/plan
+atc context list                 # ID, name, state and report status of every node
+atc context show 1a2b3c4d-c1     # the chain: each step's task, result and report summary
 ```
 
 - `continue` appends to the end of a chain and reuses its harness, model and directory. To build

@@ -70,11 +70,12 @@ differs from this page about callback delivery, this page applies to Claude Code
   ```bash
   atc agent claude --cwd "$PWD" --name parser-review -- "Inspect parser.py and report concrete defects."
   atc agent codex --template test --name parser-tests -- "Test the contract in docs/parser.md."
-  atc agent continue parser-review --name recheck -- "I fixed those; review parser.py again."
+  atc agent continue <task-or-callback-id> --name recheck -- "I fixed those; review parser.py again."
   ```
 
-  Every child needs `--name`. `atc agent continue <node>` reuses the same child with what it already
-  learned; `atc agent fork <node>` branches from it. See `atc context show <node>` for summaries;
+  Every child needs `--name`. `atc agent continue <id>` reuses the same child with what it already
+  learned; `atc agent fork <id>` branches from it. `<id>` is the task ID, the callback ID, or the
+  node's full name; prefer IDs. See `atc context show <node>` for summaries;
   never read a child's raw session.
 
   Then background `atc wait --task <id>` exactly as for `atc run`. The child's result path is in the
