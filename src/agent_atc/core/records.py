@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import Mapping
 
 CALLBACK_SCHEMA = "atc.callback/1"
+TASK_SCHEMA = "atc.task/1"
 
 
 def is_callback(record: object) -> bool:

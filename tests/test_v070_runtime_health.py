@@ -41,16 +41,7 @@ class HealthArtifacts:
         path.write_text(json.dumps(value), encoding="utf-8")
 
     def task(self, task_id="fixture-task", backend="systemd-user", **updates):
-        task = {
-            "version": 2 if backend == "systemd-user" else 1,
-            "id": task_id, "queue_dir": str(self.root), "agent": "codex",
-            "execution_backend": backend, "execution_owner": f"atc-{task_id}-attempt1.service",
-            "screen_session": f"atc-{task_id}", "state": "running",
-            "machine_id": "this-machine", "boot_id": "this-boot", "submission_boot_id": "this-boot",
-            "launch_requested_at": 100.0, "started_at": 101.0,
-            "cwd": str(self.directory), "task": "SECRET_TASK_CONTENT", "command": "SECRET_COMMAND_CONTENT",
-            "target": {"kind": "session", "session": "bound-fixture-session"},
-        }
+        task = atc_records.task_record(id=task_id, queue_dir=str(self.root), agent="codex", execution_backend=backend, execution_owner=f"atc-{task_id}-attempt1.service", screen_session=f"atc-{task_id}", state="running", machine_id="this-machine", boot_id="this-boot", submission_boot_id="this-boot", launch_requested_at=100.0, started_at=101.0, cwd=str(self.directory), task="SECRET_TASK_CONTENT", command="SECRET_COMMAND_CONTENT", target={"kind": "session", "session": "bound-fixture-session"})
         task.update(updates)
         self.write_json(layout.managed_task_path(self.root, task_id), task)
         return task

@@ -15,7 +15,7 @@ from ..harness.base import DEFAULT_APPROVALS_REVIEWER, DEFAULT_APPROVAL_POLICY, 
 from ..runtime import worker_command
 from ..owners import LaunchError, OwnerState, ScreenBackend, SystemdUserBackend, LaunchdBackend
 from ..owners.windows import WindowsBackend
-from ..core import ids, results, targets
+from ..core import capabilities, ids, records, results, targets
 from ..store import layout
 from ..owners import host
 from ..store import records as queue_store
@@ -63,24 +63,25 @@ def write_managed_task(root: Path, task: dict[str, object]) -> None:
 
 def load_managed_task(path: Path) -> dict[str, object]:
     task = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(task, dict) or task.get("version") not in (1, 2, 3, 4, 5):
-        raise ValueError("invalid managed task record")
+    if not isinstance(task, dict) or task.get("schema") != records.TASK_SCHEMA:
+        raise ValueError(f"not an {records.TASK_SCHEMA} record; tasks from Long Task Callback need atc migrate")
     if task.get("id") != path.parent.name:
         raise ValueError("managed task id must match its directory")
+    missing = capabilities.unsupported(task.get("requires"))
+    if missing:
+        raise ValueError("task requires unsupported capabilities: " + ", ".join(missing))
     get_agent(str(task.get("agent", "codex")))
     if task.get("task_kind") == "agent":
         get_child_agent(str(task.get("agent_worker", "")))
-    backend = task.get("execution_backend", "screen")
-    if task.get("version") in (2, 3, 4, 5) and "execution_backend" not in task:
-        raise ValueError("native task records require an execution backend")
-    if task.get("version") in (3, 4, 5) and task.get("callback_mode") not in ("cli", "desktop", "manual"):
-        raise ValueError("version 3 task requires an explicit callback mode")
-    if task.get("version") in (4, 5):
+    if "execution_backend" not in task:
+        raise ValueError("task records require an execution backend")
+    backend = task["execution_backend"]
+    if task.get("callback_mode") not in ("cli", "desktop", "manual"):
+        raise ValueError("task requires an explicit callback mode")
+    if set(task["requires"]) & {capabilities.PI_STEER, capabilities.PI_FOLLOW_UP}:
         if dispatch.request_agent(task) != "pi":
-            raise ValueError("version 4 task requires a frozen Pi parent route")
+            raise ValueError("only Pi parents can require Pi delivery")
         pi_channel.validate_route(task)
-    if task.get("version") == 5 and task.get("pi_delivery") != "steer":
-        raise ValueError("version 5 task requires explicit Pi steer delivery")
     if backend not in ("screen", "systemd-user", "launchd", "windows-task"):
         raise ValueError(f"unsupported execution backend: {backend!r}")
     if not isinstance(task.get("queue_dir"), str):

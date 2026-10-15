@@ -27,6 +27,7 @@ from agent_atc.install import diagnostics, launchd_service
 from agent_atc.owners import LaunchdBackend, LaunchError, OwnerState
 from agent_atc.owners import macos, screen
 from test_cli import assert_private_file
+import atc_records
 
 
 class MacOSContracts(unittest.TestCase):
@@ -139,10 +140,7 @@ class MacOSContracts(unittest.TestCase):
 
     def test_worker_rejects_stale_attempt_host_boot_and_owner_before_command(self):
         ident = "abcd1234"
-        task = {"version": 2, "id": ident, "queue_dir": str(self.queue),
-                "execution_backend": "launchd", "state": "launching", "agent": "codex",
-                "launch_attempt_count": 1, "launch_boot_id": "boot", "machine_id": "host",
-                "execution_owner": self.backend.owner_name(ident, 1, self.queue)}
+        task = atc_records.task_record(id=ident, queue_dir=str(self.queue), execution_backend="launchd", state="launching", agent="codex", launch_attempt_count=1, launch_boot_id="boot", machine_id="host", execution_owner=self.backend.owner_name(ident, 1, self.queue))
         args = argparse.Namespace(task_file=str(layout.managed_task_path(self.queue, ident)), attempt=1)
         for change in ({"state": "running"}, {"launch_attempt_count": 2},
                        {"launch_boot_id": "previous"}, {"launch_boot_id": None},
@@ -155,9 +153,7 @@ class MacOSContracts(unittest.TestCase):
                 self.assertEqual(command.call_count, 0 if change else 1)
 
     def test_launch_boot_detects_reboot_even_when_submitter_could_not_read_boot(self):
-        task = {"version": 2, "id": "abcd1234", "queue_dir": str(self.queue),
-                "execution_backend": "launchd", "machine_id": "host", "submission_boot_id": None,
-                "launch_boot_id": "previous-boot", "state": "launching", "agent": "codex"}
+        task = atc_records.task_record(id="abcd1234", queue_dir=str(self.queue), execution_backend="launchd", machine_id="host", submission_boot_id=None, launch_boot_id="previous-boot", state="launching", agent="codex")
         managed_tasks.write_managed_task(self.queue, task)
         with mock.patch.object(managed_tasks, "mark_managed_task_interrupted", return_value=True) as interrupt, mock.patch.object(
             LaunchdBackend, "launch"
@@ -169,10 +165,7 @@ class MacOSContracts(unittest.TestCase):
         self.assertEqual(diagnostics.runtime_issues(self.queue)[0]["code"], "task_boot_changed")
 
     def test_ambiguous_native_launch_is_never_replayed(self):
-        task = {"version": 2, "id": "abcd1234", "queue_dir": str(self.queue),
-                "execution_backend": "launchd", "machine_id": "host", "submission_boot_id": "boot",
-                "state": "submitted", "environment_path": str(self.directory / "env.json"),
-                "cwd": str(self.directory), "log_path": str(self.directory / "log"), "agent": "codex"}
+        task = atc_records.task_record(id="abcd1234", queue_dir=str(self.queue), execution_backend="launchd", machine_id="host", submission_boot_id="boot", state="submitted", environment_path=str(self.directory / "env.json"), cwd=str(self.directory), log_path=str(self.directory / "log"), agent="codex")
         Path(task["environment_path"]).write_text("{}")
         managed_tasks.write_managed_task(self.queue, task)
         with mock.patch.object(LaunchdBackend, "launch", side_effect=LaunchError("unknown", uncertain=True)) as launch, mock.patch.object(

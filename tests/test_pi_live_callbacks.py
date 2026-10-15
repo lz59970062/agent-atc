@@ -78,7 +78,7 @@ class PiLiveCallbackTests(unittest.TestCase):
         path = queue/'pending/fixture.json'
         queue_store.write_request(path, steer)
         assert dispatch.load_request(path)['pi_delivery'] == 'steer'
-        task = dict(steer, version=5, queue_dir=str(queue), execution_backend='screen',
+        task = dict(steer, schema='atc.task/1', queue_dir=str(queue), execution_backend='screen',
                     screen_session='atc-fixture', state='completed', command='/bin/true',
                     wrapped_command=['/bin/true'], log_path=str(self.directory/'task.log'))
         task_path = self.directory/'fixture/task.json'

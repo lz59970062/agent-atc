@@ -407,9 +407,7 @@ def submit_managed_run(args: argparse.Namespace) -> int:
                         macos_platform.OWNER_ENV, "XPC_SERVICE_NAME", "XPC_FLAGS")
     }
     task: dict[str, object] = {
-        # Older daemons must reject new route intent, even for screen tasks,
-        # instead of silently auto-delivering an explicit manual callback.
-        "version": 4 if resolve_agent(args) == "pi" else 3,
+        "schema": records.TASK_SCHEMA,
         "id": task_id,
         "submitted_at": time.time(),
         "execution_backend": backend,
@@ -439,8 +437,9 @@ def submit_managed_run(args: argparse.Namespace) -> int:
         "token": managed_tasks.MANAGED_WORKER_TOKEN_PREFIX + secrets.token_urlsafe(32),
     }
     task.update(routes.selection(args))
-    if task.get("pi_delivery") == "steer":
-        task["version"] = 5  # Old coordinators must not downgrade steer to follow-up.
+    # A tower that cannot deliver this route must leave the task alone, not
+    # silently auto-deliver an explicit manual callback or downgrade a steer.
+    task["requires"] = capabilities.required_for(task)
     if task_kind == "agent" and agent_prompt_path is not None and agent_result_path is not None:
         task.update(
             {

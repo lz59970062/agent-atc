@@ -65,7 +65,7 @@ class NativeTaskLifecycleTests(unittest.TestCase):
         path = self.submit()
         submitted = managed_tasks.load_managed_task(path)
         self.assertEqual(submitted["execution_backend"], "systemd-user")
-        self.assertEqual(submitted["version"], 3)
+        self.assertEqual(submitted["schema"], "atc.task/1")
         with mock.patch.object(SystemdUserBackend, "launch") as launch, mock.patch.object(
             SystemdUserBackend, "probe", return_value=OwnerState.ALIVE
         ), mock.patch.object(managed_tasks, "launch_managed_screen") as screen:
@@ -138,7 +138,7 @@ class NativeTaskLifecycleTests(unittest.TestCase):
         launch.assert_not_called()
         completed = managed_tasks.load_managed_task(path)
         self.assertEqual(completed["state"], "completed")
-        self.assertEqual(completed["version"], 3)
+        self.assertEqual(completed["schema"], "atc.task/1")
         self.assertEqual(completed["execution_backend"], "systemd-user")
         pending = list((self.root / "pending").glob("*.json"))
         self.assertEqual(len(pending), 1)
@@ -188,26 +188,18 @@ class NativeTaskLifecycleTests(unittest.TestCase):
         self.assertEqual(recovered["state"], "interrupted")
         self.assertEqual(recovered["recovery_reason"], "interrupted_by_host_reboot")
 
-    def test_old_record_without_backend_still_uses_screen_owner(self) -> None:
+    def test_task_without_a_backend_is_refused(self) -> None:
         path = self.submit()
         task = managed_tasks.load_managed_task(path)
         task.pop("execution_backend")
-        task.update(version=1, state="running", boot_id=host.current_boot_id())
         managed_tasks.write_managed_task(self.root, task)
-        with mock.patch.object(managed_tasks, "screen_owner_state", return_value=cli.OwnerState.ALIVE) as screen, mock.patch.object(
-            SystemdUserBackend, "probe"
-        ) as native, mock.patch.object(SystemdUserBackend, "launch") as launch:
-            managed_tasks.recover_managed_tasks(self.root)
-        screen.assert_called_once_with(task["screen_session"])
-        native.assert_not_called()
-        launch.assert_not_called()
-        self.assertEqual(managed_tasks.load_managed_task(path)["state"], "running")
-        self.assertEqual(managed_tasks.load_managed_task(path)["version"], 1)
+        with self.assertRaisesRegex(ValueError, "execution backend"):
+            managed_tasks.load_managed_task(path)
 
     def test_unknown_screen_owner_is_not_evidence_to_interrupt_or_relaunch(self) -> None:
         path = self.submit()
         task = managed_tasks.load_managed_task(path)
-        task.update(version=1, execution_backend="screen", state="running", boot_id=host.current_boot_id())
+        task.update(execution_backend="screen", state="running", boot_id=host.current_boot_id())
         managed_tasks.write_managed_task(self.root, task)
         with mock.patch.object(managed_tasks, "screen_owner_state", return_value=OwnerState.UNKNOWN), mock.patch.object(
             managed_tasks, "launch_managed_screen"
@@ -223,7 +215,7 @@ class NativeTaskLifecycleTests(unittest.TestCase):
     def test_unknown_screen_probe_cannot_authorize_submitted_work_to_launch(self) -> None:
         path = self.submit()
         task = managed_tasks.load_managed_task(path)
-        task.update(version=1, execution_backend="screen")
+        task.update(execution_backend="screen")
         managed_tasks.write_managed_task(self.root, task)
         with mock.patch.object(managed_tasks, "screen_binary", return_value="/usr/bin/screen"), mock.patch.object(
             managed_tasks, "screen_owner_state", return_value=OwnerState.UNKNOWN
@@ -235,7 +227,7 @@ class NativeTaskLifecycleTests(unittest.TestCase):
     def test_ambiguous_screen_launch_reply_never_retries_disappeared_owner(self) -> None:
         path = self.submit()
         task = managed_tasks.load_managed_task(path)
-        task.update(version=1, execution_backend="screen")
+        task.update(execution_backend="screen")
         managed_tasks.write_managed_task(self.root, task)
         with mock.patch.object(managed_tasks, "screen_binary", return_value="/usr/bin/screen"), mock.patch.object(
             managed_tasks, "screen_owner_state", return_value=OwnerState.ABSENT
@@ -272,7 +264,7 @@ class NativeTaskLifecycleTests(unittest.TestCase):
         task = managed_tasks.load_managed_task(path)
         self.assertEqual(task["state"], "completed")
         self.assertEqual(task["exit_code"], 7)
-        self.assertEqual(task["version"], 3)
+        self.assertEqual(task["schema"], "atc.task/1")
         self.assertEqual(task["execution_backend"], "systemd-user")
         self.assertEqual(len(list((self.root / "pending").glob("*.json"))), 1)
 
@@ -389,7 +381,7 @@ class NativeTaskLifecycleTests(unittest.TestCase):
         self.assertEqual(completed["state"], "completed")
         self.assertEqual(completed["outcome"], "completed")
         self.assertEqual(completed["exit_code"], 7)
-        self.assertEqual(completed["version"], 3)
+        self.assertEqual(completed["schema"], "atc.task/1")
         self.assertEqual(len(list((self.root / "pending").glob("*.json"))), 1)
 
 

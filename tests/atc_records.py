@@ -38,3 +38,12 @@ def result_record(task: dict[str, object], *, exit_code: int, ended_at: float, s
                             attempt=ids.attempt_id(str(task["id"]), 1), log="attempt-1.log")
     record.update(fields)
     return record
+
+
+def task_record(**fields: object) -> dict[str, object]:
+    """An atc.task/1 record; tests pass the fields their case needs."""
+    fields.pop("version", None)
+    record: dict[str, object] = {"schema": records.TASK_SCHEMA, "callback_mode": "cli"}
+    record.update(fields)
+    record.setdefault("requires", capabilities.required_for(record))
+    return record
