@@ -2,11 +2,11 @@
   <img src="./assets/readme/hero.svg" width="100%" alt="Agent Traffic Control (atc): run a task under an independent Linux, macOS or Windows owner and wake the same Codex or Claude Code session when it finishes">
 </p>
 
-<h3 align="center">Stop babysitting long-running jobs. Let your agent sleep — and wake it up when the work is done.</h3>
+<h3 align="center">ATC (Agent Traffic Control): dispatch work to any agent and route the result back to the session that asked.</h3>
 
 <p align="center">
-  <a href="https://github.com/lz59970062/agent-atc/tree/v0.7.0"><img src="https://img.shields.io/badge/stable-v0.7.0-3fb950" alt="Stable v0.7.0"></a>
-  <a href="./CHANGELOG.md"><img src="https://img.shields.io/badge/preview-0.7.1a1-a371f7" alt="Preview 0.7.1a1"></a>
+  <a href="./CHANGELOG.md"><img src="https://img.shields.io/badge/preview-0.8.0.dev0-a371f7" alt="Preview 0.8.0.dev0"></a>
+  <a href="https://www.npmjs.com/package/agent-atc"><img src="https://img.shields.io/badge/npm-agent--atc-cb3837" alt="npm agent-atc"></a>
   <img src="https://img.shields.io/badge/python-%E2%89%A53.9-3776ab" alt="Python ≥ 3.9">
   <img src="https://img.shields.io/badge/platforms-Linux%20%C2%B7%20macOS%20%C2%B7%20Windows-58a6ff" alt="Linux, macOS, Windows">
   <img src="https://img.shields.io/badge/agents-Codex%20%C2%B7%20Claude%20Code%20%C2%B7%20Pi-d29922" alt="Works with Codex, Claude Code and Pi">
@@ -25,18 +25,18 @@
 
 ## The problem
 
-You ask Codex or Claude Code to train a model, run a benchmark, or build a big project. The job takes
-two hours. Now what?
+You ask Codex or Claude Code to train a model, run a benchmark, or hand a review to a second agent.
+The work takes two hours. Now what?
 
-- The agent **polls** with `sleep && tail` — burning turns, tokens and context on nothing.
+- The agent **polls** with `sleep && tail`, burning turns, tokens and context on nothing.
 - Or the job is **owned by the agent's shell**, so it dies when the turn ends, times out, or the app restarts.
-- Or you **come back later** and have to re-explain everything to a fresh conversation.
+- Or the second agent's answer lands somewhere else, and **you carry it back** to the conversation by hand.
 
 ## The fix
 
-**Agent Traffic Control (`atc`)** hands the job to an independent, OS-native process owner and, when it
-finishes, **resumes the exact same conversation** with a compact result — exit code, log path,
-artifacts, and the command to acknowledge it.
+**ATC** hands the work, a command or a fresh agent in any harness, to an independent OS-native
+process owner. When it finishes, ATC **resumes the exact same conversation** with a short result:
+what it observed, what a child agent reported, where the files are, and the command to acknowledge it.
 
 ```console
 $ atc run --task "train model" -- python train.py --config configs/exp.yaml
@@ -77,8 +77,8 @@ can't report to either.
 
 This project fills that gap. From a Codex, Claude Code or Pi session, `atc agent codex|claude|pi`
 starts a fresh agent in any of the three as a durable job, and the result comes back to the session that
-asked for it. A single dispatch layer across closed and open harnesses is also why Agent Traffic Control
-is growing into **Agent Traffic Control**.
+asked for it. A single dispatch layer across closed and open harnesses is also why Long Task Callback
+became **Agent Traffic Control**.
 
 ## ✨ Highlights
 
@@ -89,7 +89,8 @@ is growing into **Agent Traffic Control**.
 | 🧱 **Survives the agent** | Tasks run under systemd, launchd or Task Scheduler — not as a child of the agent turn or even the daemon. |
 | ⚡ **Claude Code native** | In Claude Code (CLI or desktop app), a background `atc wait` wakes the conversation you're looking at — no headless side session. → [Claude Code guide](docs/claude-code.md) |
 | 🥧 **Pi native** | Pi's extension steers the result into the running Pi session — even mid-run, before its next model call. → [Pi guide](docs/pi.md) |
-| 🤖 **Child agents** | `atc agent codex\|claude\|pi` launches a fresh agent as a durable background job, with reusable prompt templates. |
+| 🤖 **Any agent, any harness** | `atc agent codex\|claude\|pi` starts a fresh agent as a durable job from any of the three. It writes a structured report, shown to you as a claim, never as proof. |
+| 📦 **One installation** | `atc setup` installs one canonical `~/.atc/bin/atc`; copies of `atc` in other environments forward to it, so versions never mix. |
 | 🎯 **Multi-stage goals** | Track an objective across many callbacks with a YAML plan that the agent must verify before declaring victory. |
 | 🛡️ **Never reruns blindly** | Ambiguous launches, reboots and failures are reported to the agent for inspection — ATC never silently replays work. |
 | 🩺 **Self-repairing setup** | When something is misconfigured, the agent gets a machine-readable repair plan and fixes it itself. |
@@ -98,16 +99,23 @@ is growing into **Agent Traffic Control**.
 ## 🚀 Quick start
 
 ```bash
-# 1. Install (stable release)
-python3 -m pip install "git+https://github.com/lz59970062/agent-atc.git@v0.7.0"
+# 1. Install (prebuilt for Linux x64; see below for other platforms)
+npm install -g agent-atc
 
-# 2. Install the skill for Codex + Claude Code and start the background daemon
+# 2. Make it the installed ATC, add the skills for Codex + Claude Code, start the coordinator
 atc setup --force --enable --now
 #    Using Pi too? Add --with-pi-extension (Pi skill + live-callback extension)
 
 # 3. Check that everything is healthy
 atc --version
 atc doctor --agent codex --session <session-id>
+```
+
+Without Node, or on macOS and Windows until their prebuilt packages ship, install from source and
+run the same `atc setup`:
+
+```bash
+python3 -m pip install "git+https://github.com/lz59970062/agent-atc.git"
 ```
 
 That's it. `setup` installs the bundled skill, so your agent already knows when and how to use `atc`.
@@ -129,21 +137,13 @@ To use the screen compatibility backend: `sudo apt install screen` (or `dnf inst
 </details>
 
 <details>
-<summary><b>Trying the 0.7.1 preview (Desktop callbacks)</b></summary>
+<summary><b>Codex Desktop callbacks</b></summary>
 
-`main` currently carries the **0.7.1a1 preview**, which adds explicit callback modes
-(`cli`, `desktop`, `manual`, `auto`) and generates a Desktop launcher during `atc setup` on Mac and Windows.
-
-```bash
-# Installs from main and runs setup with the same interpreter
-./scripts/install_from_git.sh https://github.com/lz59970062/agent-atc.git
-# Windows: scripts/install_from_git.ps1 -RepoUrl https://github.com/lz59970062/agent-atc.git
-```
-
-Setup never starts or interrupts Desktop. When you're ready, quit Desktop and open
-`Start ATC Desktop.command` (Mac) / `Start ATC Desktop.cmd` (Windows), or run `atc desktop launch`.
-Read [callback modes](docs/callback-modes.md), [Mac Desktop setup](docs/macos-desktop-bridge.md) and
-[Windows Desktop setup](docs/windows-desktop-bridge.md) for the current limits — the Windows Desktop
+Callback modes are explicit (`cli`, `desktop`, `manual`, `auto`), and `atc setup` generates a Desktop
+launcher on Mac and Windows. Setup never starts or interrupts Desktop. When you're ready, quit
+Desktop and open `Start ATC Desktop.command` (Mac) / `Start ATC Desktop.cmd` (Windows), or run
+`atc desktop launch`. Read [callback modes](docs/callback-modes.md), [Mac Desktop setup](docs/macos-desktop-bridge.md)
+and [Windows Desktop setup](docs/windows-desktop-bridge.md) for the current limits; the Windows Desktop
 package-context bridge is still experimental.
 
 </details>
@@ -260,7 +260,7 @@ atc wait --task <task-id>         # (Claude Code) block until the callback is re
 atc ack <callback-id>        # confirm a callback was received and inspected
 atc status                        # list callbacks that still need handling
 atc cancel --id <callback-id>     # cancel a queued callback
-atc retry --id <callback-id>      # (0.7.1) re-deliver a result without rerunning the task
+atc retry --id <callback-id>      # re-deliver a result without rerunning the task
 atc doctor --agent codex --session <id>   # JSON readiness report + repair plan
 ```
 
@@ -344,23 +344,28 @@ Use `--service standalone --now` where user systemd is unavailable (e.g. AutoDL)
 | Registering templates as discoverable skills | [docs/template-registration.md](docs/template-registration.md) |
 | Goals and acknowledgement layers | [docs/goals.md](docs/goals.md) |
 | Callback format, reminder cadence, user hook | [docs/callback-reminders.md](docs/callback-reminders.md) |
-| Callback modes (CLI / Desktop / manual) — 0.7.1 | [docs/callback-modes.md](docs/callback-modes.md) |
+| Callback modes (CLI / Desktop / manual) | [docs/callback-modes.md](docs/callback-modes.md) |
 | Restart, recovery and self-repair | [docs/recovery.md](docs/recovery.md) |
-| Architecture and extension points | [docs/architecture.md](docs/architecture.md) |
+| Protocol v1 and package architecture (design) | [protocol](docs/design/protocol-v1.md) · [architecture](docs/design/architecture.md) |
+| Platform ownership and extension points | [docs/architecture.md](docs/architecture.md) |
 | macOS · Windows · Containers | [macOS](docs/macos.md) · [Windows](docs/windows.md) · [Containers](docs/containers.md) |
 | Desktop bridges | [Mac](docs/macos-desktop-bridge.md) · [Windows](docs/windows-desktop-bridge.md) |
-| Validation records | [0.7.0](docs/validation-0.7.0.md) · [0.7.1 preview](docs/validation-0.7.1-preview.md) · [Linux preview](docs/validation-0.7.0a1.md) · [macOS](docs/validation-macos.md) · [Windows](docs/validation-windows.md) |
+| Validation records (Long Task Callback era) | [0.7.0](docs/validation-0.7.0.md) · [0.7.1 preview](docs/validation-0.7.1-preview.md) · [Linux preview](docs/validation-0.7.0a1.md) · [macOS](docs/validation-macos.md) · [Windows](docs/validation-windows.md) |
 | Release history | [CHANGELOG.md](CHANGELOG.md) |
 
 ## 🗺️ Roadmap
 
-- [x] Native task owners on Linux, macOS and Windows (0.7.0)
-- [x] Fresh child agents with templates (0.6.5)
-- [ ] Explicit callback modes and Desktop shared Core (0.7.1 preview)
-- [ ] Claude Code live callbacks via `atc wait` (0.7.1 preview; verified on macOS and Linux)
-- [ ] Pi agent adapter: child worker and steered live callbacks (0.7.1 preview; verified on Linux)
-- [ ] DSH agent adapter
+- [x] Native task owners on Linux, macOS and Windows
+- [x] Fresh child agents in Codex, Claude Code and Pi; live callbacks into Claude Code and Pi
+- [x] Protocol v1: root-plus-suffix IDs, record schemas, delivery capabilities, results that keep child reports apart from observed facts (0.8)
+- [x] One canonical installation and npm distribution for Linux x64 (0.8)
+- [ ] Prebuilt npm packages for macOS and Windows
+- [ ] `--notify`: deliver a callback to another session
+- [ ] Expert agents, and forking an expert's context from a checkpoint
+- [ ] Fan-in: one callback when a group of tasks finishes
+- [ ] More harnesses: Gemini CLI, OpenCode, and agents that speak ACP
+- [ ] A cross-harness benchmark against working without ATC
 
 ## License
 
-[MIT](LICENSE) · Formerly `agent-atc` — the old command remains an alias for `atc`.
+[MIT](LICENSE) · ATC was previously Long Task Callback (`ltc`); see [Coming from Long Task Callback](#coming-from-long-task-callback-ltc).
