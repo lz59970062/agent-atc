@@ -9,6 +9,7 @@ import sys
 import time
 from pathlib import Path
 from .. import __version__
+from .. import runtime as atc_runtime
 from ..harness.pi import channel as pi_channel
 from ..runtime import worker_command
 from ..owners import linux as linux_platform
@@ -179,6 +180,7 @@ def write_daemon_runtime(root: Path | None = None) -> None:
         "queue_dir": str((root if root is not None else layout.queue_dir()).resolve()),
         "reload_protocol": RELOAD_PROTOCOL_VERSION,
         "version": __version__,
+        "build": atc_runtime.build_id(),
         "started_at": time.time(),
     }
     queue_store.write_request(path, payload)

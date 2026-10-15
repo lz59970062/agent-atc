@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import contextlib
 import io
 import sys
@@ -28,6 +29,9 @@ class DaemonServiceSelectionTests(unittest.TestCase):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         self.directory = Path(temporary.name)
+        home = mock.patch.dict(os.environ, {"ATC_HOME": str(self.directory / "atc-home")})
+        home.start()  # setup installs the canonical launcher here, not in a shared home
+        self.addCleanup(home.stop)
 
     def arguments(self, service="auto", *, now=True):
         return argparse.Namespace(

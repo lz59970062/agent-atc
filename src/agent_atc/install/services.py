@@ -9,6 +9,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from ..store import install_record
 from ..harness.claude import session as claude_session
 from ..harness.pi import channel as pi_channel
 from ..harness.claude.adapter import CLAUDE_BIN_ENV
@@ -501,6 +502,11 @@ def setup(args: argparse.Namespace) -> int:
     except ValueError as exc:
         print(f"atc: setup cannot continue: {exc}", file=sys.stderr)
         return 2
+    from . import canonical
+    record = canonical.ensure()
+    print(f"Installed ATC {record['version']} (build {record['build']}) as {install_record.launcher_path()}")
+    if not getattr(args, "exec_start", None):
+        args.exec_start = str(install_record.launcher_path())  # services run the canonical ATC
     skill_args = argparse.Namespace(
         path=args.skill_path,
         force=args.force,

@@ -36,6 +36,13 @@
   `--apply` archives the LTC state directory unchanged and removes the old
   coordinator service, skills, Pi extension and shell hook. It refuses while
   LTC still has callbacks or tasks in flight (`--wait` waits for them).
+- `atc setup` makes the running installation the canonical ATC: it writes
+  `~/.atc/bin/atc` and `~/.atc/install.json` (a frozen build copies itself to
+  `~/.atc/versions/<version>-<build>/`), points services and pasted ACK
+  commands at that launcher, and other installations forward their commands
+  to it. `atc --version` shows a build ID (a digest of the package, or the
+  commit for release builds) and `atc doctor` reports a coordinator running a
+  different build. Version is now 0.8.0.dev0.
 - Remove `--last`. ATC only resumes an explicitly bound session and never
   falls back to "the most recent session"; stored callbacks must name one.
 - Remove the `codex-long-task-wakeup` command alias and the automatic adoption

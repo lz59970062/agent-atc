@@ -1845,6 +1845,7 @@ class CliTests(unittest.TestCase):
             mock.patch.object(reminder_policy, "ensure_callback_hook_file") as ensure_callback_hook_file,
             mock.patch.object(services, "report_claude_agent_readiness") as report_claude_agent_readiness,
             mock.patch.object(services, "install_systemd", return_value=0) as install_systemd,
+            mock.patch.dict(os.environ, {"ATC_HOME": self._temporary_directory()}),
         ):
             self.assertEqual(services.setup(args), 0)
 
@@ -2566,11 +2567,18 @@ class CliTests(unittest.TestCase):
                 cwd=tmp, task="train model", plan_file=str(self._goal_plan(tmp)), idle_seconds=1.0,
             )
             self.assertEqual(goal_commands.goal_start(start_args), 0)
+            # Drive the reminder clock explicitly: with a 1s idle window, a slow
+            # fsync between two real-time calls would otherwise age the reminder.
+            clock = argparse.Namespace(now=time.time())
+            patcher = mock.patch.object(goals, "time", argparse.Namespace(time=lambda: clock.now))
+            patcher.start()
+            self.addCleanup(patcher.stop)
             goal = goals.load_goal(root, "reminder-goal")
-            goal["last_external_callback_at"] = time.time() - 2.0
+            goal["last_external_callback_at"] = clock.now - 2.0
             goals.write_goal(root, goal)
 
             self.assertTrue(goals.process_goal_reminders(root))
+            clock.now += 0.5  # Still inside the reminder's idle window.
             self.assertFalse(goals.process_goal_reminders(root))
             pending = list((root / "pending").glob("*.json"))
             self.assertEqual(len(pending), 1)
@@ -2584,15 +2592,23 @@ class CliTests(unittest.TestCase):
 
             queue_store.move_request(pending[0], root / "done")
             goal = goals.load_goal(root, "reminder-goal")
-            goal["last_reminder_at"] = time.time() - 2.0
+            goal["last_reminder_at"] = clock.now - 2.0
             goals.write_goal(root, goal)
             self.assertTrue(goals.process_goal_reminders(root))
             self.assertEqual(len(list((root / "pending").glob("*.json"))), 1)
 
-            goals.update_goal_from_callback(root, {"goal_id": "reminder-goal", "created_at": time.time()})
+            for path in (root / "pending").glob("*.json"):
+                queue_store.move_request(path, root / "done")
+            callback_at = clock.now
+            goals.update_goal_from_callback(root, {"goal_id": "reminder-goal", "created_at": callback_at})
             goal = goals.load_goal(root, "reminder-goal")
             self.assertNotIn("last_reminder_at", goal)
-            self.assertGreaterEqual(float(goal["last_external_callback_at"]), time.time() - 1.0)
+            self.assertEqual(float(goal["last_external_callback_at"]), callback_at)
+            clock.now += 0.5  # The external callback restarted the idle timer.
+            self.assertFalse(goals.process_goal_reminders(root))
+            clock.now += 1.0
+            self.assertTrue(goals.process_goal_reminders(root))
+            self.assertEqual(len(list((root / "pending").glob("*.json"))), 1)
 
     def test_goal_reminder_reconciles_callback_persisted_before_goal_update(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -3176,6 +3192,11 @@ class CliTests(unittest.TestCase):
             json.dumps(request) + "\n",
             encoding="utf-8",
         )
+
+    def _temporary_directory(self) -> str:
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        return temporary.name
 
     def _run_args(self, cwd: str, root: Path, command: list[str]) -> argparse.Namespace:
         return argparse.Namespace(

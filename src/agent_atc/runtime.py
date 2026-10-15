@@ -3,11 +3,37 @@
 All private workers use this entry point. A future frozen distribution can use
 its executable directly without pretending it is a Python interpreter.
 """
+import functools
+import hashlib
 from pathlib import Path
 import sys
 import os
 import shutil
 from .system import shell
+
+
+BUILD_FILE = "_build.txt"
+_BUILD_SUFFIXES = (".py", ".js", ".ps1", ".md", ".yaml")
+
+
+@functools.lru_cache(maxsize=1)
+def build_id() -> str:
+    """Identify this exact build, not just its version number.
+
+    Release builds embed ``_build.txt``. Otherwise the ID is a digest of the
+    package's own files, so two installations that report the same version but
+    hold different code are told apart.
+    """
+    package = Path(__file__).parent
+    embedded = package / BUILD_FILE
+    if embedded.is_file():
+        return embedded.read_text(encoding="utf-8").strip()
+    digest = hashlib.sha256()
+    for path in sorted(package.rglob("*")):
+        if path.suffix in _BUILD_SUFFIXES and path.is_file() and "__pycache__" not in path.parts:
+            digest.update(path.relative_to(package).as_posix().encode("utf-8") + b"\0")
+            digest.update(path.read_bytes() + b"\0")
+    return digest.hexdigest()[:12]
 
 
 def worker_command(*arguments: str) -> list[str]:

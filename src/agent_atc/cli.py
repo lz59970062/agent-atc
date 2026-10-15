@@ -178,9 +178,17 @@ def invoke_with_diagnostics(args: argparse.Namespace, operation: Callable[[argpa
             diagnostics.emit_if_needed(args)
 
 
+# Modes that act on this installation itself, or that OS services start
+# directly, never forward to the canonical installation.
+LOCAL_MODES = frozenset({
+    "setup", "migrate", "daemon", "install-skill", "install-pi-extension", "install-shell-hook",
+    "install-systemd", "install-launchd", "install-supervisor", "install-windows-task", "uninstall-windows-task",
+})
+
+
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Explicit callback tool for waking Codex or Claude Code after a long task.")
-    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
+    parser = argparse.ArgumentParser(prog="atc", description="ATC (Agent Traffic Control): dispatch work to any agent and route the result back to the session that asked.")
+    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__} (build {atc_runtime.build_id()})")
     sub = parser.add_subparsers(dest="mode", required=True)
 
     doctor_parser = sub.add_parser("doctor", help="Check local readiness and print an Agent-owned repair plan as JSON")
@@ -466,6 +474,11 @@ def main() -> int:
     shell_hook_parser.add_argument("--command", help="Executable path embedded in the hook")
 
     args = parser.parse_args()
+    if args.mode not in LOCAL_MODES and not args.mode.startswith("_"):
+        from .install import canonical
+        forwarded = canonical.forward(sys.argv[1:])
+        if forwarded is not None:
+            return forwarded
     if args.mode == "migrate":
         from .install import migrate
         return migrate.command(args)

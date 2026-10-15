@@ -26,7 +26,9 @@ as_user=(--user "$(id -u):$(id -g)" -e HOME=/tmp)
 pip_env=()
 [[ -n ${ATC_PIP_INDEX_URL:-} ]] && pip_env=(-e "PIP_INDEX_URL=$ATC_PIP_INDEX_URL")
 
-docker run --rm "${as_user[@]}" "${pip_env[@]}" -v "$root:/src:ro" -v "$out:/out" \
+build=$(git -C "$root" rev-parse --short=12 HEAD)
+git -C "$root" diff --quiet HEAD -- src pyproject.toml || build="$build-dirty"
+docker run --rm "${as_user[@]}" "${pip_env[@]}" -e "ATC_BUILD=$build" -v "$root:/src:ro" -v "$out:/out" \
   "$builder" bash /src/packaging/freeze.sh
 docker run --rm "${as_user[@]}" -e npm_config_cache=/tmp/.npm -v "$root:/src:ro" -v "$out:/out" \
   "$node_image" bash /src/packaging/npm/pack.sh "$npm_version" linux-x64

@@ -18,7 +18,7 @@ from ..harness import AGENTS, AGENT_NAMES, get_agent
 from ..harness.base import DEFAULT_APPROVALS_REVIEWER, DEFAULT_APPROVAL_POLICY, DEFAULT_SANDBOX_MODE, DEFAULT_CLAUDE_PERMISSION_MODE
 from ..harness.claude.adapter import CLAUDE_PERMISSION_MODE_ENV
 from ..owners import macos as macos_platform
-from ..store import layout
+from ..store import install_record, layout
 from ..owners import host
 from .. import runtime as atc_runtime
 from ..store import records as queue_store
@@ -195,9 +195,13 @@ def make_request(
 
 def ack_command(root: Path, request_id: str) -> str:
     """The command a session runs to acknowledge; it names the queue only when not the default."""
-    if root.expanduser().absolute() == layout.queue_dir(None).expanduser().absolute():
-        return atc_runtime.control_command("ack", request_id)
-    return atc_runtime.control_command("ack", "--queue-dir", str(root), request_id)
+    arguments = ["ack", request_id]
+    if root.expanduser().absolute() != layout.queue_dir(None).expanduser().absolute():
+        arguments = ["ack", "--queue-dir", str(root), request_id]
+    launcher = install_record.launcher()
+    if launcher is not None:  # the canonical ATC, whatever is first on PATH
+        return shell.format_command([launcher, *arguments])
+    return atc_runtime.control_command(*arguments)
 
 
 def prepare_request_for_queue(root: Path, request: dict[str, object], prompt: str) -> dict[str, object]:

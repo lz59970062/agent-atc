@@ -22,6 +22,8 @@ try:
 except ImportError:  # pragma: no cover - Windows uses its own file locks
     fcntl = None
 
+from ..store import install_record
+from .. import runtime as atc_runtime
 from ..core import results
 from .. import __version__
 from ..harness.pi import channel as pi_channel
@@ -121,6 +123,11 @@ def coordinator_issue(root: Path) -> dict[str, str] | None:
         return {"code": "daemon_unverified", "action": "Inspect the lock-owning coordinator and its queue/runtime identity; leave unrelated processes untouched."}
     if runtime.get("version") != __version__:
         return {"code": "daemon_version_mismatch", "action": "Safely update the verified coordinator after active deliveries drain, then recheck."}
+    installed = install_record.read()
+    expected_build = installed.get("build") if installed else atc_runtime.build_id()
+    if runtime.get("build") != expected_build:
+        return {"code": "daemon_build_mismatch",
+                "action": "The coordinator runs a different build than the installed ATC; rerun atc setup after active deliveries drain, then recheck."}
     return None
 
 

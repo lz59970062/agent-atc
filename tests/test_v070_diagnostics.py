@@ -24,6 +24,7 @@ from agent_atc.engine import delivery as delivery_engine
 from agent_atc.store import records as queue_store
 from agent_atc.store import layout
 from agent_atc.install import diagnostics
+from agent_atc import runtime as atc_runtime
 
 
 class DiagnosticBoundaryTests(unittest.TestCase):
@@ -394,6 +395,8 @@ class DiagnosticFilesystemTests(unittest.TestCase):
                 ):
                     self.assertEqual(diagnostics.coordinator_issue(root)["code"], "daemon_version_mismatch")
                     record["version"] = cli.__version__
+                    self.assertEqual(diagnostics.coordinator_issue(root)["code"], "daemon_build_mismatch")
+                    record["build"] = atc_runtime.build_id()
                     self.assertIsNone(diagnostics.coordinator_issue(root))
             finally:
                 queue_store.release_owner_lock(lock, remove=False)
