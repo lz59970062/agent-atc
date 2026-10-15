@@ -100,6 +100,8 @@ differs from this page about callback delivery, this page applies to Claude Code
 
 ## Rules
 
+- **After `--` comes one command, not shell code**: for `;`, `&&`, pipes or redirection use
+  `-- bash -c '...'` (`atc run --task check -- bash -c 'sleep 720; python3 report.py'`).
 - **Heredoc scripts work**: input piped into `atc run` (`-- python3 - <<'EOF'`) becomes the task's
   stdin. Without piped input the task's stdin is empty.
 - **Session binding is automatic** from `CLAUDE_CODE_SESSION_ID`. Never invent a session id. `atc wait` refuses to run without a session.

@@ -374,6 +374,9 @@ tail -f ~/.atc/tasks/<task-id>/attempt-1.log
 
 Detaching with `Ctrl-a d` leaves the task running.
 
+Everything after `--` is one command and its arguments, not shell code. For a sequence, pipes or
+redirection, wrap it: `atc run --task check -- bash -c 'sleep 720; python3 report.py > out.txt'`.
+
 Input piped into `atc run`, such as a heredoc script (`atc run --task scan -- python3 - <<'EOF'`),
 is saved with the task and becomes the command's stdin. Without piped input the command's stdin is
 empty, so a command that reads stdin ends instead of waiting for a terminal.
