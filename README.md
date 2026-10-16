@@ -98,9 +98,6 @@ became **Agent Traffic Control**.
 
 ## 🚀 Quick start
 
-> The npm package is not published yet (the name holds a 0.0.0 placeholder). Until it is, install
-> it from GitHub with the `pip` command below.
-
 ```bash
 # 1. Install (prebuilt for Linux x64; see below for other platforms)
 npm install -g agent-atc
