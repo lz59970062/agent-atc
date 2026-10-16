@@ -41,6 +41,27 @@ atc doctor --agent codex --session <原会话ID>
 
 业务任务的日志路径来自最初的提交输出。先打开日志和产物，可以了解任务本身的运行结果。
 
+## Linux 上的无头回调全部失败，doctor 报告 agent_cli_blocked_by_service_sandbox
+
+systemd 用户服务带有 `NoNewPrivileges=yes`。如果单元记录的 Agent CLI（如 `ATC_CLAUDE_BIN=~/.local/bin/claude`）其实是管理员提供的启动脚本，内部用 `sudo` 或其他 setuid 程序重新执行，它在登录终端里能运行，在服务里会失败，例如：
+
+```text
+sudo: effective uid is not 0, is /usr/bin/sudo on a file system with the 'nosuid' option set ...
+```
+
+此时每次 `claude -p --resume ...` 回调都以退出码 1 结束，重试 3 次后进入 `failed`。`atc setup` 和 `atc doctor` 会在同样的属性下用 `--version` 试运行单元记录的每个 CLI，失败时报告 `agent_cli_blocked_by_service_sandbox`，并给出二进制路径和 stderr 中的那一行。可以手动复现：
+
+```bash
+systemd-run --user --wait --pipe -p NoNewPrivileges=yes ~/.local/bin/claude --version
+```
+
+处理方式：
+
+1. 优先让服务使用不需要提权的 CLI，例如启动脚本最终调用的真实程序：`atc setup --force --now --claude-bin /真实路径/claude`（Codex 和 Pi 分别用 `--codex-bin`、`--pi-bin`）。
+2. 必须使用这个启动脚本时，运行 `atc setup --force --now --allow-privilege-escalation`。生成的单元不含 `NoNewPrivileges=yes`，服务启动的 Agent CLI 可以通过 sudo 等程序提权，请确认这是你接受的配置。
+
+修复后对失败的回调执行 `atc retry --id <回调ID>`，不需要重新运行业务任务。
+
 ## 同一条回调重复出现
 
 读取结果后，执行回调中的完整 ACK 命令。核对回调 ID 和 `--queue-dir`，确认写入的是同一个队列。
