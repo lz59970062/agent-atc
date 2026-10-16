@@ -5,7 +5,7 @@
 <h3 align="center">ATC (Agent Traffic Control): dispatch work to any agent and route the result back to the session that asked.</h3>
 
 <p align="center">
-  <a href="./CHANGELOG.md"><img src="https://img.shields.io/badge/release-0.8.1-a371f7" alt="Release 0.8.1"></a>
+  <a href="./CHANGELOG.md"><img src="https://img.shields.io/badge/release-0.8.2-a371f7" alt="Release 0.8.2"></a>
   <a href="https://www.npmjs.com/package/agent-atc"><img src="https://img.shields.io/badge/npm-agent--atc-cb3837" alt="npm agent-atc"></a>
   <img src="https://img.shields.io/badge/python-%E2%89%A53.9-3776ab" alt="Python ≥ 3.9">
   <img src="https://img.shields.io/badge/platforms-Linux%20%C2%B7%20macOS%20%C2%B7%20Windows-58a6ff" alt="Linux, macOS, Windows">

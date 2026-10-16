@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.8.2 — 2026-10-16
+
+- `atc doctor` and `atc setup` honor systemd drop-ins (`<unit>.d/*.conf`,
+  applied in filename order) when checking agent CLIs against
+  `NoNewPrivileges`. 0.8.1 read only the unit file and reported
+  `agent_cli_blocked_by_service_sandbox` on machines where a drop-in had
+  already turned the hardening off, although resumes worked.
+
 ## 0.8.1 — 2026-10-16
 
 - `atc setup` (systemd) and `atc doctor` start each agent CLI recorded in the
