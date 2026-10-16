@@ -127,6 +127,24 @@ class ServiceSandboxProbeTests(unittest.TestCase):
                          {"codex": self.codex, "claude": self.claude, "pi": str(self.bin / "pi")})
         self.assertEqual(parsed["environment"]["PATH"], self.path)
 
+    def test_a_dropin_that_turns_hardening_off_is_honored(self):
+        # An administrator's or user's <unit>.d/*.conf overrides the unit, as systemd applies it.
+        unit = self.root / "agent-atc.service"
+        unit.write_text(services.systemd_service_text(self.service_args()), encoding="utf-8")
+        dropins = self.root / "agent-atc.service.d"
+        dropins.mkdir()
+        (dropins / "10-allow.conf").write_text("[Service]\nNoNewPrivileges=no\n", encoding="utf-8")
+        parsed = service_sandbox.read_unit(unit)
+        self.assertEqual(parsed["hardening"], ())
+        self.assertTrue(parsed["dropin_disables_hardening"])
+        (dropins / "20-harden.conf").write_text("[Service]\nNoNewPrivileges=yes\n", encoding="utf-8")
+        self.assertEqual(service_sandbox.read_unit(unit)["hardening"], ("NoNewPrivileges=yes",), "the last file wins")
+        (dropins / "20-harden.conf").unlink()
+        with contextlib.redirect_stderr(io.StringIO()) as errors, mock.patch.object(service_sandbox, "probe") as probe:
+            services.check_agent_clis_under_hardening(self.service_args(), unit)
+        probe.assert_not_called()
+        self.assertIn("sets NoNewPrivileges=no", errors.getvalue())
+
     def test_setup_and_install_systemd_parse_the_opt_out(self):
         for argv, handler in ((["setup", "--allow-privilege-escalation"], "setup"),
                               (["install-systemd", "--allow-privilege-escalation"], "install_systemd"),

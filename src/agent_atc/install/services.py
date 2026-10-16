@@ -392,7 +392,7 @@ def install_systemd(args: argparse.Namespace) -> int:
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(text, encoding="utf-8")
     print(f"Installed systemd user service to {target}")
-    check_agent_clis_under_hardening(args)
+    check_agent_clis_under_hardening(args, target)
 
     status = 0
     if shutil.which("systemctl"):
@@ -461,8 +461,16 @@ def install_systemd(args: argparse.Namespace) -> int:
     return status
 
 
-def check_agent_clis_under_hardening(args: argparse.Namespace) -> None:
-    """Warn when a recorded agent CLI cannot start under the unit's hardening."""
+def check_agent_clis_under_hardening(args: argparse.Namespace, unit: Path | None = None) -> None:
+    """Warn when a recorded agent CLI cannot start under the unit's effective hardening."""
+    parsed = service_sandbox.read_unit(unit) if unit is not None else None
+    if parsed is not None and parsed["dropin_disables_hardening"]:
+        print(
+            f"atc: note: a drop-in in {unit.name}.d/ sets NoNewPrivileges=no; agent CLIs started by the "
+            "coordinator can gain privileges through setuid helpers such as sudo.",
+            file=sys.stderr,
+        )
+        return
     if getattr(args, "allow_privilege_escalation", False):
         print(
             f"atc: note: the unit omits NoNewPrivileges=yes ({service_sandbox.OPT_OUT_FLAG}); "

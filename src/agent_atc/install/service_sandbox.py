@@ -101,8 +101,32 @@ def _unquote(value: str) -> str:
     return value
 
 
+def dropin_overrides(path: Path) -> dict[str, str]:
+    """Settings from ``<unit>.d/*.conf``, which systemd applies over the unit in filename order."""
+    values: dict[str, str] = {}
+    directory = path.with_name(path.name + ".d")
+    try:
+        files = sorted(directory.glob("*.conf"))
+    except OSError:
+        return values
+    for item in files:
+        try:
+            lines = item.read_text(encoding="utf-8").splitlines()
+        except (OSError, UnicodeDecodeError):
+            continue
+        for line in lines:
+            name, separator, value = line.strip().partition("=")
+            if separator and name == "NoNewPrivileges":
+                values[name] = value.strip().lower()
+    return values
+
+
 def read_unit(path: Path) -> dict[str, object] | None:
-    """Parse the environment and hardening of a unit written by systemd_service_text."""
+    """Parse the environment and effective hardening of a unit written by systemd_service_text.
+
+    A drop-in such as ``<unit>.d/override.conf`` with ``NoNewPrivileges=no`` turns
+    the hardening off for the running service, so it is not probed for.
+    """
     try:
         lines = path.read_text(encoding="utf-8").splitlines()
     except (OSError, UnicodeDecodeError):
@@ -112,10 +136,17 @@ def read_unit(path: Path) -> dict[str, object] | None:
         if line.startswith("Environment="):
             name, _, value = _unquote(line.removeprefix("Environment=")).partition("=")
             environment[name] = value
+    hardening = tuple(item for item in HARDENING if item in lines)
+    dropin = dropin_overrides(path).get("NoNewPrivileges")
+    if dropin in ("no", "false", "0", "off"):
+        hardening = tuple(item for item in hardening if not item.startswith("NoNewPrivileges="))
+    elif dropin in ("yes", "true", "1", "on") and "NoNewPrivileges=yes" not in hardening:
+        hardening += ("NoNewPrivileges=yes",)
     return {
         "environment": environment,
-        "hardening": tuple(item for item in HARDENING if item in lines),
+        "hardening": hardening,
         "allows_privilege_escalation": OPT_OUT_COMMENT in lines,
+        "dropin_disables_hardening": dropin in ("no", "false", "0", "off"),
     }
 
 
