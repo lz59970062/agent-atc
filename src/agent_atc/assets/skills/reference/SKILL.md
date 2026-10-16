@@ -228,6 +228,29 @@ under `[atc-user-hook]`; hook read failures warn and continue with the callback.
 This check is advisory and must not block Codex-only installation or print credentials/account
 details. Claude configuration must be present in the shell that later submits `atc agent claude`.
 
+### Linux: systemd service hardening
+
+The systemd user unit runs the coordinator with `NoNewPrivileges=yes`, and the
+coordinator starts the agent CLIs recorded in the unit (`ATC_CODEX_BIN`,
+`ATC_CLAUDE_BIN`, `ATC_PI_BIN`) for headless callback resumes and child agents.
+A CLI that is really a launcher re-executing through `sudo` or another setuid
+helper works in a login shell but fails inside the service (for example
+`sudo: effective uid is not 0 ...`), so every headless callback fails and lands
+in `failed` after its retries. `setup` and an explicit `atc doctor` start each
+recorded CLI with `--version` in a transient unit carrying the same properties
+(`systemd-run --user --wait --pipe -p NoNewPrivileges=yes`). A CLI that runs
+without the property but not with it is reported as
+`agent_cli_blocked_by_service_sandbox`, naming the binary and its stderr line.
+Automatic checks after `run`, `agent` and `done` do not start agent CLIs.
+
+To fix it, prefer rerunning setup with `--claude-bin`, `--codex-bin` or
+`--pi-bin` pointing at a CLI that needs no privilege escalation. If the
+launcher is required, **ask the user first**, then run
+`atc setup --force --now --allow-privilege-escalation`: it writes the unit
+without `NoNewPrivileges=yes` and marks it, so a later doctor repair keeps the
+opt-out. The doctor reports no `repair_command` for this issue alone, because
+weakening the hardening is the user's decision.
+
 ## Windows
 
 Use Windows 10+, Python 3.9+, an ACL-capable local filesystem such as NTFS, and

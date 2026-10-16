@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+- `atc setup` (systemd) and `atc doctor` start each agent CLI recorded in the
+  unit with `--version` under the unit's `NoNewPrivileges=yes`
+  (`systemd-run --user --wait --pipe`). A CLI that only fails with it, such
+  as a launcher that re-executes through sudo, is reported as
+  `agent_cli_blocked_by_service_sandbox` with the binary and its stderr line,
+  instead of doctor saying ready while every headless callback fails.
+- `atc setup --allow-privilege-escalation` (and `install-systemd`) writes the
+  unit without `NoNewPrivileges=yes` for such launchers. The hardening is kept
+  by default and doctor never adds the flag on its own unless the installed
+  unit already opted out.
+
 ## 0.8.0 — 2026-10-16 (Agent Traffic Control)
 
 - Rename Long Task Callback (LTC) to Agent Traffic Control (ATC). The command is

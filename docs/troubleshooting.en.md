@@ -41,6 +41,27 @@ Use the report to choose the next step:
 
 The original submission output contains the task's log path. Open the log and artifacts to inspect the task result directly.
 
+## Every headless callback fails on Linux and doctor reports agent_cli_blocked_by_service_sandbox
+
+The systemd user service runs with `NoNewPrivileges=yes`. If an agent CLI recorded in the unit (for example `ATC_CLAUDE_BIN=~/.local/bin/claude`) is an administrator launcher that re-executes through `sudo` or another setuid helper, it works in a login shell but fails inside the service, for example:
+
+```text
+sudo: effective uid is not 0, is /usr/bin/sudo on a file system with the 'nosuid' option set ...
+```
+
+Every `claude -p --resume ...` callback then exits 1 and moves to `failed` after 3 retries. `atc setup` and `atc doctor` start each CLI recorded in the unit with `--version` under the same property and report `agent_cli_blocked_by_service_sandbox` with the binary path and its stderr line. To reproduce it by hand:
+
+```bash
+systemd-run --user --wait --pipe -p NoNewPrivileges=yes ~/.local/bin/claude --version
+```
+
+To fix it:
+
+1. Prefer a CLI that needs no privilege escalation, such as the real program the launcher wraps: `atc setup --force --now --claude-bin /real/path/claude` (`--codex-bin` and `--pi-bin` for Codex and Pi).
+2. If the launcher is required, run `atc setup --force --now --allow-privilege-escalation`. The unit is written without `NoNewPrivileges=yes`, so agent CLIs started by the service can gain privileges through sudo and similar helpers. Only do this if you accept that.
+
+After the fix, run `atc retry --id <callback-id>` for the failed callbacks. The business task does not need to run again.
+
 ## The same callback appears repeatedly
 
 After reading the result, run the complete ACK command from the callback. Check its ID and `--queue-dir` so the acknowledgement reaches the same queue.

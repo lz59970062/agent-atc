@@ -166,6 +166,8 @@ class DaemonServiceSelectionTests(unittest.TestCase):
         ), mock.patch.object(services, "report_claude_agent_readiness"), mock.patch.object(
             tower_environment, "configure_proxy_environment"
         ), mock.patch.object(services, "systemd_service_text", return_value="[Service]\nExecStart=/fixture/atc daemon\n"), mock.patch.object(
+            services.service_sandbox, "probe", return_value=[]
+        ), mock.patch.object(
             services, "run_systemctl", return_value=1
         ) as systemctl, mock.patch.object(services, "start_standalone_daemon", return_value=0) as standalone, mock.patch.object(
             services, "install_supervisor", return_value=0

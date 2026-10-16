@@ -147,6 +147,15 @@ def add_common_flags(parser: argparse.ArgumentParser) -> None:
     )
 
 
+def add_privilege_escalation_flag(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--allow-privilege-escalation",
+        action="store_true",
+        help="systemd only: write the unit without NoNewPrivileges=yes, for an agent CLI launcher that "
+             "must run sudo or another setuid helper (weakens the service hardening)",
+    )
+
+
 def add_proxy_environment_flags(parser: argparse.ArgumentParser) -> None:
     proxy_source = parser.add_mutually_exclusive_group()
     proxy_source.add_argument(
@@ -317,6 +326,8 @@ def main() -> int:
         service_parser.add_argument("--enable", action="store_true", help="Enable the service for this user")
         service_parser.add_argument("--now", action="store_true", help="Start the service or request a safe reload")
         service_parser.add_argument("--print", action="store_true", help="Print configuration without installing it")
+        if service == "systemd":
+            add_privilege_escalation_flag(service_parser)
 
     install_parser = sub.add_parser("install-skill", help="Install the bundled skill for Codex, Claude Code and/or Pi")
     install_parser.add_argument("--path", help="Skills directory to install into (overrides --target)")
@@ -420,6 +431,7 @@ def main() -> int:
                               help="Windows Desktop launch route (default: preserve selection, or direct)")
     setup_parser.add_argument("--enable", action="store_true", help="Enable the service for this user")
     setup_parser.add_argument("--now", action="store_true", help="Start the service or request a safe reload")
+    add_privilege_escalation_flag(setup_parser)
 
     wait_parser = sub.add_parser(
         "wait",

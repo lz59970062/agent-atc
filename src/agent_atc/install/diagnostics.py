@@ -23,6 +23,7 @@ except ImportError:  # pragma: no cover - Windows uses its own file locks
     fcntl = None
 
 from ..store import install_record
+from . import service_sandbox
 from .. import runtime as atc_runtime
 from ..core import results
 from .. import __version__
@@ -129,6 +130,19 @@ def coordinator_issue(root: Path) -> dict[str, str] | None:
         return {"code": "daemon_build_mismatch",
                 "action": "The coordinator runs a different build than the installed ATC; rerun atc setup after active deliveries drain, then recheck."}
     return None
+
+
+def installed_service_unit() -> dict[str, object] | None:
+    """The default systemd unit, when it serves this ATC home."""
+    from . import services
+    from ..store import layout
+
+    if sys.platform != "linux":
+        return None
+    unit = service_sandbox.read_unit(services.systemd_user_dir() / services.service_name("agent-atc"))
+    if unit is None or unit["environment"].get(layout.ATC_HOME_ENV) != str(layout.daemon_state_dir().resolve()):
+        return None
+    return unit
 
 
 def environment_profile() -> dict[str, object]:
@@ -351,6 +365,12 @@ def inspect(args: argparse.Namespace) -> dict[str, object]:
         issues.append(dict(issue, kind="runtime", component="coordinator"))
     issues.extend(runtime_issues(root))
     issues.extend(delivery_issues(root))
+    # Probing starts each agent CLI, so only an explicit `atc doctor` does it.
+    service_unit = installed_service_unit() if getattr(args, "mode", None) == "doctor" else None
+    if service_unit is not None:
+        unit_environment = service_unit["environment"]
+        issues.extend(service_sandbox.probe(service_sandbox.recorded_binaries(unit_environment),
+                                            unit_environment.get("PATH", ""), properties=service_unit["hardening"]))
 
     callback_agent = dispatch.resolve_agent(args)
     adapter = get_agent(callback_agent)
@@ -406,6 +426,8 @@ def inspect(args: argparse.Namespace) -> dict[str, object]:
     if callback_agent in {"codex", "claude", "pi"}:
         repair.extend(["--skill-target", callback_agent])
     repair.extend(["--keep-skill", "--force", "--now"])
+    if service_unit is not None and service_unit["allows_privilege_escalation"]:
+        repair.append(service_sandbox.OPT_OUT_FLAG)  # keep the user's explicit opt-out
     if operation == "done":
         repair.append("--callback-only")
     for agent, executable in executables.items():
@@ -428,8 +450,11 @@ def inspect(args: argparse.Namespace) -> dict[str, object]:
     # Setup repairs bootstrap/configuration or a missing coordinator. A lost
     # task owner or failed delivery instead needs inspection and reconciliation,
     # not a generic service reinstall that cannot restore the business process.
+    # Weakening the unit's hardening is the user's decision, so a blocked agent
+    # CLI alone gets no repair command; its action says what to ask.
     bootstrap_codes = {"daemon_not_running", "daemon_version_mismatch", "skill_missing"}
-    if issues and not any(issue["kind"] == "configuration" or issue["code"] in bootstrap_codes for issue in issues):
+    repairable = [issue for issue in issues if issue["code"] != service_sandbox.ISSUE_CODE]
+    if issues and not any(issue["kind"] == "configuration" or issue["code"] in bootstrap_codes for issue in repairable):
         repair = None
     report: dict[str, object] = {
         "schema": SCHEMA,

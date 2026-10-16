@@ -26,6 +26,7 @@ from ..engine import reminders as reminder_policy
 from ..harness.codex import app_server
 from ..engine import tasks as managed_tasks
 from . import skills as skill_install
+from . import service_sandbox
 from ..tower import environment as tower_environment
 from ..tower import main as tower
 
@@ -114,6 +115,10 @@ def systemd_service_text(args: argparse.Namespace) -> str:
     pi_bin = tower_environment.pi_bin_path(args)
     screen_bin = managed_tasks.screen_binary() or "screen"
     path = args.path or os.environ.get("PATH", "")
+    # Agent CLIs that re-execute through sudo cannot start under NoNewPrivileges;
+    # the opt-out is explicit and leaves a marker that doctor and setup read back.
+    hardening = ([service_sandbox.OPT_OUT_COMMENT] if getattr(args, "allow_privilege_escalation", False)
+                 else list(service_sandbox.HARDENING))
     return "\n".join(
         [
             "[Unit]",
@@ -129,7 +134,7 @@ def systemd_service_text(args: argparse.Namespace) -> str:
             "Restart=always",
             f"RestartSec={args.restart_sec}",
             "UMask=0077",
-            "NoNewPrivileges=yes",
+            *hardening,
             "Environment=PYTHONUNBUFFERED=1",
             f"Environment={systemd_quote(f'PATH={path}')}",
             f"Environment={systemd_quote(f'ATC_CODEX_BIN={codex_bin}')}",
@@ -387,6 +392,7 @@ def install_systemd(args: argparse.Namespace) -> int:
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(text, encoding="utf-8")
     print(f"Installed systemd user service to {target}")
+    check_agent_clis_under_hardening(args)
 
     status = 0
     if shutil.which("systemctl"):
@@ -453,6 +459,24 @@ def install_systemd(args: argparse.Namespace) -> int:
             status = start_daemon_fallback(args)
 
     return status
+
+
+def check_agent_clis_under_hardening(args: argparse.Namespace) -> None:
+    """Warn when a recorded agent CLI cannot start under the unit's hardening."""
+    if getattr(args, "allow_privilege_escalation", False):
+        print(
+            f"atc: note: the unit omits NoNewPrivileges=yes ({service_sandbox.OPT_OUT_FLAG}); "
+            "agent CLIs started by the coordinator can gain privileges through setuid helpers such as sudo.",
+            file=sys.stderr,
+        )
+        return
+    binaries = {
+        "codex": tower_environment.codex_bin_path(args),
+        "claude": tower_environment.claude_bin_path(args),
+        "pi": tower_environment.pi_bin_path(args),
+    }
+    path = args.path or os.environ.get("PATH", "")
+    service_sandbox.report(service_sandbox.probe(binaries, path))
 
 
 def install_launchd(args: argparse.Namespace) -> int:
@@ -552,6 +576,7 @@ def setup(args: argparse.Namespace) -> int:
         enable=args.enable,
         now=args.now,
         print=False,
+        allow_privilege_escalation=bool(getattr(args, "allow_privilege_escalation", False)),
     )
     if service == "systemd":
         return install_systemd(systemd_args)
