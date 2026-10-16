@@ -27,6 +27,7 @@ from ..store import records as queue_store
 from ..system import shell
 from . import dispatch
 from . import reminders as reminder_policy
+from . import resume_environment
 from ..harness.codex import app_server
 
 
@@ -647,9 +648,16 @@ def delivery_worker_main() -> int:
                 # without blocking other callbacks and task launches.
                 result = {"returncode": pi_channel.PUBLISHED_RETURN_CODE, "delivery": pi_delivery.delivery_name}
             else:
+                session_environment = payload.get("environment")
+                if pi_delivery is not None:
+                    resume_env = pi_delivery.environment
+                elif isinstance(session_environment, dict):
+                    resume_env = resume_environment.merged(os.environ, session_environment)
+                else:
+                    resume_env = None
                 process = subprocess.Popen(
                     shell.process_command([str(part) for part in command]),
-                    env=pi_delivery.environment if pi_delivery is not None else None,
+                    env=resume_env,
                     stdin=subprocess.PIPE,
                     stdout=sys.stderr,
                     stderr=sys.stderr,
@@ -791,6 +799,8 @@ def run_resume_until_exit_or_ack(
         "timeout": timeout,
         "ack_path": str(layout.ack_path(root, request_id)),
         "canceled_path": str(layout.request_path(root, "canceled", request_id)),
+        # The submitting session's environment; the worker resumes with it on top of its own.
+        "environment": resume_environment.load(root, request_id),
     }
     env = os.environ.copy()
     if os.name == "nt":

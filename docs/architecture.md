@@ -65,13 +65,18 @@ own their data and operations without circular imports or large callback bundles
 ## Linux ownership and recovery
 
 ```
-CLI -> private task.json + environment.json -> coordinator
+CLI -> private task.json + environment.json (+ queue/environments/<callback>.json) -> coordinator
                                               |
                          systemd-run --user -> separate per-task service
                                               -> ATC worker -> user command
                                               -> result.json -> callback queue
 coordinator -> agent adapter / optional Codex Desktop transport -> original session
 ```
+
+The task runs with the submitting session's environment (`environment.json`,
+deleted once the worker has loaded it). A headless resume runs with the same
+session environment, kept per callback until it is settled
+(`engine/resume_environment.py`), on top of the coordinator's own.
 
 `--backend auto` selects an available systemd user manager (v240+) and otherwise
 uses screen. `--backend systemd` requires that manager; `--backend screen` selects

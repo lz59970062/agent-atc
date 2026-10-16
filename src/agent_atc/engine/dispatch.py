@@ -11,6 +11,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 from ..core import capabilities, envelope, ids, records, results, targets
+from . import resume_environment
 from . import routes
 from ..harness.claude import session as claude_session
 from ..harness.pi import channel as pi_channel
@@ -281,7 +282,12 @@ def enqueue_request(args: argparse.Namespace, prompt: str) -> int:
     # A persistence error can occur after publication. Diagnostics must not tell
     # the caller to blindly submit a duplicate callback in that case.
     args._health_work = {"state": "unknown", "id": str(request["id"])}
+    resumable = request.get("callback_mode") != "manual" and (request.get("target") or {}).get("kind") == "session"
+    if resumable:
+        resume_environment.capture(root, str(request["id"]))
     result = enqueue_existing_request(root, request, prompt)
+    if result != 0 and resumable:
+        resume_environment.discard(root, str(request["id"]))
     if result == 0:
         args._health_work = {"state": "callback_queued", "id": str(request["id"])}
     return result
@@ -494,6 +500,8 @@ def submit_managed_run(args: argparse.Namespace) -> int:
             task["stdin_path"] = str(stdin_path)
         queue_store.write_request(environment_path, {"version": 1, "environment": environment})
         managed_tasks.write_managed_task(root, task)
+        if task["callback_mode"] != "manual" and target.get("kind") == "session":
+            resume_environment.capture(root, ids.callback_id(task_id), environment)
     except OSError as exc:
         print(f"atc: refusing to submit task because its durable record could not be written: {exc}", file=sys.stderr)
         return 125

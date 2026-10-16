@@ -36,6 +36,7 @@ from agent_atc.engine import tasks as managed_tasks
 from agent_atc.engine import worker as task_worker
 from agent_atc.engine import delivery as delivery_engine
 from agent_atc.engine import reminders as reminder_policy
+from agent_atc.engine import resume_environment
 from agent_atc.harness.codex import app_server
 from agent_atc.owners import host
 from agent_atc import runtime as atc_runtime
@@ -1590,6 +1591,65 @@ class CliTests(unittest.TestCase):
             self.assertTrue(acked)
             self.assertFalse(live)
             self.assertEqual(result.returncode, 0)
+
+    def test_headless_resume_runs_with_the_submitting_session_environment(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "queue"
+            seen = Path(tmp) / "seen.json"
+            fake = Path(tmp) / "fake-codex"
+            fake.write_text(
+                f"#!{sys.executable}\nimport json, os, sys\nsys.stdin.read()\n"
+                f"names = ('MODEL_ENDPOINT', 'CLAUDECODE', 'STY', 'ATC_HOME')\n"
+                f"open({str(seen)!r}, 'w').write(json.dumps({{n: os.environ.get(n) for n in names}}))\n",
+                encoding="utf-8")
+            executable_python_fixture(fake)
+            self._write_request(root, "env-check", tmp, target={"kind": "session", "session": "env-session"})
+            request = dispatch.load_request(layout.request_path(root, "pending", "env-check"))
+            # What the submitting shell had, including markers that must not reach the resumed CLI.
+            resume_environment.capture(root, "env-check", {
+                "PATH": os.environ.get("PATH", ""), "MODEL_ENDPOINT": "https://models.example/v1",
+                "CLAUDECODE": "1", "STY": "parent-screen", "ATC_HOME": str(Path(tmp) / "elsewhere")})
+            assert_private_file(self, resume_environment.path(root, "env-check"))
+            coordinator_home = os.environ.get("ATC_HOME")
+            with mock.patch.dict(os.environ, {"ATC_CODEX_BIN": str(fake), "ATC_DESKTOP_APP_SERVER": "0"}):
+                result, _, _ = delivery_engine.run_resume_until_exit_or_ack(
+                    root, "env-check", request, argparse.Namespace(resume_timeout=30.0))
+            self.assertEqual(result.returncode, 0)
+            environment = json.loads(seen.read_text(encoding="utf-8"))
+            self.assertEqual(environment["MODEL_ENDPOINT"], "https://models.example/v1")
+            self.assertIsNone(environment["CLAUDECODE"])
+            self.assertIsNone(environment["STY"])
+            self.assertEqual(environment["ATC_HOME"], coordinator_home, "the coordinator's queue home wins")
+
+    def test_submission_keeps_the_session_environment_for_its_callback(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "queue"
+            args = self._run_args(tmp, root, [sys.executable, "-c", "pass"])
+            with mock.patch.object(managed_tasks, "screen_binary", return_value="/usr/bin/screen"), \
+                    mock.patch.dict(os.environ, {"MODEL_ENDPOINT": "https://models.example/v1", "CLAUDECODE": "1"}), \
+                    contextlib.redirect_stderr(io.StringIO()):
+                self.assertEqual(dispatch.submit_managed_run(args), 0)
+            task_id = next(layout.managed_tasks_root(root).glob("*/task.json")).parent.name
+            kept = resume_environment.load(root, ids.callback_id(task_id))
+            self.assertEqual(kept["MODEL_ENDPOINT"], "https://models.example/v1")
+            self.assertNotIn("CLAUDECODE", kept)
+            assert_private_file(self, resume_environment.path(root, ids.callback_id(task_id)))
+
+    def test_session_environment_copies_are_removed_once_the_callback_is_settled(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "queue"
+            queue_store.ensure_daemon_dirs(root)
+            for callback_id in ("acked-c1", "done-c1", "failed-c1", "pending-c1"):
+                resume_environment.capture(root, callback_id, {"MODEL_ENDPOINT": "x"})
+            queue_store.write_request(layout.ack_path(root, "acked-c1"), {"id": "acked-c1"})
+            self._write_request(root, "done-c1", tmp)
+            queue_store.move_request(layout.request_path(root, "pending", "done-c1"), root / "done")
+            resume_environment.prune(root)
+            left = sorted(p.stem for p in (root / resume_environment.DIRECTORY_NAME).glob("*.json"))
+            self.assertEqual(left, ["failed-c1", "pending-c1"], "failed callbacks keep theirs for atc retry")
+            self.assertEqual(resume_environment.merged({"ATC_HOME": "/coordinator", "PATH": "/svc"},
+                                                       {"ATC_HOME": "/session", "PATH": "/session/bin"}),
+                             {"ATC_HOME": "/coordinator", "PATH": "/session/bin"})
 
     def test_canceled_live_delivery_retains_target_lease_after_memory_loss(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

@@ -163,6 +163,7 @@ ATC 需要的六项能力：
 - `root`：所属的任务或目标。任务的细节（命令、退出码、日志）**不复制**进回调记录，统一从根找 `result.json`，避免两份数据不一致。
 - `requires`：投递需要的能力，由冻结的路由推出（`core/capabilities.py`）：`deliver.cli-resume`（通过 Harness 命令行恢复会话）、`deliver.codex-desktop`（向已加载的 Codex Desktop 线程提交）、`deliver.pi-steer` 和 `deliver.pi-follow-up`（Pi 扩展的两种投递方式）。`manual` 模式不需要任何能力。塔台维护一份已知能力表，遇到不认识的能力就不选取这条回调，原样留在队列里，升级后照常投递。这一项替代原来的 `version` 2、3、4。
 - `route`：各个投递方式自己的参数，替代现在平铺在顶层的 `callback_mode`、`pi_profile_dir` 等字段。
+- 会话环境不放进回调记录：提交时另存一份私有副本 `<queue>/environments/<回调ID>.json`（权限 600）。无头恢复以协调进程的环境为底，叠加这份副本，再去掉会话标记（`CLAUDECODE`、`CLAUDE_CODE_SESSION_ID`、`CODEX_THREAD_ID` 和 Pi 的会话变量等），`ATC_HOME` 与锁目录以协调进程为准。这样恢复会话和执行任务看到同一套环境，而不是 systemd/launchd 服务启动时定下的那套。回调 ACK、完成或取消后删除副本；失败的回调保留副本，以便 `atc retry`。没有副本的回调照旧用协调进程的环境。
 - `group`：预留给汇合，以后的形状是 `{"id": "grp-…", "expect": 3, "policy": "all"}`。v1 恒为 `null`。
 
 ### 6.3 `atc.result/1`

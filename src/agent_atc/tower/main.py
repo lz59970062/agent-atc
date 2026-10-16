@@ -17,6 +17,7 @@ from ..store import layout
 from ..owners import host
 from ..store import records as queue_store
 from ..engine import delivery as delivery_engine
+from ..engine import resume_environment
 from ..engine import goals
 from ..engine import recovery
 from ..engine import tasks as managed_tasks
@@ -137,6 +138,7 @@ def daemon(args: argparse.Namespace) -> int:
             delivery_engine.reap_background_resumes()
             delivery_engine.recover_running(root)
             delivery_engine.reconcile_acknowledged_retained_leases(root)
+            resume_environment.prune(root)
             pi_channel.reconcile_publications(root, max(1.0, float(getattr(args, "resume_timeout", delivery_engine.DEFAULT_RESUME_TIMEOUT))))
             managed_work = managed_tasks.recover_managed_tasks(root)
             recovery.recover_active(root)

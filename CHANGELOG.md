@@ -12,6 +12,17 @@
   unit without `NoNewPrivileges=yes` for such launchers. The hardening is kept
   by default and doctor never adds the flag on its own unless the installed
   unit already opted out.
+- A headless resume runs with the environment of the session that submitted
+  the work. `atc run`, `atc agent` and `atc done` keep a private copy
+  (`<queue>/environments/<callback id>.json`, mode 600) and the delivery worker
+  starts `claude -p --resume`, `codex exec resume` and the like with the
+  coordinator's environment overlaid by it, so model endpoints and keys set as
+  variables, proxies and PATH reach the resumed session as they reach the task.
+  Session markers (`CLAUDECODE`, `CLAUDE_CODE_SESSION_ID`, `CODEX_THREAD_ID`,
+  Pi's session variables, Claude's entrypoint, service markers) never pass on,
+  and the coordinator's `ATC_HOME` and lock directory win. The copy is removed
+  once the callback is acknowledged, done or canceled; a failed callback keeps
+  it for `atc retry`. Callbacks without a copy resume as before.
 
 ## 0.8.0 — 2026-10-16 (Agent Traffic Control)
 
