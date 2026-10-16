@@ -5,7 +5,7 @@
 <h3 align="center">ATC (Agent Traffic Control): dispatch work to any agent and route the result back to the session that asked.</h3>
 
 <p align="center">
-  <a href="./CHANGELOG.md"><img src="https://img.shields.io/badge/preview-0.8.0.dev0-a371f7" alt="Preview 0.8.0.dev0"></a>
+  <a href="./CHANGELOG.md"><img src="https://img.shields.io/badge/release-0.8.0-a371f7" alt="Release 0.8.0"></a>
   <a href="https://www.npmjs.com/package/agent-atc"><img src="https://img.shields.io/badge/npm-agent--atc-cb3837" alt="npm agent-atc"></a>
   <img src="https://img.shields.io/badge/python-%E2%89%A53.9-3776ab" alt="Python ≥ 3.9">
   <img src="https://img.shields.io/badge/platforms-Linux%20%C2%B7%20macOS%20%C2%B7%20Windows-58a6ff" alt="Linux, macOS, Windows">
@@ -97,6 +97,9 @@ became **Agent Traffic Control**.
 | 📬 **At-least-once delivery** | Durable queue, stable callback IDs, retries with backoff, and explicit ACKs. |
 
 ## 🚀 Quick start
+
+> The npm package is not published yet (the name holds a 0.0.0 placeholder). Until it is, install
+> 0.8.0 from GitHub with the `pip` command below.
 
 ```bash
 # 1. Install (prebuilt for Linux x64; see below for other platforms)

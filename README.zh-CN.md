@@ -55,6 +55,8 @@ Codex 会话没法把任务交给 Claude Code 再把结果拿回来，Pi 里的 
 
 ## 快速开始
 
+> npm 包还没有正式发布（包名上目前只有 0.0.0 占位版本）。发布之前，请用下面的 `pip` 命令从 GitHub 安装 0.8.0。
+
 ```bash
 # 1. 安装（目前提供 Linux x64 预编译包；其他平台见下文）
 npm install -g agent-atc

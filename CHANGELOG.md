@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.8.0 — unreleased (Agent Traffic Control)
+## 0.8.0 — 2026-10-16 (Agent Traffic Control)
 
 - Rename Long Task Callback (LTC) to Agent Traffic Control (ATC). The command is
   `atc`, the package `agent-atc`, the Python import `agent_atc`, the state home
@@ -45,7 +45,7 @@
   commands at that launcher, and other installations forward their commands
   to it. `atc --version` shows a build ID (a digest of the package, or the
   commit for release builds) and `atc doctor` reports a coordinator running a
-  different build. Version is now 0.8.0.dev0.
+  different build.
 - Child agents are named nodes that keep their sessions. `atc agent continue
   <node>` reuses a finished child with what it learned; `atc agent fork <node>`
   branches from any finished node and sees exactly what it knew then. Each node
@@ -62,6 +62,20 @@
 - Remove the `codex-long-task-wakeup` command alias and the automatic adoption
   of `${CODEX_HOME}/long-task-wakeup` state. Moving from LTC will be an explicit
   `atc migrate`.
+- Input piped into `atc run` (a heredoc script, `-- python3 - <<'EOF'`) becomes
+  the task's stdin; without piped input a task reads an empty stdin and never
+  waits on a terminal.
+- When Claude Code runs without background tasks
+  (`CLAUDE_CODE_DISABLE_BACKGROUND_TASKS`), `atc run` tells the agent to end
+  its turn instead of running `atc wait`; ATC resumes the session with the
+  callback.
+- `atc agent continue|fork|expert` parse their options before the prompt
+  (`--name` after the node name was folded into the prompt).
+- Manual callbacks no longer report `callback_agent_unavailable`.
+- The skills say that the command after `--` is argv, not shell code (use
+  `bash -c` for sequences). The protocol notes that Claude Code's auto memory
+  is shared by every session in a project, so a fork can see what later nodes
+  saved there.
 
 Entries below are from Long Task Callback and keep its original names.
 
