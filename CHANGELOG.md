@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.8.1 — 2026-10-16
 
 - `atc setup` (systemd) and `atc doctor` start each agent CLI recorded in the
   unit with `--version` under the unit's `NoNewPrivileges=yes`
