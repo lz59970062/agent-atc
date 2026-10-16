@@ -30,6 +30,10 @@ auth:
   htpasswd:
     file: /tmp/verdaccio/htpasswd
 packages:
+  # No uplink: the real registry's agent-atc (a placeholder until release) must not shadow the local packages.
+  'agent-atc':
+    access: $all
+    publish: $authenticated
   '@agent-atc/*':
     access: $all
     publish: $authenticated
@@ -46,7 +50,7 @@ npm view --registry "$registry" agent-atc name version optionalDependencies
 
 step "npm install -g agent-atc (npm picks the platform binary)"
 npm install -g --registry "$registry" agent-atc
-npm ls -g --depth 1 | grep atc-proto
+npm ls -g --depth 1 | grep "@agent-atc/linux-x64"
 command -v atc
 atc --version
 
@@ -66,7 +70,7 @@ case "$1" in auth) echo '{"loggedIn": true}'; exit 0;; esac
 prompt=$(cat)
 { echo "argv: $*"; echo "--- stdin ---"; echo "$prompt"; echo "--- end ---"; } >>/tmp/fake-claude.log
 # Like a real agent: inspect, then run the ACK command the callback names.
-ack=$(printf '%s\n' "$prompt" | grep -E '^[^ ]*atc ack ')
+ack=$(printf '%s\n' "$prompt" | sed -n 's/^ACK after inspection: //p')
 sh -c "$ack" >>/tmp/fake-claude.log 2>&1
 echo "fake claude received the callback"
 EOF
@@ -83,6 +87,9 @@ if [[ ! -s /tmp/fake-claude.log ]]; then
 fi
 echo "--- fake claude log"; cat /tmp/fake-claude.log
 if [[ -n $(atc status --quiet-empty) ]]; then echo "FAIL: callback was not acknowledged"; atc status; exit 1; fi
+if ! ls /root/.atc/queue/acks/*-c1.json >/dev/null 2>&1; then echo "FAIL: no ACK record"; exit 1; fi
+deliveries=$(grep -c '^--- stdin ---' /tmp/fake-claude.log)
+if [[ $deliveries -ne 1 ]]; then echo "FAIL: callback delivered $deliveries times, expected once"; exit 1; fi
 echo "ok: callback delivered and acknowledged"
 
 step "who owns the long-lived processes"
