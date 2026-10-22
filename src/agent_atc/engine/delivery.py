@@ -35,6 +35,8 @@ DEFAULT_RETRIES = 3
 DEFAULT_RETRY_DELAY = 30.0
 DEFAULT_RETRY_BACKOFF = 2.0
 DEFAULT_RESUME_TIMEOUT = 3600.0
+# Codex refuses a second writer for a thread whose original process still runs.
+CODEX_ACTIVE_WRITER = "already has an active writer"
 
 
 @dataclass
@@ -494,7 +496,7 @@ def start_desktop_app_server_turn(payload: dict[str, object]) -> app_server.Desk
         connection = None
         return delivery
     except app_server.AppServerRpcError as exc:
-        if not turn_start_submitted and "already has an active writer" in str(exc):
+        if not turn_start_submitted and CODEX_ACTIVE_WRITER in str(exc):
             raise app_server.CallbackTransportBlocked("bound session belongs to another Core; repair the connection before retrying") from exc
         if turn_start_submitted:
             if delivery_context is not None:
@@ -656,12 +658,15 @@ def delivery_worker_main() -> int:
                     resume_env = resume_environment.merged(os.environ, session_environment)
                 else:
                     resume_env = None
+                # A Codex thread whose original process is still running refuses a
+                # second writer before any turn starts; that means busy, not failed.
+                codex_resume = pi_delivery is None and isinstance(request, dict) and dispatch.request_agent(request) == "codex"
                 process = subprocess.Popen(
                     shell.process_command([str(part) for part in command]),
                     env=resume_env,
                     stdin=subprocess.PIPE,
                     stdout=sys.stderr,
-                    stderr=sys.stderr,
+                    stderr=subprocess.PIPE if codex_resume else sys.stderr,
                     text=True,
                     encoding="utf-8",
                     cwd=str(payload["cwd"]),
@@ -671,8 +676,12 @@ def delivery_worker_main() -> int:
                 if pi_delivery is not None:
                     pi_delivery.monitor_owner(process)
                 try:
-                    process.communicate(input=prompt, timeout=timeout)
+                    _, errors = process.communicate(input=prompt, timeout=timeout)
+                    if errors:
+                        sys.stderr.write(errors)
                     result = {"returncode": int(process.returncode)}
+                    if codex_resume and process.returncode != 0 and CODEX_ACTIVE_WRITER in (errors or ""):
+                        result = {"returncode": 123, "delivery_state": "waiting_for_idle"}
                 except subprocess.TimeoutExpired:
                     terminate_process_group(process)
                     result = {"returncode": 124, "timed_out": True}

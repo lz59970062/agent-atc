@@ -2994,6 +2994,40 @@ class CliTests(unittest.TestCase):
             self.assertTrue(delivery.closed)
             popen.assert_not_called()
 
+    def test_codex_cli_resume_into_a_live_thread_waits_instead_of_failing(self) -> None:
+        # The original `codex exec` still runs, so `codex exec resume` exits 1 before any turn.
+        cases = (("Error: thread/resume failed: thread t1 already has an active writer (code -32600)", 123),
+                 ("Error: thread/resume failed: no rollout found for thread id t1", 1))
+        for message, expected in cases:
+            with self.subTest(expected=expected), tempfile.TemporaryDirectory() as tmp:
+                payload = {
+                    "command": [sys.executable, "-c", f"import sys; sys.stdin.read(); sys.stderr.write({message!r}); sys.exit(1)"],
+                    "prompt": "wake up",
+                    "cwd": tmp,
+                    "request": {"agent": "codex", "target": {"kind": "session", "session": "t1"}},
+                    "timeout": 30.0,
+                    "ack_path": str(Path(tmp) / "acks" / "callback.json"),
+                    "canceled_path": str(Path(tmp) / "canceled.json"),
+                }
+                read_fd, lock_fd = os.pipe()
+                output = io.StringIO()
+                errors = open(Path(tmp) / "worker.err", "w+", encoding="utf-8")  # Popen needs a real descriptor.
+                self.addCleanup(errors.close)
+                try:
+                    with (
+                        mock.patch.dict(os.environ, {"CODEX_LONG_TASK_DELIVERY_LOCK_FDS": json.dumps([lock_fd])}, clear=False),
+                        mock.patch.object(sys, "stdin", io.StringIO(json.dumps(payload))),
+                        mock.patch.object(sys, "stdout", output),
+                        mock.patch.object(sys, "stderr", errors),
+                        mock.patch.object(delivery_engine, "start_desktop_app_server_turn", return_value=None),
+                    ):
+                        delivery_engine.delivery_worker_main()
+                finally:
+                    os.close(read_fd)
+                self.assertEqual(json.loads(output.getvalue())["returncode"], expected)
+                errors.seek(0)
+                self.assertIn(message, errors.read())  # Codex's stderr still reaches the daemon log.
+
     def test_desktop_app_server_explicit_turn_rejection_allows_cli_fallback(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             class RejectedConnection:
