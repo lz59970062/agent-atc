@@ -309,6 +309,15 @@ def reap_background_resumes() -> None:
             _BACKGROUND_RESUMES.pop(pid, None)
 
 
+def pi_resume_reached_session(request: dict[str, object], request_id: str) -> bool:
+    """Whether a managed Pi resume left this callback in the bound session file."""
+    target = request.get("target")
+    if dispatch.request_agent(request) != "pi" or not isinstance(target, dict):
+        return False
+    session = target.get("session")
+    return isinstance(session, str) and pi_channel.session_has_callback(session, request_id)
+
+
 def target_has_live_resume(root: Path, request: dict[str, object]) -> bool:
     reap_background_resumes()
     key = callback_target_key(request)
@@ -966,7 +975,24 @@ def process_one(root: Path, args: argparse.Namespace) -> bool:
         if result.returncode == 126 and not acked:
             request["delivery_state"] = "blocked"
             request["last_error"] = "callback transport blocked; repair the original session connection, then use atc retry --id " + request_id
-        if result.returncode == 125 and not acked:
+        if result.returncode == 125 and not acked and pi_resume_reached_session(request, request_id):
+            # The resumed Pi turn saw the callback but ended without an ACK. It is
+            # in the session, so order is kept and nothing needs replaying: later
+            # callbacks continue and name this one until it is ACKed.
+            request.pop("retain_target_lease", None)
+            request["pi_session_observed"] = True
+            request["last_error"] = ("Pi callback reached the session but was not ACKed by the resumed turn. Later "
+                                     f"callbacks for this session continue and name it. Inspect the session, then "
+                                     f"atc ack {request_id}")
+            destination_dir = root / "failed"
+            print(f"atc: warning: daemon callback {running.name} reached the session without an ACK; "
+                  "later callbacks continue", file=sys.stderr)
+            if running.exists():
+                queue_store.write_request(running, request)
+                release_retained_target_lease(root, request)
+            else:
+                return True
+        elif result.returncode == 125 and not acked:
             delivery_name = "Pi" if dispatch.request_agent(request) == "pi" else "Desktop"
             request["last_error"] = delivery_name + " callback outcome is unknown; automatic retry suppressed to prevent duplicate delivery"
             request["retain_target_lease"] = True

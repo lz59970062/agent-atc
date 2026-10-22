@@ -109,6 +109,32 @@ def session_header(session: str) -> dict:
     return header
 
 
+def session_has_callback(session: str, request_id: str) -> bool:
+    """Whether a user message in the session file opens with this callback's envelope."""
+    marker = f"[atc] {request_id}"
+    try:
+        with Path(canonical_session(session)).open(encoding="utf-8") as stream:
+            for line in stream:
+                if marker not in line:
+                    continue
+                try:
+                    entry = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                message = entry.get("message") if entry.get("type") == "message" else None
+                if not isinstance(message, dict) or message.get("role") != "user":
+                    continue
+                content = message.get("content")
+                text = content if isinstance(content, str) else "\n".join(
+                    part.get("text", "") for part in content or [] if isinstance(part, dict))
+                first = text.lstrip().splitlines()[:1]
+                if first and first[0].split()[:2] == ["[atc]", request_id]:
+                    return True
+    except (OSError, ValueError):
+        return False
+    return False
+
+
 def owner_record(request: dict) -> tuple[Path, dict]:
     validate_route(request)
     target = request.get("target")
@@ -386,6 +412,7 @@ def reconcile_publications(root: Path, timeout: float) -> None:
             # The callback is in the session, so order is kept and nothing needs
             # replaying: later callbacks continue and name this one until ACKed.
             request.pop("retain_target_lease", None)
+            request["pi_session_observed"] = True
             request["last_error"] = (f"Pi callback reached the session but was not ACKed: {reason}. Later "
                                      f"callbacks for this session continue and name it. Inspect the session, then "
                                      f"atc ack {request_id}")
@@ -428,7 +455,7 @@ def with_unacknowledged_notice(root: Path, request: dict, prompt: str) -> str:
         except (OSError, ValueError):
             continue
         other_id = str(other.get("id", path.stem))
-        if (other_id == request.get("id") or "pi_published_at" not in other
+        if (other_id == request.get("id") or other.get("pi_session_observed") is not True
                 or other.get("retain_target_lease") is True or layout.ack_path(root, other_id).exists()
                 or delivery_engine.callback_target_key(other) != key):
             continue

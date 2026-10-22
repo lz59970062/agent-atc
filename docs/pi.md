@@ -54,7 +54,9 @@ for manual recovery — never replayed automatically — when:
 
 If the extension had already seen the callback in the session (`session_observed`), order is kept
 and nothing needs replaying, so later callbacks for that session continue; each names the
-un-ACKed one until it is ACKed. Otherwise the session's later callbacks wait behind it.
+un-ACKed one until it is ACKed. Otherwise the session's later callbacks wait behind it. The same
+applies to a managed offline resume that ends without an ACK: when the callback is in the session
+file, later callbacks continue; when it is not, the session waits for manual recovery.
 
 `last_error` records whether Pi had already admitted the message. Inspect the session, then
 `atc ack <id>` if it was handled, or `atc retry --id <id>` to deliver it again.

@@ -228,6 +228,37 @@ class PiLiveCallbackTests(unittest.TestCase):
                     envelope.unlink()
                 queue_store.write_request(directory / 'owner.json', owner)
 
+    def test_offline_resume_that_reached_the_session_without_ack_does_not_block(self):
+        request, _, _, queue, _ = self.bound
+        request = dispatch.prepare_request_for_queue(queue, request, request['prompt'])
+        session = Path(request['target']['session'])
+        args = argparse.Namespace(resume_timeout=3600, retries=3, retry_delay=0, retry_backoff=1)
+        for reached in (False, True):
+            with self.subTest(reached=reached):
+                queue_store.write_request(queue / 'pending' / 'fixture.json', request)
+                if reached:  # The resumed turn got the callback, then ended without an ACK.
+                    with session.open('a', encoding='utf-8') as stream:
+                        stream.write(json.dumps({'type': 'message', 'message': {'role': 'user', 'content': [
+                            {'type': 'text', 'text': '[atc] fixture\nTask: fixture'}]}}) + '\n')
+                def resume(root, *_):
+                    # The managed resume takes the target lease before Pi starts.
+                    delivery_engine.retain_target_lease(root, request)
+                    return subprocess.CompletedProcess([], 125), False, False
+                with mock.patch.object(delivery_engine, 'run_resume_until_exit_or_ack', side_effect=resume):
+                    assert delivery_engine.process_one(queue, args)
+                failed = dispatch.load_request(queue / 'failed' / 'fixture.json')
+                # Unseen: outcome unknown, the session stays held for manual recovery.
+                assert (failed.get('retain_target_lease') is True) is not reached
+                assert delivery_engine.retained_target_lease_is_held(request) is not reached
+                later = dict(request, id='later')
+                if reached:
+                    assert failed['pi_session_observed'] is True
+                    assert '`atc ack fixture`' in bridge.with_unacknowledged_notice(queue, later, '[atc] later')
+                else:
+                    assert bridge.with_unacknowledged_notice(queue, later, '[atc] later') == '[atc] later'
+                    (queue / 'failed' / 'fixture.json').unlink()
+                    delivery_engine.release_retained_target_lease(queue, request)
+
     def test_observed_but_unacknowledged_callback_does_not_block_later_ones(self):
         request, owner, directory, queue = self.queue_published()
         # The extension found the prompt in the session, but the agent never ran atc ack.
