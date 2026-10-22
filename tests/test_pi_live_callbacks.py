@@ -228,6 +228,25 @@ class PiLiveCallbackTests(unittest.TestCase):
                     envelope.unlink()
                 queue_store.write_request(directory / 'owner.json', owner)
 
+    def test_observed_but_unacknowledged_callback_does_not_block_later_ones(self):
+        request, owner, directory, queue = self.queue_published()
+        # The extension found the prompt in the session, but the agent never ran atc ack.
+        envelope = next((directory / 'inbox').glob('*.json'))
+        queue_store.write_request(directory / 'receipts' / envelope.name,
+                                  {'version': 1, 'state': 'session_observed', 'callback_id': 'fixture'})
+        bridge.reconcile_publications(queue, 0.001)
+        failed = dispatch.load_request(queue / 'failed' / 'fixture.json')
+        assert 'retain_target_lease' not in failed and 'reached the session' in failed['last_error']
+        assert not delivery_engine.retained_target_lease_is_held(request)
+        later = dict(request, id='later', task='later task')
+        later.pop('pi_published_at', None)
+        queue_store.write_request(queue / 'pending' / 'later.json', later)
+        assert delivery_engine.select_pending(queue, time.time() + 7200) == queue / 'pending' / 'later.json'
+        prompt = bridge.with_unacknowledged_notice(queue, later, '[atc] later')
+        assert prompt.startswith('[atc] later') and '`atc ack fixture`' in prompt
+        callback_commands.ack(argparse.Namespace(queue_dir=str(queue), id='fixture', message=None))
+        assert bridge.with_unacknowledged_notice(queue, later, '[atc] later') == '[atc] later'
+
     def test_publication_failure_still_retains_unknown(self):
         bound = self.bound
         tmp_path = self.directory

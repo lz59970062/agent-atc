@@ -372,29 +372,71 @@ def reconcile_publications(root: Path, timeout: float) -> None:
         if reason is None:
             continue
         received = None
+        observed = False
         try:
             directory, _ = owner_record(request)
-            received = (directory / "receipts" / envelope_path(directory, root.resolve(), request_id).name).exists()
+            receipt = directory / "receipts" / envelope_path(directory, root.resolve(), request_id).name
+            received = receipt.exists()
+            # "admitted" records only an attempt; "session_observed" means the
+            # extension found the prompt in the session branch.
+            observed = received and read_record(receipt).get("state") in ("session_observed", "acknowledged")
         except (OSError, ValueError, KeyError):
             pass
-        evidence = {True: "Pi admitted it into the session", False: "Pi had not admitted it yet",
-                    None: "admission is unknown"}[received]
-        request["retain_target_lease"] = True
-        request["last_error"] = (f"Pi callback outcome is unknown: {reason} ({evidence}); automatic retry "
-                                 f"suppressed to prevent duplicate delivery. Inspect the session, then ACK or use "
-                                 f"atc retry --id {request_id}")
+        if observed:
+            # The callback is in the session, so order is kept and nothing needs
+            # replaying: later callbacks continue and name this one until ACKed.
+            request.pop("retain_target_lease", None)
+            request["last_error"] = (f"Pi callback reached the session but was not ACKed: {reason}. Later "
+                                     f"callbacks for this session continue and name it. Inspect the session, then "
+                                     f"atc ack {request_id}")
+        else:
+            evidence = {True: "Pi admitted it into the session", False: "Pi had not admitted it yet",
+                        None: "admission is unknown"}[received]
+            request["retain_target_lease"] = True
+            request["last_error"] = (f"Pi callback outcome is unknown: {reason} ({evidence}); automatic retry "
+                                     f"suppressed to prevent duplicate delivery. Inspect the session, then ACK or use "
+                                     f"atc retry --id {request_id}")
         try:
             queue_store.write_request(path, request)
             failed = queue_store.move_request(path, root / "failed")
         except FileNotFoundError:
             continue  # ACKed or canceled meanwhile.
-        print(f"atc: warning: Pi callback {request_id}: {reason}; manual recovery required", file=sys.stderr)
+        if observed:
+            print(f"atc: warning: Pi callback {request_id}: {reason}; it reached the session, later callbacks continue",
+                  file=sys.stderr)
+            delivery_engine.release_retained_target_lease(root, request)
+        else:
+            print(f"atc: warning: Pi callback {request_id}: {reason}; manual recovery required", file=sys.stderr)
         if layout.ack_path(root, request_id).exists():  # ack() raced the move.
             try:
                 queue_store.move_request(failed, root / "done")
                 delivery_engine.release_retained_target_lease(root, request)
             except FileNotFoundError:
                 pass
+
+
+def with_unacknowledged_notice(root: Path, request: dict, prompt: str) -> str:
+    """Name earlier callbacks that reached this session but were never ACKed."""
+    from ...engine import dispatch
+    from ...engine import delivery as delivery_engine
+    from ...store import layout
+    key = delivery_engine.callback_target_key(request)
+    lines = []
+    for path in sorted((root / "failed").glob("*.json")):
+        try:
+            other = dispatch.load_request(path)
+        except (OSError, ValueError):
+            continue
+        other_id = str(other.get("id", path.stem))
+        if (other_id == request.get("id") or "pi_published_at" not in other
+                or other.get("retain_target_lease") is True or layout.ack_path(root, other_id).exists()
+                or delivery_engine.callback_target_key(other) != key):
+            continue
+        task = f" ({other['task']})" if isinstance(other.get("task"), str) and other["task"] else ""
+        lines.append(f"- {other_id}{task}: inspect its result, then `atc ack {other_id}`")
+    if not lines:
+        return prompt
+    return prompt + "\n\nEarlier callbacks reached this session but were never ACKed:\n" + "\n".join(lines)
 
 
 def extension_path() -> Path:

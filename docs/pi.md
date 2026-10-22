@@ -52,6 +52,10 @@ for manual recovery — never replayed automatically — when:
 | the session was reopened by another process | the published envelope belongs to the old owner |
 | `--resume-timeout` (default 1 h) passed since publication | no ACK in time |
 
+If the extension had already seen the callback in the session (`session_observed`), order is kept
+and nothing needs replaying, so later callbacks for that session continue; each names the
+un-ACKed one until it is ACKed. Otherwise the session's later callbacks wait behind it.
+
 `last_error` records whether Pi had already admitted the message. Inspect the session, then
 `atc ack <id>` if it was handled, or `atc retry --id <id>` to deliver it again.
 

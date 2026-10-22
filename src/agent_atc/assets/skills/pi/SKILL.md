@@ -1,6 +1,6 @@
 ---
 name: agent-atc
-description: Run long jobs (training, benchmarks, builds, test suites, deployments, data jobs, child agents) under Agent Traffic Control (atc) so they outlive this run, and get the result steered back into this same Pi session when they finish. Use instead of sleeping, polling logs, or blocking a tool call whenever a command may take about a minute or longer. Also covers handling an `[atc-status]` repair block and acknowledging `[atc]` results.
+description: Run long jobs (training, benchmarks, builds, test suites, deployments, data jobs, child agents) under Agent Traffic Control (atc) so they outlive this run, and get the result steered back into this same Pi session when they finish. Use instead of sleeping, polling logs, or blocking a tool call whenever a command or a wait for time to pass may take about a minute or longer. Also covers handling an `[atc-status]` repair block and acknowledging `[atc]` results.
 ---
 
 # Agent Traffic Control for Pi
@@ -19,8 +19,12 @@ differs from this page about callback delivery, this page applies to Pi.
 
 - Reliably done within 60 seconds → run it in the foreground once. No ATC.
 - About a minute or longer, uncertain duration, or might need a second check → `atc run` from the start.
-- Never keep a job alive with `sleep`/`tail` polling or a blocking tool call. Steering cannot
-  interrupt a running tool, so a long foreground command also delays your callbacks.
+- Waiting for time to pass (a real-time clock, a schedule, a cooldown) is a long job too: submit the
+  wait, `atc run --cwd "$PWD" --task "wait for hour 12" -- sleep 900`, instead of `sleep 900` in a
+  tool call. Pi's shell has no time limit, so a long foreground `sleep` will not fail; it blocks
+  you and every callback steered to you until it returns.
+- Never `sleep` longer than about a minute in a tool call, never loop `sleep` + status/log checks,
+  and never start long jobs with `&`, `nohup` or `setsid`: ATC owns them and tells you when they end.
 
 ## The workflow
 
@@ -34,7 +38,11 @@ differs from this page about callback delivery, this page applies to Pi.
    automatically. stderr prints the task id, backend and log path.
 
 2. **Keep working** on independent work, or tell the user what is running and stop. There is
-   nothing to wait on: the callback is pushed to you.
+   nothing to wait on: the callback is pushed to you. Do not poll the task: one look at its log to
+   check early progress is fine, but do not wait in a tool call for it to change. With several tasks
+   running, each finished one arrives as its own callback. In print mode (`pi -p`) a managed session
+   (`atc pi`) exits when you stop and ATC resumes it with the callback, so ending your answer is the
+   right way to wait.
 
 3. **Handle the callback** — it arrives as a user message:
 
@@ -54,6 +62,13 @@ differs from this page about callback delivery, this page applies to Pi.
    the callback. ACK means "received and inspected", not "goal done". An exit code is process
    status, not proof that tests passed. Delivery is at-least-once: check existing processes and
    outputs before relaunching anything.
+
+   ACK **every** callback, including ones that arrive back to back while you handle another. A
+   callback that names "Earlier callbacks ... never ACKed" lists ids you missed: inspect each and
+   run its `atc ack`.
+
+4. **Stop a task early** by killing its process (`pkill -f '<its command>'`); `atc cancel` cancels
+   only the callback, not the workload. The callback still arrives with the exit status; ACK it.
 
 ## Ordinary and managed Pi sessions
 

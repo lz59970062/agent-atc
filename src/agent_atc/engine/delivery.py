@@ -636,6 +636,7 @@ def delivery_worker_main() -> int:
         else:
             request = payload.get("request")
             if isinstance(request, dict) and dispatch.request_agent(request) == "pi":
+                prompt = pi_channel.with_unacknowledged_notice(Path(str(payload["queue_dir"])), request, prompt)
                 payload["prompt"] = prompt
                 pi_delivery = pi_channel.prepare_delivery(payload)
                 if not pi_delivery.online:
