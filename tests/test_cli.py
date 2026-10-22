@@ -1173,9 +1173,10 @@ class CliTests(unittest.TestCase):
             self.assertTrue((claude_skill / "SKILL.md").exists())
             self.assertFalse((claude_skill / "agents").exists())
             self.assertIn("atc wait", (claude_skill / "SKILL.md").read_text(encoding="utf-8"))
+            self.assertIn("End your turn", (codex_skill / "SKILL.md").read_text(encoding="utf-8"))
             self.assertEqual(
                 (claude_skill / "REFERENCE.md").read_text(encoding="utf-8"),
-                (codex_skill / "SKILL.md").read_text(encoding="utf-8"),
+                (codex_skill / "REFERENCE.md").read_text(encoding="utf-8"),
             )
 
     def test_install_skill_single_target(self) -> None:
@@ -1206,10 +1207,12 @@ class CliTests(unittest.TestCase):
             self.assertIn("steer", pi)
             self.assertNotIn("atc wait", pi)
             self.assertNotIn("steer", claude)
-            for text in (codex,):
-                self.assertNotIn("atc wait", text)
-                self.assertNotIn("install-pi-extension", text)
-            self.assertEqual((skills["PI_CODING_AGENT_DIR"] / "REFERENCE.md").read_text(encoding="utf-8"), codex)
+            # Codex names `atc wait` only to rule it out; it never runs Claude Code background commands.
+            self.assertIn("End your turn", codex)
+            self.assertNotIn("run_in_background", codex)
+            self.assertNotIn("install-pi-extension", codex)
+            self.assertEqual((skills["PI_CODING_AGENT_DIR"] / "REFERENCE.md").read_text(encoding="utf-8"),
+                             (skills["CODEX_HOME"] / "REFERENCE.md").read_text(encoding="utf-8"))
             self.assertFalse((skills["PI_CODING_AGENT_DIR"] / "agents").exists())
 
     def test_daemon_requeues_when_agent_does_not_ack(self) -> None:

@@ -24,8 +24,8 @@ def install_skill_tree(target: Path, *, include_codex_plugin: bool, force: bool,
                        focused: str | None = None) -> int:
     """Install the bundled skill.
 
-    Claude (``claude_skill``) and Pi (``pi_skill``) get a focused SKILL.md for
-    their own callback delivery plus the shared full text as REFERENCE.md.
+    Codex, Claude and Pi each get a focused SKILL.md for their own callback
+    delivery plus the shared full text as REFERENCE.md.
     """
     if keep_existing and (target / "SKILL.md").is_file():
         print(f"Keeping existing agent-atc skill at {target}")
@@ -75,7 +75,7 @@ def install_skill(args: argparse.Namespace) -> int:
     status = 0
     if target_name in ("codex", "both", "all"):
         status |= install_skill_tree(layout.codex_home() / "skills" / "agent-atc", include_codex_plugin=True, force=args.force,
-                                     keep_existing=keep)
+                                     keep_existing=keep, focused="codex")
     if target_name in ("claude", "both", "all"):
         status |= install_skill_tree(layout.claude_home() / "skills" / "agent-atc", include_codex_plugin=False, force=args.force,
                                      keep_existing=keep, focused="claude")
