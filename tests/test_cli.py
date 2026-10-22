@@ -969,6 +969,8 @@ class CliTests(unittest.TestCase):
         self.assertIn('approvals_reviewer="auto_review"', command)
         self.assertIn('approval_policy="on-request"', command)
         self.assertIn('sandbox_mode="workspace-write"', command)
+        # A session started outside a git repo must still resume.
+        self.assertIn("--skip-git-repo-check", command)
         self.assertEqual(command[-2:], ["session-1", "-"])
 
     def test_enqueue_adds_acknowledgement_instruction(self) -> None:

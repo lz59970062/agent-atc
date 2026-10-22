@@ -39,7 +39,9 @@ class CodexAdapter:
     def resume_command(
         self, request: Mapping[str, object], environment: Mapping[str, str]
     ) -> list[str]:
-        cmd = [self.executable(environment), "exec", "resume", "--all"]
+        # The session already ran in its cwd; Codex's first-run git/trust check
+        # would otherwise refuse to resume any session started outside a repo.
+        cmd = [self.executable(environment), "exec", "resume", "--all", "--skip-git-repo-check"]
         for key, default in (
             ("approvals_reviewer", DEFAULT_APPROVALS_REVIEWER),
             ("approval_policy", DEFAULT_APPROVAL_POLICY),
