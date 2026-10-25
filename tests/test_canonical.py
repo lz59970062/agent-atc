@@ -1,4 +1,4 @@
-"""One canonical ATC per user: the launcher setup installs, and forwarding to it."""
+"""One canonical Reins per user: the launcher setup installs, and forwarding to it."""
 from __future__ import annotations
 
 import json
@@ -10,11 +10,11 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from agent_atc import __version__
-from agent_atc import runtime as atc_runtime
-from agent_atc.engine import dispatch
-from agent_atc.install import canonical
-from agent_atc.store import install_record
+from harness_reins import __version__
+from harness_reins import runtime as reins_runtime
+from harness_reins.engine import dispatch
+from harness_reins.install import canonical
+from harness_reins.store import install_record
 
 SRC = str(Path(__file__).resolve().parents[1] / "src")
 
@@ -23,19 +23,19 @@ class CanonicalInstallTests(unittest.TestCase):
     def setUp(self) -> None:
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
-        self.home = Path(temporary.name) / "atc-home"
-        patcher = mock.patch.dict(os.environ, {"ATC_HOME": str(self.home)})
+        self.home = Path(temporary.name) / "reins-home"
+        patcher = mock.patch.dict(os.environ, {"REINS_HOME": str(self.home)})
         patcher.start()
         self.addCleanup(patcher.stop)
 
     def test_build_ids_name_the_code_not_just_the_version(self):
-        self.assertRegex(atc_runtime.build_id(), r"^[0-9a-f]{12}$")
-        self.assertEqual(atc_runtime.build_id(), atc_runtime.build_id())
+        self.assertRegex(reins_runtime.build_id(), r"^[0-9a-f]{12}$")
+        self.assertEqual(reins_runtime.build_id(), reins_runtime.build_id())
 
     def test_ensure_installs_a_working_launcher_and_record(self):
         record = canonical.ensure()
         self.assertEqual(record["version"], __version__)
-        self.assertEqual(record["build"], atc_runtime.build_id())
+        self.assertEqual(record["build"], reins_runtime.build_id())
         self.assertEqual(install_record.read(), json.loads(install_record.record_path().read_text(encoding="utf-8")))
         launcher = install_record.launcher_path()
         self.assertEqual(install_record.launcher(), str(launcher))
@@ -44,7 +44,7 @@ class CanonicalInstallTests(unittest.TestCase):
             completed = subprocess.run([str(launcher), "--version"], capture_output=True, text=True, timeout=60,
                                        env=dict(os.environ, PYTHONPATH=SRC))
             self.assertEqual(completed.returncode, 0, completed.stderr)
-            self.assertIn(f"atc {__version__} (build {atc_runtime.build_id()})", completed.stdout)
+            self.assertIn(f"reins {__version__} (build {reins_runtime.build_id()})", completed.stdout)
 
     def test_the_same_build_runs_itself_and_a_different_build_forwards(self):
         self.assertTrue(canonical.is_current())  # nothing installed yet

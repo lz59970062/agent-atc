@@ -13,13 +13,13 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from agent_atc.harness.claude import channel as claude_channel, session as claude_session
-from agent_atc import cli
-from agent_atc.commands import callbacks as callback_commands
-from agent_atc.engine import dispatch
-from agent_atc.engine import delivery as delivery_engine
-from agent_atc.store import records as queue_store
-from agent_atc.store import layout
+from harness_reins.harness.claude import channel as claude_channel, session as claude_session
+from harness_reins import cli
+from harness_reins.commands import callbacks as callback_commands
+from harness_reins.engine import dispatch
+from harness_reins.engine import delivery as delivery_engine
+from harness_reins.store import records as queue_store
+from harness_reins.store import layout
 
 SRC = str(Path(__file__).resolve().parents[1] / "src")
 SESSION = "3f0c9a52-claude-session"
@@ -30,20 +30,20 @@ CLAUDE_PID = 424242
 class ChannelOptInTests(unittest.TestCase):
     def test_only_a_server_atc_opt_in_enables_delivery(self) -> None:
         enabled = claude_channel.channel_enabled
-        self.assertTrue(enabled(["claude", "--dangerously-load-development-channels", "server:atc"]))
-        self.assertTrue(enabled(["claude", "--dangerously-load-development-channels", "server:x", "server:atc"]))
-        self.assertTrue(enabled(["claude", "--channels=server:atc"]))
+        self.assertTrue(enabled(["claude", "--dangerously-load-development-channels", "server:reins"]))
+        self.assertTrue(enabled(["claude", "--dangerously-load-development-channels", "server:x", "server:reins"]))
+        self.assertTrue(enabled(["claude", "--channels=server:reins"]))
         self.assertFalse(enabled(["claude", "--mcp-config", "{}"]))
         self.assertFalse(enabled(["claude", "--channels", "plugin:telegram@claude-plugins-official"]))
-        self.assertFalse(enabled(["claude", "--dangerously-load-development-channels", "--resume", "server:atc"]))
+        self.assertFalse(enabled(["claude", "--dangerously-load-development-channels", "--resume", "server:reins"]))
 
     def test_launch_adds_the_server_and_the_development_flag(self) -> None:
         root = Path("/q")
         command = claude_channel.launch_command("/bin/claude", root, ["--resume", SESSION],
                                                 {layout.TARGET_LOCK_DIR_ENV: "/locks", "PATH": "/bin"})
         self.assertEqual(command[0], "/bin/claude")
-        self.assertEqual(command[3:6], ["--dangerously-load-development-channels", "server:atc", "--resume"])
-        server = json.loads(command[2])["mcpServers"]["atc"]
+        self.assertEqual(command[3:6], ["--dangerously-load-development-channels", "server:reins", "--resume"])
+        server = json.loads(command[2])["mcpServers"]["reins"]
         self.assertEqual(server["args"][-3:], ["_claude-channel", "--queue-dir", "/q"])
         self.assertEqual(server["env"], {layout.TARGET_LOCK_DIR_ENV: "/locks"})
         self.assertTrue(claude_channel.channel_enabled(command))
@@ -56,7 +56,7 @@ class ChannelServerTests(unittest.TestCase):
         self.directory = Path(temporary.name)
         self.root = self.directory / "queue"
         self.environment = {
-            "CODEX_HOME": str(self.directory / "codex-home"), "ATC_HOME": str(self.directory / "codex-home" / "atc-home"),
+            "CODEX_HOME": str(self.directory / "codex-home"), "REINS_HOME": str(self.directory / "codex-home" / "reins-home"),
             "CLAUDE_CONFIG_DIR": str(self.directory / "claude"),
             layout.TARGET_LOCK_DIR_ENV: str(self.directory / "target-locks"),
         }
@@ -84,7 +84,7 @@ class ChannelServerTests(unittest.TestCase):
 
     def server(self, *, enabled: bool = True, ack_grace: float = 3600.0) -> claude_channel.ChannelServer:
         with mock.patch.object(claude_channel, "parent_command_line",
-                               return_value=["claude", "--dangerously-load-development-channels", "server:atc"]
+                               return_value=["claude", "--dangerously-load-development-channels", "server:reins"]
                                if enabled else ["claude"]):
             server = claude_channel.ChannelServer(self.root, parent_pid=CLAUDE_PID, environment=os.environ,
                                                   poll_interval=0.05, ack_grace=ack_grace, out=io.StringIO())
@@ -112,7 +112,7 @@ class ChannelServerTests(unittest.TestCase):
         first, second, ping, unknown = self.messages(server)
         self.assertEqual(first["result"]["capabilities"], {"experimental": {"claude/channel": {}}})
         self.assertEqual(first["result"]["protocolVersion"], "2025-06-18")
-        self.assertIn("atc wait", first["result"]["instructions"])
+        self.assertIn("reins wait", first["result"]["instructions"])
         self.assertEqual(second["result"]["protocolVersion"], "2025-03-26")
         self.assertEqual(ping, {"jsonrpc": "2.0", "id": 3, "result": {}})
         self.assertEqual(unknown["error"]["code"], -32601)
@@ -128,7 +128,7 @@ class ChannelServerTests(unittest.TestCase):
         (event,) = self.messages(server)
         self.assertEqual(event["method"], "notifications/claude/channel")
         self.assertEqual(event["params"]["meta"], {"callback_id": "cb-mine"})
-        self.assertIn("[atc]", event["params"]["content"])
+        self.assertIn("[reins]", event["params"]["content"])
         self.assertTrue(mine.exists())  # Back in pending until ACKed.
         self.assertTrue(claude_session.channel_is_held(SESSION))
         self.assertFalse(claude_session.channel_is_held(OTHER_SESSION))
@@ -136,13 +136,13 @@ class ChannelServerTests(unittest.TestCase):
         selected = delivery_engine.select_pending(self.root, time.time() + 2 * claude_session.LIVE_ACK_GRACE_SECONDS)
         self.assertIn(selected, (codex, layout.request_path(self.root, "pending", "cb-other")))
         self.assertNotEqual(selected, mine)
-        # A stray `atc wait` in the channel session exits instead of printing a duplicate.
+        # A stray `reins wait` in the channel session exits instead of printing a duplicate.
         errors = io.StringIO()
         with contextlib.redirect_stdout(io.StringIO()) as output, contextlib.redirect_stderr(errors):
             status = claude_session.wait(argparse.Namespace(queue_dir=str(self.root), session=SESSION, task=None,
                                                          timeout=1.0, poll_interval=0.05))
         self.assertEqual((status, output.getvalue()), (0, ""))
-        self.assertIn("atc channel", errors.getvalue())
+        self.assertIn("reins channel", errors.getvalue())
         server.release()
         self.assertFalse(claude_session.channel_is_held(SESSION))
 
@@ -186,10 +186,10 @@ class ChannelServerTests(unittest.TestCase):
         self.assertFalse(claude_session.channel_is_held(SESSION))
 
     def test_stdio_server_pushes_and_exits_when_claude_closes_the_pipe(self) -> None:
-        # The parent's command line carries the channel opt-in, like `atc claude`.
+        # The parent's command line carries the channel opt-in, like `reins claude`.
         self.enqueue("cb-mine")
-        environment = dict(os.environ, PYTHONPATH=SRC, ATC_QUEUE_DIR=str(self.root))
-        child = [sys.executable, "-m", "agent_atc", "_claude-channel", "--poll-interval", "0.05"]
+        environment = dict(os.environ, PYTHONPATH=SRC, REINS_QUEUE_DIR=str(self.root))
+        child = [sys.executable, "-m", "harness_reins", "_claude-channel", "--poll-interval", "0.05"]
         parent = ("import os,subprocess,sys,json;"
                   f"open(os.path.join({str(self.directory / 'claude/sessions')!r}, f'{{os.getpid()}}.json'),'w')"
                   f".write(json.dumps({{'sessionId': {SESSION!r}}}));"
@@ -199,7 +199,7 @@ class ChannelServerTests(unittest.TestCase):
                   "p.stdin.flush();print(p.stdout.readline(),end='');print(p.stdout.readline(),end='');"
                   "p.stdin.close();sys.exit(p.wait(timeout=10))")
         result = subprocess.run([sys.executable, "-c", parent, json.dumps(child),
-                                 "--dangerously-load-development-channels", "server:atc"],
+                                 "--dangerously-load-development-channels", "server:reins"],
                                 capture_output=True, text=True, timeout=30, env=environment)
         self.assertEqual(result.returncode, 0, result.stderr)
         initialize, event = (json.loads(line) for line in result.stdout.splitlines())

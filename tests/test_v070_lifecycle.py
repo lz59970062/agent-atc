@@ -12,17 +12,17 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from agent_atc import cli
-from agent_atc.commands import work as work_commands
-from agent_atc.engine import dispatch
-from agent_atc.engine import tasks as managed_tasks
-from agent_atc.engine import worker as task_worker
-from agent_atc.owners import host
-from agent_atc.store import records as queue_store
-from agent_atc.store import layout
-from agent_atc.owners import LaunchError, OwnerState, ScreenBackend, SystemdUserBackend
-from agent_atc.core import ids
-import atc_records
+from harness_reins import cli
+from harness_reins.commands import work as work_commands
+from harness_reins.engine import dispatch
+from harness_reins.engine import tasks as managed_tasks
+from harness_reins.engine import worker as task_worker
+from harness_reins.owners import host
+from harness_reins.store import records as queue_store
+from harness_reins.store import layout
+from harness_reins.owners import LaunchError, OwnerState, ScreenBackend, SystemdUserBackend
+from harness_reins.core import ids
+import reins_records
 
 
 class NativeTaskLifecycleTests(unittest.TestCase):
@@ -65,7 +65,7 @@ class NativeTaskLifecycleTests(unittest.TestCase):
         path = self.submit()
         submitted = managed_tasks.load_managed_task(path)
         self.assertEqual(submitted["execution_backend"], "systemd-user")
-        self.assertEqual(submitted["schema"], "atc.task/1")
+        self.assertEqual(submitted["schema"], "reins.task/1")
         with mock.patch.object(SystemdUserBackend, "launch") as launch, mock.patch.object(
             SystemdUserBackend, "probe", return_value=OwnerState.ALIVE
         ), mock.patch.object(managed_tasks, "launch_managed_screen") as screen:
@@ -128,7 +128,7 @@ class NativeTaskLifecycleTests(unittest.TestCase):
     def test_persisted_result_wins_over_lost_manager_and_callback_is_idempotent(self) -> None:
         path = self.submit()
         task = self.mark_running(path)
-        result = atc_records.result_record(task, exit_code=7, ended_at=time.time())
+        result = reins_records.result_record(task, exit_code=7, ended_at=time.time())
         queue_store.write_request(layout.managed_result_path(self.root, str(task["id"])), result)
         with mock.patch.object(SystemdUserBackend, "probe", return_value=OwnerState.UNKNOWN), mock.patch.object(
             SystemdUserBackend, "launch"
@@ -138,7 +138,7 @@ class NativeTaskLifecycleTests(unittest.TestCase):
         launch.assert_not_called()
         completed = managed_tasks.load_managed_task(path)
         self.assertEqual(completed["state"], "completed")
-        self.assertEqual(completed["schema"], "atc.task/1")
+        self.assertEqual(completed["schema"], "reins.task/1")
         self.assertEqual(completed["execution_backend"], "systemd-user")
         pending = list((self.root / "pending").glob("*.json"))
         self.assertEqual(len(pending), 1)
@@ -153,7 +153,7 @@ class NativeTaskLifecycleTests(unittest.TestCase):
         task["started_at"] = 100.0
         managed_tasks.write_managed_task(self.root, task)
         queue_store.write_request(layout.managed_result_path(self.root, str(task["id"])),
-                                  atc_records.result_record(task, exit_code=0, ended_at=225.5))
+                                  reins_records.result_record(task, exit_code=0, ended_at=225.5))
         with mock.patch.object(cli.time, "time", return_value=10000.0):
             managed_tasks.recover_managed_tasks(self.root)
         callback = dispatch.load_request(layout.request_path(self.root, "pending", ids.callback_id(str(task["id"]))))
@@ -165,7 +165,7 @@ class NativeTaskLifecycleTests(unittest.TestCase):
         path = self.submit()
         task = self.mark_running(path)
         queue_store.write_request(layout.managed_result_path(self.root, str(task["id"])),
-                                  atc_records.result_record({"id": "different-task"}, exit_code=0, ended_at=time.time()))
+                                  reins_records.result_record({"id": "different-task"}, exit_code=0, ended_at=time.time()))
         with mock.patch.object(SystemdUserBackend, "probe", return_value=OwnerState.ABSENT), mock.patch.object(
             SystemdUserBackend, "launch"
         ) as launch:
@@ -264,7 +264,7 @@ class NativeTaskLifecycleTests(unittest.TestCase):
         task = managed_tasks.load_managed_task(path)
         self.assertEqual(task["state"], "completed")
         self.assertEqual(task["exit_code"], 7)
-        self.assertEqual(task["schema"], "atc.task/1")
+        self.assertEqual(task["schema"], "reins.task/1")
         self.assertEqual(task["execution_backend"], "systemd-user")
         self.assertEqual(len(list((self.root / "pending").glob("*.json"))), 1)
 
@@ -381,7 +381,7 @@ class NativeTaskLifecycleTests(unittest.TestCase):
         self.assertEqual(completed["state"], "completed")
         self.assertEqual(completed["outcome"], "completed")
         self.assertEqual(completed["exit_code"], 7)
-        self.assertEqual(completed["schema"], "atc.task/1")
+        self.assertEqual(completed["schema"], "reins.task/1")
         self.assertEqual(len(list((self.root / "pending").glob("*.json"))), 1)
 
 

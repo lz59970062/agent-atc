@@ -12,7 +12,7 @@ import tempfile
 import unittest
 from unittest import mock
 
-from agent_atc.system import windows_process as processes
+from harness_reins.system import windows_process as processes
 
 
 NPM_PREAMBLE = """@ECHO off
@@ -39,8 +39,8 @@ endLocal & goto #_undefined_# 2>NUL || title %COMSPEC% & "%_prog%"  "%dp0%\node_
 class CommandFormattingTests(unittest.TestCase):
     def test_powershell_arguments_are_literal_and_single_quotes_double(self):
         self.assertEqual(
-            processes.format_command(["C:\\Program Files\\atc.exe", "a'b", '$x; &(whoami)', "中文", ""]),
-            "& 'C:\\Program Files\\atc.exe' 'a''b' '$x; &(whoami)' '中文' ''",
+            processes.format_command(["C:\\Program Files\\reins.exe", "a'b", '$x; &(whoami)', "中文", ""]),
+            "& 'C:\\Program Files\\reins.exe' 'a''b' '$x; &(whoami)' '中文' ''",
         )
 
     def test_posix_command_preparation_is_unchanged(self):
@@ -57,7 +57,7 @@ class CommandFormattingTests(unittest.TestCase):
 @unittest.skipUnless(os.name == "nt", "native Windows process contracts")
 class WindowsCommandTests(unittest.TestCase):
     def setUp(self):
-        temporary = tempfile.TemporaryDirectory(prefix="atc process 中文 ")
+        temporary = tempfile.TemporaryDirectory(prefix="reins process 中文 ")
         self.addCleanup(temporary.cleanup)
         self.directory = Path(temporary.name).resolve()
 
@@ -87,19 +87,19 @@ class WindowsCommandTests(unittest.TestCase):
 
     def test_forwarding_wrapper_updates_only_child_environment(self):
         shim = self.directory / "agent.bat"
-        shim.write_text('@echo off\nset ATC_TEST_VALUE=child-value\n"' + sys.executable + '" %*\n', encoding="utf-8")
+        shim.write_text('@echo off\nset REINS_TEST_VALUE=child-value\n"' + sys.executable + '" %*\n', encoding="utf-8")
         environment = dict(os.environ)
-        original = environment.get("ATC_TEST_VALUE")
-        command = processes.prepare_command([str(shim), "-c", "import os; print(os.environ['ATC_TEST_VALUE'])"], env=environment)
+        original = environment.get("REINS_TEST_VALUE")
+        command = processes.prepare_command([str(shim), "-c", "import os; print(os.environ['REINS_TEST_VALUE'])"], env=environment)
         result = subprocess.run(command, env=environment, capture_output=True, text=True, check=True, **processes.background_popen_kwargs())
         self.assertEqual(result.stdout.strip(), "child-value")
-        self.assertEqual(os.environ.get("ATC_TEST_VALUE"), original)
+        self.assertEqual(os.environ.get("REINS_TEST_VALUE"), original)
 
     def test_forwarding_wrapper_without_env_uses_private_launcher(self):
         shim = self.directory / "agent.bat"
-        shim.write_text('@echo off\nset ATC_TEST_VALUE=private-value\n"' + sys.executable + '" %*\n', encoding="utf-8")
+        shim.write_text('@echo off\nset REINS_TEST_VALUE=private-value\n"' + sys.executable + '" %*\n', encoding="utf-8")
         argument = '%PATH% & " literal'
-        command = processes.prepare_command([str(shim), "-c", "import os,json,sys;print(json.dumps([os.environ['ATC_TEST_VALUE'],sys.argv[1]]))", argument])
+        command = processes.prepare_command([str(shim), "-c", "import os,json,sys;print(json.dumps([os.environ['REINS_TEST_VALUE'],sys.argv[1]]))", argument])
         self.assertNotIn("private-value", " ".join(command))
         result = subprocess.run(command, capture_output=True, text=True, check=True, **processes.background_popen_kwargs())
         self.assertEqual(json.loads(result.stdout), ["private-value", argument])
@@ -162,7 +162,7 @@ class WindowsProcessTests(unittest.TestCase):
             "print(json.dumps([os.getpid(),leaf.pid]),flush=True); time.sleep(60)"
         )
         runner = (
-            "from agent_atc.system.windows_process import enter_worker_job; "
+            "from harness_reins.system.windows_process import enter_worker_job; "
             "import os,subprocess,sys,json,time; "
             "job=enter_worker_job(); again=enter_worker_job(); "
             f"child=subprocess.Popen([sys.executable,'-c',{child!r}],stdout=subprocess.PIPE,text=True); "
@@ -200,13 +200,13 @@ class WindowsProcessTests(unittest.TestCase):
                 api.CloseHandle(handle)
 
     def test_delivery_worker_retains_exclusive_lock_after_parent_close(self):
-        from agent_atc.system.windows_io import acquire_path_lock
+        from harness_reins.system.windows_io import acquire_path_lock
 
-        with tempfile.TemporaryDirectory(prefix="atc transfer ") as temporary:
+        with tempfile.TemporaryDirectory(prefix="reins transfer ") as temporary:
             path = Path(temporary) / "lease.lock"
             handle, _ = acquire_path_lock(path, blocking=False)
             program = (
-                "from agent_atc.system.windows_process import inherited_lock_fds; "
+                "from harness_reins.system.windows_process import inherited_lock_fds; "
                 "import json,os,sys; fds=inherited_lock_fds(); "
                 "print(json.dumps([os.get_inheritable(fd) for fd in fds]),flush=True); sys.stdin.read(); "
                 "[os.close(fd) for fd in fds]"
@@ -236,24 +236,24 @@ class WindowsProcessTests(unittest.TestCase):
                     processes.inherited_lock_fds()
 
     def test_graceful_job_drain_waits_nested_children_and_does_not_kill_foreign_pid(self):
-        from agent_atc.owners import windows
+        from harness_reins.owners import windows
 
         outsider = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"],
                                     **processes.background_popen_kwargs())
         try:
-            with tempfile.TemporaryDirectory(prefix="atc-job-drain-") as temporary:
+            with tempfile.TemporaryDirectory(prefix="reins-job-drain-") as temporary:
                 folder = Path(temporary)
                 program = folder / "runner.py"
                 program.write_text('''
-from agent_atc.system import windows_process as p
-from agent_atc.owners import windows
-from agent_atc.system.windows_io import open_private_text
+from harness_reins.system import windows_process as p
+from harness_reins.owners import windows
+from harness_reins.system.windows_io import open_private_text
 import json, os, pathlib, subprocess, sys, time
 directory=pathlib.Path(sys.argv[1]); outsider=int(sys.argv[2])
 job=p.enter_worker_job()
 marker=directory/'children.json'
 child_code="""
-from agent_atc.system.windows_process import enter_worker_job
+from harness_reins.system.windows_process import enter_worker_job
 import json,os,pathlib,subprocess,sys,time
 enter_worker_job()
 leaf=subprocess.Popen([sys.executable,'-c','import time; time.sleep(30)'])

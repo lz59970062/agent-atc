@@ -19,14 +19,14 @@ import types
 import unittest
 from unittest import mock
 
-from agent_atc import cli
-from agent_atc.commands import callbacks as callback_commands
-from agent_atc.engine import dispatch
-from agent_atc.engine import delivery as delivery_engine
-from agent_atc.harness.codex import app_server
-from agent_atc.store import records as queue_store
-from agent_atc.store import layout
-import atc_records
+from harness_reins import cli
+from harness_reins.commands import callbacks as callback_commands
+from harness_reins.engine import dispatch
+from harness_reins.engine import delivery as delivery_engine
+from harness_reins.harness.codex import app_server
+from harness_reins.store import records as queue_store
+from harness_reins.store import layout
+import reins_records
 
 
 # Real-time budget for a worker to reach turn/start and finish on its own. It
@@ -38,17 +38,17 @@ WORKER_TIMEOUT = 120.0
 
 class DesktopDeliveryTimeoutTests(unittest.TestCase):
     def setUp(self):
-        temporary = tempfile.TemporaryDirectory(prefix="atc desktop intent ")
+        temporary = tempfile.TemporaryDirectory(prefix="reins desktop intent ")
         self.addCleanup(temporary.cleanup)
         self.directory = Path(temporary.name).resolve()
         self.root = self.directory / "queue"
         self.events = self.directory / "rpc-events.jsonl"
         self.cli_calls = self.directory / "cli-calls"
-        self.request = atc_records.callback_record("desktop-fixture", str(self.directory), target={"kind": "session", "session": "fixture-original-session"}, prompt="Model-free Desktop delivery fixture", created_at=time.time(), agent="codex", queue_dir=str(self.root), target_source="explicit", sandbox_mode="workspace-write", attempts=0)
+        self.request = reins_records.callback_record("desktop-fixture", str(self.directory), target={"kind": "session", "session": "fixture-original-session"}, prompt="Model-free Desktop delivery fixture", created_at=time.time(), agent="codex", queue_dir=str(self.root), target_source="explicit", sandbox_mode="workspace-write", attempts=0)
         self.stack = contextlib.ExitStack()
         self.addCleanup(self.stack.close)
         self.stack.enter_context(mock.patch.dict(os.environ, {
-            "CODEX_HOME": str(self.directory / "codex-profile"), "ATC_HOME": str(self.directory / "codex-profile" / "atc-home"),
+            "CODEX_HOME": str(self.directory / "codex-profile"), "REINS_HOME": str(self.directory / "codex-profile" / "reins-home"),
             layout.TARGET_LOCK_DIR_ENV: str(self.directory / "target-locks"),
             "PYTHONPATH": str(Path(cli.__file__).resolve().parents[1]),
             "PYTHONIOENCODING": "utf-8",
@@ -60,13 +60,13 @@ class DesktopDeliveryTimeoutTests(unittest.TestCase):
         program = textwrap.dedent("""
             import argparse,json,os,sys,time
             from pathlib import Path
-            from agent_atc import cli
-            from agent_atc.commands import callbacks as callback_commands
-            from agent_atc.engine import dispatch
-            from agent_atc.engine import delivery as delivery_engine
-            from agent_atc.harness.codex import app_server
-            from agent_atc.store import records as queue_store
-            from agent_atc.store import layout
+            from harness_reins import cli
+            from harness_reins.commands import callbacks as callback_commands
+            from harness_reins.engine import dispatch
+            from harness_reins.engine import delivery as delivery_engine
+            from harness_reins.harness.codex import app_server
+            from harness_reins.store import records as queue_store
+            from harness_reins.store import layout
             root=Path(ROOT)
             request=json.loads(REQUEST)
             events=Path(EVENTS)

@@ -3,11 +3,11 @@
 # Python-free Node container. Nothing on the host is installed or changed.
 #
 #   NPM_UPSTREAM=...   registry used to fetch verdaccio (default registry.npmjs.org)
-#   ATC_APT_MIRROR=... optional Debian mirror host
+#   REINS_APT_MIRROR=... optional Debian mirror host
 set -euo pipefail
 
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 docker run --rm --init \
-  -e "NPM_UPSTREAM=${NPM_UPSTREAM:-https://registry.npmjs.org}" -e "APT_MIRROR=${ATC_APT_MIRROR:-}" \
+  -e "NPM_UPSTREAM=${NPM_UPSTREAM:-https://registry.npmjs.org}" -e "APT_MIRROR=${REINS_APT_MIRROR:-}" \
   -v "$root/packaging/out:/out:ro" -v "$root/packaging/npm/smoke-test.sh:/smoke-test.sh:ro" \
-  "${ATC_NODE_IMAGE:-node:20-bookworm-slim}" bash ${ATC_TRACE:+-x} /smoke-test.sh
+  "${REINS_NODE_IMAGE:-node:20-bookworm-slim}" bash ${REINS_TRACE:+-x} /smoke-test.sh

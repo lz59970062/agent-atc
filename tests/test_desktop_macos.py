@@ -12,17 +12,17 @@ import tempfile
 import unittest
 from unittest import mock
 
-from agent_atc import cli
-from agent_atc.store import layout
-from agent_atc.harness.codex.desktop import macos as desktop
-from agent_atc.harness.codex.desktop.connection import load_unix_bridge_endpoint
-from agent_atc.harness.codex.desktop.core import app_server_arguments
+from harness_reins import cli
+from harness_reins.store import layout
+from harness_reins.harness.codex.desktop import macos as desktop
+from harness_reins.harness.codex.desktop.connection import load_unix_bridge_endpoint
+from harness_reins.harness.codex.desktop.core import app_server_arguments
 
 
 @unittest.skipUnless(sys.platform == "darwin", "macOS Desktop launcher")
 class DesktopLauncherTests(unittest.TestCase):
     def setUp(self):
-        temp = tempfile.TemporaryDirectory(prefix="atc-desktop-", dir="/tmp")
+        temp = tempfile.TemporaryDirectory(prefix="reins-desktop-", dir="/tmp")
         self.addCleanup(temp.cleanup)
         self.root = Path(temp.name).resolve()
         self.profile = self.root / "profile"
@@ -58,10 +58,10 @@ class DesktopLauncherTests(unittest.TestCase):
                 mock.patch.object(desktop.subprocess, "Popen") as launch, contextlib.redirect_stdout(io.StringIO()):
             self.assertEqual(desktop.command(args), 0)
         launch.assert_not_called()
-        launcher = self.profile / "agent-atc/Start ATC Desktop.command"
+        launcher = self.profile / "harness-reins/Start Reins Desktop.command"
         self.assertTrue(launcher.is_file())
         self.assertIn("desktop launch", launcher.read_text())
-        self.assertEqual(json.loads((self.profile / "agent-atc/desktop.json").read_text()), self.config)
+        self.assertEqual(json.loads((self.profile / "harness-reins/desktop.json").read_text()), self.config)
 
     def test_launch_refuses_existing_desktop_without_signaling_it(self):
         args = argparse.Namespace(desktop_action="launch", check_only=False)

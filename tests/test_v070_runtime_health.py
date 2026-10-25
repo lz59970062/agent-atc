@@ -9,23 +9,23 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from agent_atc import cli
-from agent_atc.install import services
-from agent_atc.engine import dispatch
-from agent_atc.engine import tasks as managed_tasks
-from agent_atc.engine import delivery as delivery_engine
-from agent_atc.owners import host
-from agent_atc.store import records as queue_store
-from agent_atc.store import layout
-from agent_atc.install import diagnostics
-from agent_atc.owners import OwnerState
-from agent_atc.core import ids
-import atc_records
+from harness_reins import cli
+from harness_reins.install import services
+from harness_reins.engine import dispatch
+from harness_reins.engine import tasks as managed_tasks
+from harness_reins.engine import delivery as delivery_engine
+from harness_reins.owners import host
+from harness_reins.store import records as queue_store
+from harness_reins.store import layout
+from harness_reins.install import diagnostics
+from harness_reins.owners import OwnerState
+from harness_reins.core import ids
+import reins_records
 
 
 class HealthArtifacts:
     def setUp(self):
-        temporary = tempfile.TemporaryDirectory(prefix="atc runtime health ")
+        temporary = tempfile.TemporaryDirectory(prefix="reins runtime health ")
         self.addCleanup(temporary.cleanup)
         self.directory = Path(temporary.name)
         self.root = self.directory / "queue"
@@ -34,24 +34,24 @@ class HealthArtifacts:
         self.addCleanup(self.patches.close)
         self.patches.enter_context(mock.patch.object(host, "current_machine_id", return_value="this-machine"))
         self.patches.enter_context(mock.patch.object(host, "current_boot_id", return_value="this-boot"))
-        self.patches.enter_context(mock.patch("agent_atc.install.diagnostics.time.time", return_value=1000.0))
+        self.patches.enter_context(mock.patch("harness_reins.install.diagnostics.time.time", return_value=1000.0))
 
     def write_json(self, path, value):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(value), encoding="utf-8")
 
     def task(self, task_id="fixture-task", backend="systemd-user", **updates):
-        task = atc_records.task_record(id=task_id, queue_dir=str(self.root), agent="codex", execution_backend=backend, execution_owner=f"atc-{task_id}-attempt1.service", screen_session=f"atc-{task_id}", state="running", machine_id="this-machine", boot_id="this-boot", submission_boot_id="this-boot", launch_requested_at=100.0, started_at=101.0, cwd=str(self.directory), task="SECRET_TASK_CONTENT", command="SECRET_COMMAND_CONTENT", target={"kind": "session", "session": "bound-fixture-session"})
+        task = reins_records.task_record(id=task_id, queue_dir=str(self.root), agent="codex", execution_backend=backend, execution_owner=f"reins-{task_id}-attempt1.service", screen_session=f"reins-{task_id}", state="running", machine_id="this-machine", boot_id="this-boot", submission_boot_id="this-boot", launch_requested_at=100.0, started_at=101.0, cwd=str(self.directory), task="SECRET_TASK_CONTENT", command="SECRET_COMMAND_CONTENT", target={"kind": "session", "session": "bound-fixture-session"})
         task.update(updates)
         self.write_json(layout.managed_task_path(self.root, task_id), task)
         return task
 
     def result(self, task, exit_code=7, completed_at=1000.0, **updates):
-        result = atc_records.result_record(task, exit_code=exit_code, ended_at=completed_at, **updates)
+        result = reins_records.result_record(task, exit_code=exit_code, ended_at=completed_at, **updates)
         self.write_json(layout.managed_result_path(self.root, task["id"]), result)
 
     def callback(self, callback_id=ids.callback_id("fixture-task"), state="pending", **updates):
-        value = atc_records.callback_record(callback_id, str(self.directory), target={"kind": "session", "session": "bound-fixture-session"}, prompt="SECRET_CALLBACK_CONTENT", agent="codex", last_error="SECRET_EXCEPTION_CONTENT")
+        value = reins_records.callback_record(callback_id, str(self.directory), target={"kind": "session", "session": "bound-fixture-session"}, prompt="SECRET_CALLBACK_CONTENT", agent="codex", last_error="SECRET_EXCEPTION_CONTENT")
         value.update(updates)
         self.write_json(layout.request_path(self.root, state, callback_id), value)
         return value
@@ -229,7 +229,7 @@ class RuntimeHealthTests(HealthArtifacts, unittest.TestCase):
 
     def test_configured_container_can_still_have_broken_runtime_and_needs_no_reinstall(self):
         self.task(backend="screen")
-        skill = self.directory / "skills" / "agent-atc" / "SKILL.md"
+        skill = self.directory / "skills" / "harness-reins" / "SKILL.md"
         skill.parent.mkdir(parents=True)
         skill.write_text("fixture skill", encoding="utf-8")
         args = argparse.Namespace(mode="doctor", operation="run", agent="codex", session="actual-session",

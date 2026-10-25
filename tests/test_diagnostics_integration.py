@@ -20,22 +20,22 @@ import time
 import unittest
 from unittest import mock
 
-from agent_atc import cli
-from agent_atc.install import services
-from agent_atc.tower import main as tower
-from agent_atc.store import records as queue_store
-from agent_atc.store import layout
-from agent_atc.owners import SystemdUserBackend
-from agent_atc.runtime import worker_command
+from harness_reins import cli
+from harness_reins.install import services
+from harness_reins.tower import main as tower
+from harness_reins.store import records as queue_store
+from harness_reins.store import layout
+from harness_reins.owners import SystemdUserBackend
+from harness_reins.runtime import worker_command
 
 
 @unittest.skipUnless(
-    os.environ.get("ATC_TEST_DIAGNOSTICS") == "1",
-    "set ATC_TEST_DIAGNOSTICS=1 for real standalone configuration repair",
+    os.environ.get("REINS_TEST_DIAGNOSTICS") == "1",
+    "set REINS_TEST_DIAGNOSTICS=1 for real standalone configuration repair",
 )
 class RealDiagnosticsRepairTests(unittest.TestCase):
     def invoke(self, arguments: list[str]) -> tuple[int, str, str]:
-        with mock.patch.object(sys, "argv", ["atc", *arguments]), contextlib.redirect_stdout(
+        with mock.patch.object(sys, "argv", ["reins", *arguments]), contextlib.redirect_stdout(
             io.StringIO()
         ) as output, contextlib.redirect_stderr(io.StringIO()) as errors:
             status = cli.main()
@@ -43,7 +43,7 @@ class RealDiagnosticsRepairTests(unittest.TestCase):
 
     def pinned_arguments(self, command: list[str], operation: str) -> list[str]:
         prefix = worker_command()
-        self.assertEqual(command[:len(prefix)], prefix, "repair must use the inspected ATC installation")
+        self.assertEqual(command[:len(prefix)], prefix, "repair must use the inspected Reins installation")
         self.assertEqual(command[len(prefix)], operation)
         return command[len(prefix):]
 
@@ -51,7 +51,7 @@ class RealDiagnosticsRepairTests(unittest.TestCase):
         if sys.platform != "linux":
             self.skipTest("Linux process identity and POSIX queue locks are required")
 
-        with tempfile.TemporaryDirectory(prefix="atc doctor repair ") as temporary:
+        with tempfile.TemporaryDirectory(prefix="reins doctor repair ") as temporary:
             directory = Path(temporary)
             root = directory / "isolated queue"
             codex_home = directory / "codex profile"
@@ -72,16 +72,16 @@ class RealDiagnosticsRepairTests(unittest.TestCase):
             # CLI is discovered through its absolute path and must never run.
             environment = {
                 "PATH": "/usr/bin:/bin",
-                "CODEX_HOME": str(codex_home), "ATC_HOME": str(codex_home / "atc-home"),
+                "CODEX_HOME": str(codex_home), "REINS_HOME": str(codex_home / "reins-home"),
                 "CLAUDE_CONFIG_DIR": str(claude_home),
                 "XDG_CONFIG_HOME": str(config_home),
                 "XDG_RUNTIME_DIR": str(runtime_directory),
                 "DBUS_SESSION_BUS_ADDRESS": f"unix:path={directory}/absent-user-bus",
-                "ATC_CODEX_BIN": str(fake_cli),
-                "ATC_CLAUDE_BIN": str(directory / "absent-claude"),
-                "ATC_SCREEN_BIN": str(directory / "absent-screen"),
-                "ATC_DESKTOP_APP_SERVER": "0",
-                "ATC_TARGET_LOCK_DIR": str(directory / "target-locks"),
+                "REINS_CODEX_BIN": str(fake_cli),
+                "REINS_CLAUDE_BIN": str(directory / "absent-claude"),
+                "REINS_SCREEN_BIN": str(directory / "absent-screen"),
+                "REINS_DESKTOP_APP_SERVER": "0",
+                "REINS_TARGET_LOCK_DIR": str(directory / "target-locks"),
             }
             doctor_arguments = [
                 "doctor", "--queue-dir", str(root), "--backend", "systemd",
@@ -109,7 +109,7 @@ class RealDiagnosticsRepairTests(unittest.TestCase):
                     initial_code, initial_output, initial_errors = self.invoke(doctor_arguments)
                     self.assertEqual(initial_code, 1, initial_errors)
                     initial = json.loads(initial_output)
-                    self.assertEqual(initial["schema"], "atc.health.v1")
+                    self.assertEqual(initial["schema"], "reins.health.v1")
                     self.assertEqual(initial["status"], "needs_configuration")
                     self.assertEqual(initial["work"], {"state": "not_applicable"})
                     issue_codes = {issue["code"] for issue in initial["issues"]}
@@ -157,7 +157,7 @@ class RealDiagnosticsRepairTests(unittest.TestCase):
                     if lock is not None:
                         queue_store.release_owner_lock(lock, remove=False)
                     self.assertIsNone(lock, "the actual coordinator must own this queue")
-                    self.assertTrue((codex_home / "skills" / "agent-atc" / "SKILL.md").is_file())
+                    self.assertTrue((codex_home / "skills" / "harness-reins" / "SKILL.md").is_file())
                     self.assertFalse((claude_home / "skills").exists(), "repair should install only the selected Agent skill")
                     self.assertFalse((config_home / "systemd").exists(), "standalone repair must not install a service unit")
 

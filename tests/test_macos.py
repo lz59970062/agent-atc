@@ -14,25 +14,25 @@ import tempfile
 import unittest
 from unittest import mock
 
-from agent_atc import cli
-from agent_atc.install import services
-from agent_atc.tower import environment as tower_environment
-from agent_atc.tower import main as tower
-from agent_atc.engine import tasks as managed_tasks
-from agent_atc.engine import worker as task_worker
-from agent_atc.owners import host
-from agent_atc.store import records as queue_store
-from agent_atc.store import layout
-from agent_atc.install import diagnostics, launchd_service
-from agent_atc.owners import LaunchdBackend, LaunchError, OwnerState
-from agent_atc.owners import macos, screen
+from harness_reins import cli
+from harness_reins.install import services
+from harness_reins.tower import environment as tower_environment
+from harness_reins.tower import main as tower
+from harness_reins.engine import tasks as managed_tasks
+from harness_reins.engine import worker as task_worker
+from harness_reins.owners import host
+from harness_reins.store import records as queue_store
+from harness_reins.store import layout
+from harness_reins.install import diagnostics, launchd_service
+from harness_reins.owners import LaunchdBackend, LaunchError, OwnerState
+from harness_reins.owners import macos, screen
 from test_cli import assert_private_file
-import atc_records
+import reins_records
 
 
 class MacOSContracts(unittest.TestCase):
     def setUp(self):
-        temporary = tempfile.TemporaryDirectory(prefix="atc mac ")
+        temporary = tempfile.TemporaryDirectory(prefix="reins mac ")
         self.addCleanup(temporary.cleanup)
         self.directory = Path(temporary.name).resolve()
         self.queue = self.directory / "queue"
@@ -45,7 +45,7 @@ class MacOSContracts(unittest.TestCase):
         self.backend = LaunchdBackend()
 
     def arguments(self, **updates):
-        values = dict(name="atc-test", queue_dir=str(self.queue), interval=0.1, retries=0,
+        values = dict(name="reins-test", queue_dir=str(self.queue), interval=0.1, retries=0,
                       retry_delay=1.0, retry_backoff=2.0, resume_timeout=30.0, restart_sec=2.5,
                       exec_start=None, codex_bin=None, claude_bin=None, path=None,
                       force=True, enable=True, now=True, print=False, backend="auto", service="auto")
@@ -95,10 +95,10 @@ class MacOSContracts(unittest.TestCase):
         for error, uncertain in ((subprocess.TimeoutExpired("launchctl", 10), True),
                                  (FileNotFoundError("launchctl"), False)):
             with self.subTest(error=error), mock.patch.object(macos, "launchctl", side_effect=error), self.assertRaises(LaunchError) as caught:
-                self.backend.launch("atc.test", [sys.executable], self.directory, self.directory / "log")
+                self.backend.launch("reins.test", [sys.executable], self.directory, self.directory / "log")
             self.assertEqual(caught.exception.uncertain, uncertain)
         with mock.patch.object(macos, "launchctl", return_value=subprocess.CompletedProcess([], 5)), self.assertRaises(LaunchError) as caught:
-            self.backend.launch("atc.test", [sys.executable], self.directory, self.directory / "log")
+            self.backend.launch("reins.test", [sys.executable], self.directory, self.directory / "log")
         self.assertTrue(caught.exception.uncertain)
 
     def test_probe_preserves_unknown_and_pending_owners(self):
@@ -111,40 +111,40 @@ class MacOSContracts(unittest.TestCase):
             ("\tstate = not running\n\t\tpid = 123\n", OwnerState.UNKNOWN),
         ):
             with self.subTest(output=output), mock.patch.object(macos, "launchctl", return_value=subprocess.CompletedProcess([], 0, output, "")):
-                self.assertEqual(self.backend.probe("atc.test"), expected)
+                self.assertEqual(self.backend.probe("reins.test"), expected)
         for code, error in ((5, "permission denied"), (113, "domain not available")):
             with mock.patch.object(macos, "launchctl", return_value=subprocess.CompletedProcess([], code, "", error)):
-                self.assertEqual(self.backend.probe("atc.test"), OwnerState.UNKNOWN)
-        missing = subprocess.CompletedProcess([], 113, "", 'Could not find service "atc.test" in domain for user gui: 501')
+                self.assertEqual(self.backend.probe("reins.test"), OwnerState.UNKNOWN)
+        missing = subprocess.CompletedProcess([], 113, "", 'Could not find service "reins.test" in domain for user gui: 501')
         with mock.patch.object(macos, "launchctl", return_value=missing), mock.patch.object(macos, "manager_available", return_value=True):
-            self.assertEqual(self.backend.probe("atc.test"), OwnerState.ABSENT)
+            self.assertEqual(self.backend.probe("reins.test"), OwnerState.ABSENT)
         with mock.patch.object(macos, "launchctl", return_value=missing), mock.patch.object(macos, "manager_available", return_value=False):
-            self.assertEqual(self.backend.probe("atc.test"), OwnerState.UNKNOWN)
+            self.assertEqual(self.backend.probe("reins.test"), OwnerState.UNKNOWN)
 
     def test_collection_never_stops_live_or_unknown_workers(self):
         for state in (OwnerState.ALIVE, OwnerState.UNKNOWN):
             with mock.patch.object(macos, "job_status", return_value=(state, None, True)), mock.patch.object(macos, "launchctl") as control:
-                self.assertFalse(self.backend.collect("atc.test"))
+                self.assertFalse(self.backend.collect("reins.test"))
                 control.assert_not_called()
 
     def test_worker_admission_binds_launchd_context_and_pid(self):
-        with mock.patch.dict(os.environ, {macos.OWNER_ENV: "atc.test", "XPC_SERVICE_NAME": "atc.test"}), mock.patch.object(
+        with mock.patch.dict(os.environ, {macos.OWNER_ENV: "reins.test", "XPC_SERVICE_NAME": "reins.test"}), mock.patch.object(
             os, "getppid", return_value=1
         ), mock.patch.object(macos, "job_status", return_value=(OwnerState.ALIVE, os.getpid(), True)):
-            self.assertTrue(self.backend.admits_worker("atc.test"))
-            self.assertFalse(self.backend.admits_worker("atc.other"))
-        with mock.patch.dict(os.environ, {macos.OWNER_ENV: "atc.test", "XPC_SERVICE_NAME": "atc.test"}), mock.patch.object(
+            self.assertTrue(self.backend.admits_worker("reins.test"))
+            self.assertFalse(self.backend.admits_worker("reins.other"))
+        with mock.patch.dict(os.environ, {macos.OWNER_ENV: "reins.test", "XPC_SERVICE_NAME": "reins.test"}), mock.patch.object(
             os, "getppid", return_value=1
         ), mock.patch.object(macos, "job_status", return_value=(OwnerState.ALIVE, os.getpid() + 1, True)):
-            self.assertFalse(self.backend.admits_worker("atc.test"))
+            self.assertFalse(self.backend.admits_worker("reins.test"))
 
     def test_worker_rejects_stale_attempt_host_boot_and_owner_before_command(self):
         ident = "abcd1234"
-        task = atc_records.task_record(id=ident, queue_dir=str(self.queue), execution_backend="launchd", state="launching", agent="codex", launch_attempt_count=1, launch_boot_id="boot", machine_id="host", execution_owner=self.backend.owner_name(ident, 1, self.queue))
+        task = reins_records.task_record(id=ident, queue_dir=str(self.queue), execution_backend="launchd", state="launching", agent="codex", launch_attempt_count=1, launch_boot_id="boot", machine_id="host", execution_owner=self.backend.owner_name(ident, 1, self.queue))
         args = argparse.Namespace(task_file=str(layout.managed_task_path(self.queue, ident)), attempt=1)
         for change in ({"state": "running"}, {"launch_attempt_count": 2},
                        {"launch_boot_id": "previous"}, {"launch_boot_id": None},
-                       {"machine_id": "foreign"}, {"execution_owner": "atc.other"}, {}):
+                       {"machine_id": "foreign"}, {"execution_owner": "reins.other"}, {}):
             with self.subTest(change=change), mock.patch.object(LaunchdBackend, "admits_worker", return_value=True), mock.patch.object(
                 task_worker, "run_managed_worker_locked", return_value=7
             ) as command, contextlib.redirect_stderr(io.StringIO()):
@@ -153,7 +153,7 @@ class MacOSContracts(unittest.TestCase):
                 self.assertEqual(command.call_count, 0 if change else 1)
 
     def test_launch_boot_detects_reboot_even_when_submitter_could_not_read_boot(self):
-        task = atc_records.task_record(id="abcd1234", queue_dir=str(self.queue), execution_backend="launchd", machine_id="host", submission_boot_id=None, launch_boot_id="previous-boot", state="launching", agent="codex")
+        task = reins_records.task_record(id="abcd1234", queue_dir=str(self.queue), execution_backend="launchd", machine_id="host", submission_boot_id=None, launch_boot_id="previous-boot", state="launching", agent="codex")
         managed_tasks.write_managed_task(self.queue, task)
         with mock.patch.object(managed_tasks, "mark_managed_task_interrupted", return_value=True) as interrupt, mock.patch.object(
             LaunchdBackend, "launch"
@@ -165,7 +165,7 @@ class MacOSContracts(unittest.TestCase):
         self.assertEqual(diagnostics.runtime_issues(self.queue)[0]["code"], "task_boot_changed")
 
     def test_ambiguous_native_launch_is_never_replayed(self):
-        task = atc_records.task_record(id="abcd1234", queue_dir=str(self.queue), execution_backend="launchd", machine_id="host", submission_boot_id="boot", state="submitted", environment_path=str(self.directory / "env.json"), cwd=str(self.directory), log_path=str(self.directory / "log"), agent="codex")
+        task = reins_records.task_record(id="abcd1234", queue_dir=str(self.queue), execution_backend="launchd", machine_id="host", submission_boot_id="boot", state="submitted", environment_path=str(self.directory / "env.json"), cwd=str(self.directory), log_path=str(self.directory / "log"), agent="codex")
         Path(task["environment_path"]).write_text("{}")
         managed_tasks.write_managed_task(self.queue, task)
         with mock.patch.object(LaunchdBackend, "launch", side_effect=LaunchError("unknown", uncertain=True)) as launch, mock.patch.object(
@@ -220,14 +220,14 @@ class MacOSContracts(unittest.TestCase):
         ) as reload, contextlib.redirect_stdout(io.StringIO()):
             self.assertEqual(launchd_service.install(self.arguments()), 0)
         reload.assert_called_once_with(1234, expected_queue=self.queue)
-        control.assert_called_once_with(["enable", f"{macos.gui_domain()}/atc-test"])
+        control.assert_called_once_with(["enable", f"{macos.gui_domain()}/reins-test"])
 
     def test_mac_screen_uses_system_compatible_logging_with_literal_arguments(self):
         argv = [str(self.directory / "literal python"), "entry.py", "--task-file", "/tmp/$value;literal"]
         with mock.patch.object(screen, "screen_binary", return_value="/usr/bin/screen"), mock.patch.object(
             subprocess, "run", return_value=subprocess.CompletedProcess([], 0)
         ) as run:
-            screen.ScreenBackend().launch("atc-abcd1234", argv, self.directory, self.directory / "log")
+            screen.ScreenBackend().launch("reins-abcd1234", argv, self.directory, self.directory / "log")
         command = run.call_args.args[0]
         self.assertNotIn("-Logfile", command)
         self.assertEqual(command[-len(argv):], argv)

@@ -23,23 +23,23 @@ handoff: |
 先预览展开后的提示词：
 
 ```bash
-atc agent codex --template-file ./review.yaml --dry-run -- "检查 parser.py 和 tests/test_parser.py。"
+reins agent codex --template-file ./review.yaml --dry-run -- "检查 parser.py 和 tests/test_parser.py。"
 ```
 
 查看输出后，提交任务：
 
 ```bash
-atc agent codex --template-file ./review.yaml --cwd "$PWD" --task "解析器审查" -- "检查 parser.py 和 tests/test_parser.py。"
+reins agent codex --template-file ./review.yaml --cwd "$PWD" --task "解析器审查" -- "检查 parser.py 和 tests/test_parser.py。"
 ```
 
-`--` 后面的文字会追加到模板提示词中。ATC 在提交时保存展开后的内容，便于追溯这次任务使用的要求。
+`--` 后面的文字会追加到模板提示词中。Reins 在提交时保存展开后的内容，便于追溯这次任务使用的要求。
 
 ## 在多个项目中复用
 
-将文件保存为 `~/.config/atc/templates/review.yaml`，就可以按名称调用：
+将文件保存为 `~/.config/reins/templates/review.yaml`，就可以按名称调用：
 
 ```bash
-atc agent codex --template review --task "审查当前改动" -- "阅读当前 git diff，检查行为变化。"
+reins agent codex --template review --task "审查当前改动" -- "阅读当前 git diff，检查行为变化。"
 ```
 
 ## 注册为 Agent 技能
@@ -47,8 +47,8 @@ atc agent codex --template review --task "审查当前改动" -- "阅读当前 g
 `0.7.1` 预览版支持把模板注册为 Agent 可发现的技能：
 
 ```bash
-atc template register review --file ./review.yaml --worker codex --description "审查代码并报告可复现的问题"
-atc template list
+reins template register review --file ./review.yaml --worker codex --description "审查代码并报告可复现的问题"
+reins template list
 ```
 
-注册后，Codex 可以使用 `$atc-review`，Claude Code 可以使用 `/atc-review` 调用它。注册字段、文件位置和更新方式见[模板注册资料](https://github.com/lz59970062/agent-atc/blob/main/docs/template-registration.md)。
+注册后，Codex 可以使用 `$reins-review`，Claude Code 可以使用 `/reins-review` 调用它。注册字段、文件位置和更新方式见[模板注册资料](https://github.com/lz59970062/harness-reins/blob/main/docs/template-registration.md)。

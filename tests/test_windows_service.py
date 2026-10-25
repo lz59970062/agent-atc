@@ -12,29 +12,29 @@ import tempfile
 import unittest
 from unittest import mock
 
-from agent_atc import cli
-from agent_atc.tower import environment as tower_environment
-from agent_atc.tower import main as tower
-from agent_atc.engine import tasks as managed_tasks
-from agent_atc.engine import delivery as delivery_engine
-from agent_atc.store import records as queue_store
-from agent_atc.store import layout
-from agent_atc.install import windows_service
-from agent_atc.owners import windows
-from agent_atc.system import windows_io
-import atc_records
+from harness_reins import cli
+from harness_reins.tower import environment as tower_environment
+from harness_reins.tower import main as tower
+from harness_reins.engine import tasks as managed_tasks
+from harness_reins.engine import delivery as delivery_engine
+from harness_reins.store import records as queue_store
+from harness_reins.store import layout
+from harness_reins.install import windows_service
+from harness_reins.owners import windows
+from harness_reins.system import windows_io
+import reins_records
 
 
 @unittest.skipUnless(os.name == "nt", "Windows service contracts with native private files")
 class WindowsServiceTests(unittest.TestCase):
     def setUp(self):
-        temporary = tempfile.TemporaryDirectory(prefix="atc service regression ")
+        temporary = tempfile.TemporaryDirectory(prefix="reins service regression ")
         self.addCleanup(temporary.cleanup)
         self.directory = Path(temporary.name).resolve()
         self.root = self.directory / "queue"
         self.target = self.directory / "state" / "windows-test.json"
         self.config = {
-            "version": 1, "run": True, "owner": "atc-test-service",
+            "version": 1, "run": True, "owner": "reins-test-service",
             "command": [sys.executable, "-c", "pass"], "queue_dir": str(self.root),
             "environment": {"CODEX_HOME": str(self.directory / "profile")},
             "cwd": str(self.target.parent), "log_path": str(self.target.parent / "daemon.log"),
@@ -158,7 +158,7 @@ class WindowsServiceTests(unittest.TestCase):
     def test_draining_finds_orphan_delivery_after_ack_moved_callback_to_done(self):
         queue_store.ensure_daemon_dirs(self.root)
         request_id = "acknowledged-orphan"
-        queue_store.write_request(layout.request_path(self.root, "done", request_id), atc_records.callback_record(request_id, str(self.directory), target={"kind": "session", "session": "fixture-session"}, prompt="fixture", agent="codex"))
+        queue_store.write_request(layout.request_path(self.root, "done", request_id), reins_records.callback_record(request_id, str(self.directory), target={"kind": "session", "session": "fixture-session"}, prompt="fixture", agent="codex"))
         lock = queue_store.acquire_owner_lock(self.root, layout.delivery_lock_id(request_id), blocking=False)
         self.assertIsNotNone(lock)
         try:

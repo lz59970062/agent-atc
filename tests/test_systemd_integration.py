@@ -1,8 +1,8 @@
 """Opt-in real Linux service-lifetime test; never contacts an AI provider.
 
-Run with ATC_TEST_SYSTEMD=1 after reviewing local service permissions. The test
+Run with REINS_TEST_SYSTEMD=1 after reviewing local service permissions. The test
 creates only disposable, namespaced user services and a private temporary queue.
-It does not stop/restart the installed ATC daemon or change user services.
+It does not stop/restart the installed Reins daemon or change user services.
 """
 from __future__ import annotations
 
@@ -17,16 +17,16 @@ import time
 import unittest
 from pathlib import Path
 
-from agent_atc import cli
-from agent_atc.commands import work as work_commands
-from agent_atc.engine import dispatch
-from agent_atc.engine import tasks as managed_tasks
-from agent_atc.store import layout
-from agent_atc.owners import OwnerState, SystemdUserBackend, linux
-from agent_atc.core import ids
+from harness_reins import cli
+from harness_reins.commands import work as work_commands
+from harness_reins.engine import dispatch
+from harness_reins.engine import tasks as managed_tasks
+from harness_reins.store import layout
+from harness_reins.owners import OwnerState, SystemdUserBackend, linux
+from harness_reins.core import ids
 
 
-@unittest.skipUnless(os.environ.get("ATC_TEST_SYSTEMD") == "1", "set ATC_TEST_SYSTEMD=1 for real user-service test")
+@unittest.skipUnless(os.environ.get("REINS_TEST_SYSTEMD") == "1", "set REINS_TEST_SYSTEMD=1 for real user-service test")
 class RealSystemdIsolationTests(unittest.TestCase):
     def wait_until(self, predicate, explanation: str, timeout: float = 15.0) -> None:
         deadline = time.monotonic() + timeout
@@ -56,7 +56,7 @@ class RealSystemdIsolationTests(unittest.TestCase):
         backend = SystemdUserBackend()
         if not backend.available():
             self.skipTest("Linux systemd >=240 user manager is unavailable")
-        with tempfile.TemporaryDirectory(prefix="atc-real-systemd-") as temporary:
+        with tempfile.TemporaryDirectory(prefix="reins-real-systemd-") as temporary:
             directory = Path(temporary)
             root = directory / "queue"
             started = directory / "workload-started"
@@ -102,11 +102,11 @@ class RealSystemdIsolationTests(unittest.TestCase):
                 import time
                 from pathlib import Path
                 sys.path.insert(0, {source!r})
-                from agent_atc import cli
-                from agent_atc.commands import work as work_commands
-                from agent_atc.engine import dispatch
-                from agent_atc.engine import tasks as managed_tasks
-                from agent_atc.store import layout
+                from harness_reins import cli
+                from harness_reins.commands import work as work_commands
+                from harness_reins.engine import dispatch
+                from harness_reins.engine import tasks as managed_tasks
+                from harness_reins.store import layout
                 managed_tasks.recover_managed_tasks(Path(sys.argv[1]))
                 Path(sys.argv[2]).write_text("launched")
                 time.sleep(60)

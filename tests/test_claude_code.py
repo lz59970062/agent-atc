@@ -13,14 +13,14 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from agent_atc.harness.claude import session as claude_session
-from agent_atc import cli
-from agent_atc.commands import callbacks as callback_commands
-from agent_atc.engine import dispatch
-from agent_atc.engine import delivery as delivery_engine
-from agent_atc import runtime as atc_runtime
-from agent_atc.store import records as queue_store
-from agent_atc.store import layout
+from harness_reins.harness.claude import session as claude_session
+from harness_reins import cli
+from harness_reins.commands import callbacks as callback_commands
+from harness_reins.engine import dispatch
+from harness_reins.engine import delivery as delivery_engine
+from harness_reins import runtime as reins_runtime
+from harness_reins.store import records as queue_store
+from harness_reins.store import layout
 
 SRC = str(Path(__file__).resolve().parents[1] / "src")
 SESSION = "3f0c9a52-claude-session"
@@ -173,12 +173,12 @@ class SessionDirectoryTests(unittest.TestCase):
 
 class LiveWaiterTests(unittest.TestCase):
     def setUp(self) -> None:
-        temporary = tempfile.TemporaryDirectory(prefix="atc live ")
+        temporary = tempfile.TemporaryDirectory(prefix="reins live ")
         self.addCleanup(temporary.cleanup)
         self.directory = Path(temporary.name)
         self.root = self.directory / "queue"
         self.environment = {
-            "CODEX_HOME": str(self.directory / "codex-home"), "ATC_HOME": str(self.directory / "codex-home" / "atc-home"),
+            "CODEX_HOME": str(self.directory / "codex-home"), "REINS_HOME": str(self.directory / "codex-home" / "reins-home"),
             layout.TARGET_LOCK_DIR_ENV: str(self.directory / "target-locks"),
         }
         patcher = mock.patch.dict(os.environ, self.environment)
@@ -251,7 +251,7 @@ class LiveWaiterTests(unittest.TestCase):
         self.enqueue("cb-1")
         status, output, _ = self.run_wait()
         self.assertEqual(status, 0)
-        self.assertIn("[atc] cb-1", output)
+        self.assertIn("[reins] cb-1", output)
         self.assertIn("ack", output)
         self.assertNotIn("cb-other", output)
 
@@ -313,7 +313,7 @@ class LiveWaiterTests(unittest.TestCase):
         def waiter_delivers_after_selection(root: Path, now: float) -> Path | None:
             selected = select_pending(root, now)
             self.assertIsNotNone(selected)  # No waiter yet: the daemon picks it.
-            self.assertEqual(self.run_wait()[0], 0)  # `atc wait` delivers it and exits.
+            self.assertEqual(self.run_wait()[0], 0)  # `reins wait` delivers it and exits.
             return selected
 
         args = argparse.Namespace(resume_timeout=1, retries=3, retry_delay=0, retry_backoff=1)
@@ -331,7 +331,7 @@ class LiveWaiterTests(unittest.TestCase):
                            CLAUDE_CODE_SESSION_ID=SESSION, CLAUDECODE="1")
         # Generous real-time bounds for a loaded host; they only end a hung waiter.
         process = subprocess.Popen(
-            [sys.executable, "-m", "agent_atc", "wait", "--queue-dir", str(self.root),
+            [sys.executable, "-m", "harness_reins", "wait", "--queue-dir", str(self.root),
              "--poll-interval", "0.05", "--timeout", "300"],
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=environment,
         )
@@ -359,14 +359,14 @@ class LiveWaiterTests(unittest.TestCase):
                 process.kill()
                 process.communicate()
         self.assertEqual(process.returncode, 0, stderr)
-        self.assertIn("[atc] cb-async", stdout)
+        self.assertIn("[reins] cb-async", stdout)
         self.assertFalse(claude_session.live_watcher_is_held(request))
 
 
 class ControlCommandTests(unittest.TestCase):
     def test_ack_command_is_runnable_without_atc_on_path(self) -> None:
-        with mock.patch.object(atc_runtime, "console_script_path", return_value=None):
-            command = atc_runtime.control_command("ack", "--id", "x")
+        with mock.patch.object(reins_runtime, "console_script_path", return_value=None):
+            command = reins_runtime.control_command("ack", "--id", "x")
         self.assertEqual(command.split()[:2], [sys.executable, str(Path(cli.__file__).with_name("_entry.py"))])
         self.assertTrue(command.endswith("ack --id x"))
 

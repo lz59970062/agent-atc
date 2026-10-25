@@ -14,7 +14,7 @@ from unittest import mock
 
 
 SOURCE = Path(__file__).resolve().parents[1] / "examples" / "windows" / "desktop-package-launch.py"
-_spec = importlib.util.spec_from_file_location("atc_desktop_package_launch_tests", SOURCE)
+_spec = importlib.util.spec_from_file_location("reins_desktop_package_launch_tests", SOURCE)
 launcher = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(launcher)
 
@@ -31,7 +31,7 @@ def native_probe(callback):
 
 class DesktopPackageLauncherTests(unittest.TestCase):
     def setUp(self):
-        temporary = tempfile.TemporaryDirectory(prefix="atc-package-launch-")
+        temporary = tempfile.TemporaryDirectory(prefix="reins-package-launch-")
         self.addCleanup(temporary.cleanup)
         self.directory = Path(temporary.name).resolve()
         self.executable = self.directory / "Desktop.exe"

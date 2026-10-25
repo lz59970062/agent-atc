@@ -1,4 +1,4 @@
 interface:
-  display_name: "Agent Traffic Control"
+  display_name: "Harness Reins"
   short_description: "Durable child agents, registered templates, callbacks"
-  default_prompt: "Use $agent-atc to delegate this task to a fresh child agent or arrange its completion callback."
+  default_prompt: "Use $harness-reins to delegate this task to a fresh child agent or arrange its completion callback."

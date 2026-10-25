@@ -1,4 +1,4 @@
-"""Expert agents: a portable experts file, and atc agent expert <name>."""
+"""Expert agents: a portable experts file, and reins agent expert <name>."""
 from __future__ import annotations
 
 import argparse
@@ -13,11 +13,11 @@ from unittest import mock
 
 import yaml
 
-from agent_atc.commands import experts as expert_commands
-from agent_atc.core import experts as expert_rules
-from agent_atc.core import ids
-from agent_atc.engine import dispatch
-from agent_atc.store import layout
+from harness_reins.commands import experts as expert_commands
+from harness_reins.core import experts as expert_rules
+from harness_reins.core import ids
+from harness_reins.engine import dispatch
+from harness_reins.store import layout
 from test_contexts import ContextTests
 
 HARNESSES = {"codex": ("low", "high"), "claude": (), "pi": ("off", "high")}
@@ -29,17 +29,17 @@ class ExpertRulesTests(unittest.TestCase):
             base = Path(tmp)
             (base / "prompts").mkdir()
             (base / "prompts" / "writer.md").write_text("You write clearly.\n", encoding="utf-8")
-            experts = expert_rules.validate({"schema": "atc.experts/1", "experts": {
+            experts = expert_rules.validate({"schema": "reins.experts/1", "experts": {
                 "writer": {"harness": "claude", "model": "opus", "instructions_file": "prompts/writer.md"},
                 "reviewer": {"harness": "codex", "reasoning": "high", "instructions": "Review hard.", "report": False},
             }}, base=base, harnesses=HARNESSES)
         self.assertEqual(experts["writer"]["instructions"], "You write clearly.")
         self.assertFalse(experts["reviewer"]["report"])
         for bad, reason in (({"experts": {}}, "schema"),
-                            ({"schema": "atc.experts/1", "experts": {"x": {"harness": "gemini"}}}, "harness must be"),
-                            ({"schema": "atc.experts/1", "experts": {"x": {"harness": "claude", "reasoning": "high"}}}, "reasoning"),
-                            ({"schema": "atc.experts/1", "experts": {"x": {"harness": "codex", "colour": "red"}}}, "unknown fields"),
-                            ({"schema": "atc.experts/1", "experts": {"bad name": {"harness": "codex"}}}, "names use")):
+                            ({"schema": "reins.experts/1", "experts": {"x": {"harness": "gemini"}}}, "harness must be"),
+                            ({"schema": "reins.experts/1", "experts": {"x": {"harness": "claude", "reasoning": "high"}}}, "reasoning"),
+                            ({"schema": "reins.experts/1", "experts": {"x": {"harness": "codex", "colour": "red"}}}, "unknown fields"),
+                            ({"schema": "reins.experts/1", "experts": {"bad name": {"harness": "codex"}}}, "names use")):
             with self.subTest(reason=reason), self.assertRaisesRegex(ValueError, reason):
                 expert_rules.validate(bad, base=None, harnesses=HARNESSES)
 
@@ -51,7 +51,7 @@ class ExpertRulesTests(unittest.TestCase):
 class ExpertFileTests(unittest.TestCase):
     def run_command(self, home: Path, action: str, **options) -> tuple[int, str]:
         output = io.StringIO()
-        with mock.patch.dict(os.environ, {"ATC_HOME": str(home)}), contextlib.redirect_stdout(output):
+        with mock.patch.dict(os.environ, {"REINS_HOME": str(home)}), contextlib.redirect_stdout(output):
             status = expert_commands.command(argparse.Namespace(expert_action=action, experts=None, **options))
         return status, output.getvalue()
 
@@ -60,7 +60,7 @@ class ExpertFileTests(unittest.TestCase):
             tmp = Path(tmp)
             (tmp / "src" / "prompts").mkdir(parents=True)
             (tmp / "src" / "prompts" / "writer.md").write_text("Line one.\nLine two.\n", encoding="utf-8")
-            (tmp / "src" / "experts.yaml").write_text(yaml.safe_dump({"schema": "atc.experts/1", "experts": {
+            (tmp / "src" / "experts.yaml").write_text(yaml.safe_dump({"schema": "reins.experts/1", "experts": {
                 "writer": {"harness": "claude", "model": "opus", "description": "Writes",
                            "instructions_file": "prompts/writer.md"}}}), encoding="utf-8")
             first, second = tmp / "machine-a", tmp / "machine-b"
@@ -86,7 +86,7 @@ class ExpertAgentTests(ContextTests):
 
     def test_an_expert_runs_its_harness_with_its_instructions_and_lineage_keeps_it(self):
         experts_file = self.directory / "experts.yaml"
-        experts_file.write_text(yaml.safe_dump({"schema": "atc.experts/1", "experts": {
+        experts_file.write_text(yaml.safe_dump({"schema": "reins.experts/1", "experts": {
             "writer": {"harness": "claude", "model": "opus", "instructions": "You write release notes."}}}),
             encoding="utf-8")
         draft = self.submit("expert", "Draft notes for 0.8.", expert="writer", experts=str(experts_file), name="draft")

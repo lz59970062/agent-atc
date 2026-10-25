@@ -5,12 +5,12 @@ import tempfile
 import unittest
 from pathlib import Path
 
-import atc_records
-from agent_atc.core import capabilities, records
-from agent_atc.engine import delivery as delivery_engine
-from agent_atc.engine import dispatch
-from agent_atc.store import layout
-from agent_atc.store import records as queue_store
+import reins_records
+from harness_reins.core import capabilities, records
+from harness_reins.engine import delivery as delivery_engine
+from harness_reins.engine import dispatch
+from harness_reins.store import layout
+from harness_reins.store import records as queue_store
 
 
 class CallbackRecordTests(unittest.TestCase):
@@ -26,7 +26,7 @@ class CallbackRecordTests(unittest.TestCase):
         return path
 
     def record(self, ident: str = "1a2b3c4d-c1", **fields: object) -> dict[str, object]:
-        return atc_records.callback_record(ident, str(self.root), target={"kind": "session", "session": "s"},
+        return reins_records.callback_record(ident, str(self.root), target={"kind": "session", "session": "s"},
                                            prompt="wake up", **fields)
 
     def test_routes_declare_what_delivery_depends_on(self):
@@ -43,7 +43,7 @@ class CallbackRecordTests(unittest.TestCase):
         legacy = self.record()
         legacy.pop("schema")
         legacy["version"] = 2
-        with self.assertRaisesRegex(ValueError, "atc migrate"):
+        with self.assertRaisesRegex(ValueError, "reins migrate"):
             dispatch.load_request(self.write(legacy))
         self.assertTrue(records.is_callback(self.record()))
 
@@ -73,7 +73,7 @@ if __name__ == "__main__":
 
 class AddressTests(unittest.TestCase):
     def test_a_session_target_names_only_the_bound_session(self):
-        from agent_atc.core import targets
+        from harness_reins.core import targets
 
         self.assertEqual(targets.session("019a"), {"kind": "session", "session": "019a"})
         self.assertEqual(targets.session_of({"kind": "session", "session": "019a"}), "019a")

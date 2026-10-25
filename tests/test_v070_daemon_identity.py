@@ -15,12 +15,12 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from agent_atc import cli
-from agent_atc.install import services
-from agent_atc.tower import environment as tower_environment
-from agent_atc.tower import main as tower
-from agent_atc.store import records as queue_store
-from agent_atc.store import layout
+from harness_reins import cli
+from harness_reins.install import services
+from harness_reins.tower import environment as tower_environment
+from harness_reins.tower import main as tower
+from harness_reins.store import records as queue_store
+from harness_reins.store import layout
 
 
 IDENTITY = {"boot_id": "current-boot", "machine_id": "current-machine",

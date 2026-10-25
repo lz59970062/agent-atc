@@ -11,10 +11,10 @@ import tempfile
 import unittest
 from unittest import mock
 
-from agent_atc import cli
-from agent_atc.engine import tasks as managed_tasks
-from agent_atc.engine import delivery as delivery_engine
-from agent_atc.system import shell
+from harness_reins import cli
+from harness_reins.engine import tasks as managed_tasks
+from harness_reins.engine import delivery as delivery_engine
+from harness_reins.system import shell
 
 
 class CodexCompatibilityTests(unittest.TestCase):
@@ -46,14 +46,14 @@ class CodexCompatibilityTests(unittest.TestCase):
                 for sandbox in ("workspace-write", "read-only"):
                     with self.subTest(template=template, sandbox=sandbox):
                         queue = Path(tmp) / f"queue-{template}-{sandbox}"
-                        argv = ["atc", "agent", "codex", "--agent", "codex", "--session", "compat-parent",
+                        argv = ["reins", "agent", "codex", "--agent", "codex", "--session", "compat-parent",
                                 "--cwd", tmp, "--queue-dir", str(queue), "--task", "compatibility",
                                 "--sandbox-mode", sandbox]
                         if template:
                             argv.extend(["--template", "test"])
                         argv.extend(["--", "Test the public contract."])
                         with mock.patch.object(sys, "argv", argv), \
-                                mock.patch.dict(os.environ, {"ATC_TEMPLATE_DIR": str(Path(tmp) / "templates")}), \
+                                mock.patch.dict(os.environ, {"REINS_TEMPLATE_DIR": str(Path(tmp) / "templates")}), \
                                 mock.patch.object(managed_tasks, "screen_binary", return_value="/usr/bin/screen"), \
                                 contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
                             self.assertEqual(cli.main(), 0)
@@ -80,7 +80,7 @@ class CodexCompatibilityTests(unittest.TestCase):
             profile = Path(tmp) / "codex-profile"
             profile.mkdir()
             environment["CODEX_HOME"] = str(profile)
-            environment["ATC_HOME"] = str(profile / "atc-home")
+            environment["REINS_HOME"] = str(profile / "reins-home")
             command = shell.process_command(command, environment)
             result = subprocess.run(command, input="", text=True, capture_output=True, timeout=20,
                                     cwd=tmp, env=environment)

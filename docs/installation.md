@@ -1,35 +1,35 @@
 # 安装
 
-准备 Python 3.9 或更新版本、Git，以及已经完成登录的 Agent CLI。ATC 和 Agent 使用同一个用户账号运行。
+准备 Python 3.9 或更新版本、Git，以及已经完成登录的 Agent CLI。Reins 和 Agent 使用同一个用户账号运行。
 
 ## 安装正式版
 
-以下命令安装 `0.7.0`。虚拟环境用来保存 ATC 及其依赖，安装完成后保留这个目录。
+以下命令安装 `0.7.0`。虚拟环境用来保存 Reins 及其依赖，安装完成后保留这个目录。
 
 === "Linux / macOS"
 
     ```bash
-    git clone --branch v0.7.0 --depth 1 https://github.com/lz59970062/agent-atc.git
-    cd agent-atc
+    git clone --branch v0.7.0 --depth 1 https://github.com/lz59970062/harness-reins.git
+    cd harness-reins
     python3 -m venv .venv
     source .venv/bin/activate
     python -m pip install .
-    atc setup --enable --now
-    atc --version
+    reins setup --enable --now
+    reins --version
     ```
 
 === "Windows PowerShell"
 
     ```powershell
-    git clone --branch v0.7.0 --depth 1 https://github.com/lz59970062/agent-atc.git
-    Set-Location agent-atc
+    git clone --branch v0.7.0 --depth 1 https://github.com/lz59970062/harness-reins.git
+    Set-Location harness-reins
     py -3 -m venv .venv
     & .\.venv\Scripts\python.exe -m pip install .
-    & .\.venv\Scripts\atc.exe setup --service windows-task --enable --now
-    & .\.venv\Scripts\atc.exe --version
+    & .\.venv\Scripts\reins.exe setup --service windows-task --enable --now
+    & .\.venv\Scripts\reins.exe --version
     ```
 
-`setup` 安装 Agent 技能，并配置后台协调器。最后一条命令显示版本号。Windows 后续调用可以继续使用 `.venv\Scripts\atc.exe` 的完整路径。
+`setup` 安装 Agent 技能，并配置后台协调器。最后一条命令显示版本号。Windows 后续调用可以继续使用 `.venv\Scripts\reins.exe` 的完整路径。
 
 ## 选择运行环境
 
@@ -44,27 +44,27 @@
 
 ```bash
 sudo apt-get install screen
-atc setup --backend screen --service standalone --now
+reins setup --backend screen --service standalone --now
 ```
 
-容器内的 ATC、Agent、工作目录和会话文件放在同一个运行环境中。把 `~/.atc`、Agent 配置目录和项目目录放在持久卷里，可以在重启后继续读取任务记录。镜像和启动配置见[容器部署资料](https://github.com/lz59970062/agent-atc/blob/main/docs/containers.md)。
+容器内的 Reins、Agent、工作目录和会话文件放在同一个运行环境中。把 `~/.reins`、Agent 配置目录和项目目录放在持久卷里，可以在重启后继续读取任务记录。镜像和启动配置见[容器部署资料](https://github.com/lz59970062/harness-reins/blob/main/docs/containers.md)。
 
 ## 安装预览版
 
 `0.7.1` 预览版包含 Claude 实时回调、Pi 接入和 Desktop 启动器。使用一个新的目录安装当前 `main`：
 
 ```bash
-git clone https://github.com/lz59970062/agent-atc.git atc-preview
-cd atc-preview
+git clone https://github.com/lz59970062/harness-reins.git reins-preview
+cd reins-preview
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install .
-atc setup --force --enable --now
-atc --version
+reins setup --force --enable --now
+reins --version
 ```
 
 Windows 使用上面的 PowerShell 安装方式，将克隆命令中的 `--branch v0.7.0 --depth 1` 去掉。
 
-从已有版本升级时，先处理完队列中的任务和回调，再安装新版本并运行 `atc setup --keep-skill --force --enable --now`。这会更新协调器并保留已有技能内容。
+从已有版本升级时，先处理完队列中的任务和回调，再安装新版本并运行 `reins setup --keep-skill --force --enable --now`。这会更新协调器并保留已有技能内容。
 
 安装完成后，进入[第一个任务](quickstart.md)。

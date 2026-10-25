@@ -1,6 +1,6 @@
 """Opt-in real Scheduler/runner/coordinator tests; no Agent model calls.
 
-Use ATC_TEST_WINDOWS_TASK=1 in an ordinary logged-in Windows user session.
+Use REINS_TEST_WINDOWS_TASK=1 in an ordinary logged-in Windows user session.
 Every task, profile and queue is temporary; no production service is touched.
 """
 from __future__ import annotations
@@ -19,32 +19,32 @@ import time
 import unittest
 from unittest import mock
 
-from agent_atc import cli
-from agent_atc.commands import work as work_commands
-from agent_atc.install import services
-from agent_atc.tower import main as tower
-from agent_atc.engine import tasks as managed_tasks
-from agent_atc.store import layout
-from agent_atc.install import diagnostics, windows_service
-from agent_atc.owners import OwnerState
-from agent_atc.owners.windows import WindowsBackend, scheduler_call, process_identity
-from agent_atc.system import windows_io
-from agent_atc.runtime import worker_command
-from agent_atc.core import ids
+from harness_reins import cli
+from harness_reins.commands import work as work_commands
+from harness_reins.install import services
+from harness_reins.tower import main as tower
+from harness_reins.engine import tasks as managed_tasks
+from harness_reins.store import layout
+from harness_reins.install import diagnostics, windows_service
+from harness_reins.owners import OwnerState
+from harness_reins.owners.windows import WindowsBackend, scheduler_call, process_identity
+from harness_reins.system import windows_io
+from harness_reins.runtime import worker_command
+from harness_reins.core import ids
 
 
-@unittest.skipUnless(sys.platform == "win32" and os.environ.get("ATC_TEST_WINDOWS_TASK") == "1",
-                     "set ATC_TEST_WINDOWS_TASK=1 for real Windows scheduled tasks")
+@unittest.skipUnless(sys.platform == "win32" and os.environ.get("REINS_TEST_WINDOWS_TASK") == "1",
+                     "set REINS_TEST_WINDOWS_TASK=1 for real Windows scheduled tasks")
 class WindowsIntegrationTests(unittest.TestCase):
     def setUp(self):
-        self.temporary = tempfile.TemporaryDirectory(prefix="atc Windows 中文 ")
+        self.temporary = tempfile.TemporaryDirectory(prefix="reins Windows 中文 ")
         self.directory = Path(self.temporary.name).resolve()
         self.root = self.directory / "queue"
         self.profile = self.directory / "profile"
         self.environment = mock.patch.dict(os.environ, {
-            "CODEX_HOME": str(self.profile), "ATC_HOME": str(self.profile / "atc-home"), "CLAUDE_CONFIG_DIR": str(self.directory / "claude"),
+            "CODEX_HOME": str(self.profile), "REINS_HOME": str(self.profile / "reins-home"), "CLAUDE_CONFIG_DIR": str(self.directory / "claude"),
             layout.TARGET_LOCK_DIR_ENV: str(self.directory / "target locks"),
-            "ATC_CODEX_BIN": sys.executable,
+            "REINS_CODEX_BIN": sys.executable,
         })
         self.environment.start()
         self.addCleanup(self.environment.stop)
@@ -96,7 +96,7 @@ class WindowsIntegrationTests(unittest.TestCase):
             raise SystemExit(7)
             """), encoding="utf-8")
         task_path, task = self.submit(script, str(started), str(release), str(executions))
-        coordinator_code = "from pathlib import Path; from agent_atc import cli; import sys,time; managed_tasks.recover_managed_tasks(Path(sys.argv[1])); time.sleep(40)"
+        coordinator_code = "from pathlib import Path; from harness_reins import cli; import sys,time; managed_tasks.recover_managed_tasks(Path(sys.argv[1])); time.sleep(40)"
         # This submitter/control process can disappear; Task Scheduler owns the runner.
         coordinator = subprocess.Popen([sys.executable, "-c", coordinator_code, str(self.root)],
                                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -126,12 +126,12 @@ class WindowsIntegrationTests(unittest.TestCase):
                 coordinator.wait(timeout=5)
 
     def test_coordinator_install_reload_and_remove(self):
-        name = "atc-test-service"
+        name = "reins-test-service"
         self.owners.append(windows_service.service_owner(name, self.profile))
         arguments = ["setup", "--name", name, "--queue-dir", str(self.root),
                      "--callback-only", "--service", "windows-task", "--keep-skill",
                      "--force", "--now", "--interval", "0.1", "--codex-bin", sys.executable]
-        with mock.patch.object(sys, "argv", ["atc", *arguments]), \
+        with mock.patch.object(sys, "argv", ["reins", *arguments]), \
                 mock.patch.object(services, "report_claude_agent_readiness"), \
                 contextlib.redirect_stdout(io.StringIO()):
             self.assertEqual(cli.main(), 0)
@@ -139,7 +139,7 @@ class WindowsIntegrationTests(unittest.TestCase):
                         "installed coordinator did not acquire its queue")
         before = tower.read_daemon_runtime()
         self.assertIsNotNone(process_identity(before["pid"]))
-        with mock.patch.object(sys, "argv", ["atc", *arguments]), \
+        with mock.patch.object(sys, "argv", ["reins", *arguments]), \
                 mock.patch.object(services, "report_claude_agent_readiness"), \
                 contextlib.redirect_stdout(io.StringIO()):
             self.assertEqual(cli.main(), 0)

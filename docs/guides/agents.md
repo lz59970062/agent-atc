@@ -5,27 +5,27 @@
 ## 提交一次代码审查
 
 ```bash
-atc agent codex --cwd "$PWD" --task "检查参数解析" -- "阅读 parser.py 和相关测试，检查空输入、非法参数和边界值，报告问题的位置、触发条件与修改建议。"
+reins agent codex --cwd "$PWD" --task "检查参数解析" -- "阅读 parser.py 和相关测试，检查空输入、非法参数和边界值，报告问题的位置、触发条件与修改建议。"
 ```
 
 `codex` 选择执行任务的子 Agent。`--` 后面写它要完成的工作。把要读的文件、期望产物和判断标准写清楚，子 Agent 就可以围绕这项工作展开。
 
-任务提交后，ATC 会打印日志路径和回答文件路径。子 Agent 结束时，回调返回发起任务的会话。原会话读取回答、检查相关文件，再继续处理结果。
+任务提交后，Reins 会打印日志路径和回答文件路径。子 Agent 结束时，回调返回发起任务的会话。原会话读取回答、检查相关文件，再继续处理结果。
 
 ## 选择子 Agent
 
 | 命令 | 执行者 | 版本 |
 | --- | --- | --- |
-| `atc agent codex` | Codex CLI | 0.7.0 |
-| `atc agent claude` | Claude Code CLI | 0.7.0 |
-| `atc agent pi` | Pi | 0.7.1 预览版 |
+| `reins agent codex` | Codex CLI | 0.7.0 |
+| `reins agent claude` | Claude Code CLI | 0.7.0 |
+| `reins agent pi` | Pi | 0.7.1 预览版 |
 
 在提交任务的环境中安装并登录对应 CLI。子 Agent 会继承该环境的配置、代理和项目路径。
 
 例如，在 Codex 会话中调用 Claude 做审查：
 
 ```bash
-atc agent claude --cwd "$PWD" --task "审查数据加载" -- "检查 data_loader.py 的文件读取、批次拼接和异常处理，给出可复现的问题。"
+reins agent claude --cwd "$PWD" --task "审查数据加载" -- "检查 data_loader.py 的文件读取、批次拼接和异常处理，给出可复现的问题。"
 ```
 
 结果仍回到这次提交所在的 Codex 会话。回调目标由提交会话决定，执行者由 `agent` 后面的名称决定。

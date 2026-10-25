@@ -10,24 +10,24 @@ import tempfile
 import time
 import unittest
 
-from agent_atc.engine import routes
-from agent_atc import cli
-from agent_atc.commands import callbacks as callback_commands
-from agent_atc.tower import main as tower
-from agent_atc.engine import dispatch
-from agent_atc.engine import tasks as managed_tasks
-from agent_atc.engine import delivery as delivery_engine
-from agent_atc.harness.codex import app_server
-from agent_atc.store import records as queue_store
-from agent_atc.store import layout
-from agent_atc.harness.pi import channel as bridge
-from agent_atc.core import capabilities
+from harness_reins.engine import routes
+from harness_reins import cli
+from harness_reins.commands import callbacks as callback_commands
+from harness_reins.tower import main as tower
+from harness_reins.engine import dispatch
+from harness_reins.engine import tasks as managed_tasks
+from harness_reins.engine import delivery as delivery_engine
+from harness_reins.harness.codex import app_server
+from harness_reins.store import records as queue_store
+from harness_reins.store import layout
+from harness_reins.harness.pi import channel as bridge
+from harness_reins.core import capabilities
 
 
 def build_bound(tmp_path):
     os.environ['PI_CODING_AGENT_DIR'] = str(tmp_path / 'pi')
     os.environ['CODEX_HOME'] = str(tmp_path / 'codex')
-    os.environ['ATC_HOME'] = str(tmp_path / 'atc')
+    os.environ['REINS_HOME'] = str(tmp_path / 'reins')
     os.environ[layout.TARGET_LOCK_DIR_ENV] = str(tmp_path / 'target-locks')
     os.environ.pop(bridge.CHANNEL_ROOT_ENV, None)
     session = tmp_path / 'session 中文.jsonl'
@@ -61,7 +61,7 @@ def dead_managed(owner, directory):
 
 class PiLiveCallbackTests(unittest.TestCase):
     def setUp(self):
-        temporary = tempfile.TemporaryDirectory(prefix='atc-pi-live-')
+        temporary = tempfile.TemporaryDirectory(prefix='reins-pi-live-')
         self.addCleanup(temporary.cleanup)
         self.directory = Path(temporary.name)
         patch = mock.patch.dict(os.environ)
@@ -78,8 +78,8 @@ class PiLiveCallbackTests(unittest.TestCase):
         path = queue/'pending/fixture.json'
         queue_store.write_request(path, steer)
         assert dispatch.load_request(path)['pi_delivery'] == 'steer'
-        task = dict(steer, schema='atc.task/1', queue_dir=str(queue), execution_backend='screen',
-                    screen_session='atc-fixture', state='completed', command='/bin/true',
+        task = dict(steer, schema='reins.task/1', queue_dir=str(queue), execution_backend='screen',
+                    screen_session='reins-fixture', state='completed', command='/bin/true',
                     wrapped_command=['/bin/true'], log_path=str(self.directory/'task.log'))
         task_path = self.directory/'fixture/task.json'
         queue_store.write_request(task_path, task)
@@ -239,7 +239,7 @@ class PiLiveCallbackTests(unittest.TestCase):
                 if reached:  # The resumed turn got the callback, then ended without an ACK.
                     with session.open('a', encoding='utf-8') as stream:
                         stream.write(json.dumps({'type': 'message', 'message': {'role': 'user', 'content': [
-                            {'type': 'text', 'text': '[atc] fixture\nTask: fixture'}]}}) + '\n')
+                            {'type': 'text', 'text': '[reins] fixture\nTask: fixture'}]}}) + '\n')
                 def resume(root, *_):
                     # The managed resume takes the target lease before Pi starts.
                     delivery_engine.retain_target_lease(root, request)
@@ -253,15 +253,15 @@ class PiLiveCallbackTests(unittest.TestCase):
                 later = dict(request, id='later')
                 if reached:
                     assert failed['pi_session_observed'] is True
-                    assert '`atc ack fixture`' in bridge.with_unacknowledged_notice(queue, later, '[atc] later')
+                    assert '`reins ack fixture`' in bridge.with_unacknowledged_notice(queue, later, '[reins] later')
                 else:
-                    assert bridge.with_unacknowledged_notice(queue, later, '[atc] later') == '[atc] later'
+                    assert bridge.with_unacknowledged_notice(queue, later, '[reins] later') == '[reins] later'
                     (queue / 'failed' / 'fixture.json').unlink()
                     delivery_engine.release_retained_target_lease(queue, request)
 
     def test_observed_but_unacknowledged_callback_does_not_block_later_ones(self):
         request, owner, directory, queue = self.queue_published()
-        # The extension found the prompt in the session, but the agent never ran atc ack.
+        # The extension found the prompt in the session, but the agent never ran reins ack.
         envelope = next((directory / 'inbox').glob('*.json'))
         queue_store.write_request(directory / 'receipts' / envelope.name,
                                   {'version': 1, 'state': 'session_observed', 'callback_id': 'fixture'})
@@ -273,10 +273,10 @@ class PiLiveCallbackTests(unittest.TestCase):
         later.pop('pi_published_at', None)
         queue_store.write_request(queue / 'pending' / 'later.json', later)
         assert delivery_engine.select_pending(queue, time.time() + 7200) == queue / 'pending' / 'later.json'
-        prompt = bridge.with_unacknowledged_notice(queue, later, '[atc] later')
-        assert prompt.startswith('[atc] later') and '`atc ack fixture`' in prompt
+        prompt = bridge.with_unacknowledged_notice(queue, later, '[reins] later')
+        assert prompt.startswith('[reins] later') and '`reins ack fixture`' in prompt
         callback_commands.ack(argparse.Namespace(queue_dir=str(queue), id='fixture', message=None))
-        assert bridge.with_unacknowledged_notice(queue, later, '[atc] later') == '[atc] later'
+        assert bridge.with_unacknowledged_notice(queue, later, '[reins] later') == '[reins] later'
 
     def test_publication_failure_still_retains_unknown(self):
         bound = self.bound
@@ -398,7 +398,7 @@ class PiLiveCallbackTests(unittest.TestCase):
         profile.mkdir(); (profile / 'settings.json').write_text('{"personal":"keep"}')
         args = argparse.Namespace(profile=str(profile), force=False)
         assert bridge.install_extension(args) == 0
-        target = profile / 'extensions/atc-callback.js'; target.write_text('// user edits\n')
+        target = profile / 'extensions/reins-callback.js'; target.write_text('// user edits\n')
         with self.assertRaisesRegex(ValueError, 'Preserving'): bridge.install_extension(args)
         assert target.read_text() == '// user edits\n'
         assert (profile / 'settings.json').read_text() == '{"personal":"keep"}'
@@ -446,7 +446,7 @@ class PiLiveCallbackTests(unittest.TestCase):
     def test_managed_child_strips_reservation_and_callback_cancel_paths(self):
         bound = self.bound
         tmp_path = self.directory
-        values={'ATC_PI_RESERVATION':'owner','ATC_PI_RECOVERY':'1',
-                'ATC_PI_CALLBACK_ACK_PATH':'/ack','ATC_PI_CALLBACK_CANCEL_PATH':'/cancel',
+        values={'REINS_PI_RESERVATION':'owner','REINS_PI_RECOVERY':'1',
+                'REINS_PI_CALLBACK_ACK_PATH':'/ack','REINS_PI_CALLBACK_CANCEL_PATH':'/cancel',
                 'PI_CODING_AGENT_DIR':'/keep/profile','PATH':'/keep/path'}
         assert managed_tasks.child_agent_environment(values)=={'PI_CODING_AGENT_DIR':'/keep/profile','PATH':'/keep/path'}

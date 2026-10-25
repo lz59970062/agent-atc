@@ -29,25 +29,25 @@ jobs:
         run: python -m pip install .
       - name: Unit and local process tests
         env:
-          CODEX_HOME: ${{ runner.temp }}/atc-test-profile
-          ATC_HOME: ${{ runner.temp }}/atc-test-home
-          CLAUDE_CONFIG_DIR: ${{ runner.temp }}/atc-claude-profile
-          ATC_TARGET_LOCK_DIR: ${{ runner.temp }}/atc-test-locks
+          CODEX_HOME: ${{ runner.temp }}/reins-test-profile
+          REINS_HOME: ${{ runner.temp }}/reins-test-home
+          CLAUDE_CONFIG_DIR: ${{ runner.temp }}/reins-claude-profile
+          REINS_TARGET_LOCK_DIR: ${{ runner.temp }}/reins-test-locks
         run: python -m unittest discover -s tests -q
       - name: Installed CLI and skill resources
         run: |
-          atc --version
-          atc run --agent codex --session ci-preview --backend auto --dry-run -- echo preview
-          python -c "from importlib.resources import files; assert files('agent_atc').joinpath('assets/skills/reference/SKILL.md').is_file()"
+          reins --version
+          reins run --agent codex --session ci-preview --backend auto --dry-run -- echo preview
+          python -c "from importlib.resources import files; assert files('harness_reins').joinpath('assets/skills/reference/SKILL.md').is_file()"
       - name: Native macOS task and coordinator lifecycle
         if: runner.os == 'macOS'
         env:
-          ATC_TEST_LAUNCHD: '1'
-          ATC_TEST_SCREEN: '1'
-          CODEX_HOME: ${{ runner.temp }}/atc-test-profile
-          ATC_HOME: ${{ runner.temp }}/atc-test-home
-          CLAUDE_CONFIG_DIR: ${{ runner.temp }}/atc-claude-profile
-          ATC_TARGET_LOCK_DIR: ${{ runner.temp }}/atc-test-locks
+          REINS_TEST_LAUNCHD: '1'
+          REINS_TEST_SCREEN: '1'
+          CODEX_HOME: ${{ runner.temp }}/reins-test-profile
+          REINS_HOME: ${{ runner.temp }}/reins-test-home
+          CLAUDE_CONFIG_DIR: ${{ runner.temp }}/reins-claude-profile
+          REINS_TARGET_LOCK_DIR: ${{ runner.temp }}/reins-test-locks
           TMPDIR: /tmp
         run: |
           python -m unittest discover -s tests -p test_launchd_integration.py -v
@@ -56,17 +56,17 @@ jobs:
       - name: Native Linux task and coordinator lifecycle
         if: runner.os == 'Linux'
         env:
-          ATC_TEST_SYSTEMD: '1'
-          ATC_TEST_SCREEN: '1'
-          CODEX_HOME: ${{ runner.temp }}/atc-test-profile
-          ATC_HOME: ${{ runner.temp }}/atc-test-home
-          CLAUDE_CONFIG_DIR: ${{ runner.temp }}/atc-claude-profile
-          ATC_TARGET_LOCK_DIR: ${{ runner.temp }}/atc-test-locks
+          REINS_TEST_SYSTEMD: '1'
+          REINS_TEST_SCREEN: '1'
+          CODEX_HOME: ${{ runner.temp }}/reins-test-profile
+          REINS_HOME: ${{ runner.temp }}/reins-test-home
+          CLAUDE_CONFIG_DIR: ${{ runner.temp }}/reins-claude-profile
+          REINS_TARGET_LOCK_DIR: ${{ runner.temp }}/reins-test-locks
         run: |
           export XDG_RUNTIME_DIR="/run/user/$(id -u)"
           export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
           sudo systemctl start "user@$(id -u).service"
-          python -c "from agent_atc.owners import SystemdUserBackend; assert SystemdUserBackend().available(), 'systemd user manager required'"
+          python -c "from harness_reins.owners import SystemdUserBackend; assert SystemdUserBackend().available(), 'systemd user manager required'"
           python -m unittest discover -s tests -p test_systemd_integration.py -v
           python -m unittest discover -s tests -p test_screen_integration.py -v
 
@@ -74,11 +74,11 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         env:
-          ATC_TEST_WINDOWS_SCHEDULER: '1'
-          CODEX_HOME: ${{ runner.temp }}/atc-windows-profile
-          ATC_HOME: ${{ runner.temp }}/atc-windows-home
-          CLAUDE_CONFIG_DIR: ${{ runner.temp }}/atc-windows-claude-profile
-          ATC_TARGET_LOCK_DIR: ${{ runner.temp }}/atc-windows-locks
+          REINS_TEST_WINDOWS_SCHEDULER: '1'
+          CODEX_HOME: ${{ runner.temp }}/reins-windows-profile
+          REINS_HOME: ${{ runner.temp }}/reins-windows-home
+          CLAUDE_CONFIG_DIR: ${{ runner.temp }}/reins-windows-claude-profile
+          REINS_TARGET_LOCK_DIR: ${{ runner.temp }}/reins-windows-locks
           PYTHONIOENCODING: utf-8
         run: |
           # Use the runner's own user session, without alternate credentials.
@@ -90,11 +90,11 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         env:
-          ATC_TEST_WINDOWS_TASK: '1'
-          CODEX_HOME: ${{ runner.temp }}/atc-windows-profile
-          ATC_HOME: ${{ runner.temp }}/atc-windows-home
-          CLAUDE_CONFIG_DIR: ${{ runner.temp }}/atc-windows-claude-profile
-          ATC_TARGET_LOCK_DIR: ${{ runner.temp }}/atc-windows-locks
+          REINS_TEST_WINDOWS_TASK: '1'
+          CODEX_HOME: ${{ runner.temp }}/reins-windows-profile
+          REINS_HOME: ${{ runner.temp }}/reins-windows-home
+          CLAUDE_CONFIG_DIR: ${{ runner.temp }}/reins-windows-claude-profile
+          REINS_TARGET_LOCK_DIR: ${{ runner.temp }}/reins-windows-locks
           PYTHONIOENCODING: utf-8
         run: |
           python -m unittest discover -s tests -p test_windows_integration.py -v
@@ -105,9 +105,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build non-root container
-        run: docker build -f examples/docker/Dockerfile -t atc:ci .
+        run: docker build -f examples/docker/Dockerfile -t reins:ci .
       - name: Container task lifetime and configuration repair
         run: |
           docker run --rm --init --network none \
-            -v "${PWD}/tests:/tests:ro" -e ATC_TEST_SCREEN=1 -e ATC_TEST_DIAGNOSTICS=1 \
-            atc:ci python -m unittest discover -s /tests -p 'test_*integration.py' -v
+            -v "${PWD}/tests:/tests:ro" -e REINS_TEST_SCREEN=1 -e REINS_TEST_DIAGNOSTICS=1 \
+            reins:ci python -m unittest discover -s /tests -p 'test_*integration.py' -v

@@ -21,30 +21,30 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from agent_atc import cli
-from agent_atc.commands import callbacks as callback_commands
-from agent_atc.commands import goals as goal_commands
-from agent_atc.commands import work as work_commands
-from agent_atc.install import services
-from agent_atc.install import skills as skill_install
-from agent_atc.tower import environment as tower_environment
-from agent_atc.tower import main as tower
-from agent_atc.engine import dispatch
-from agent_atc.engine import goals
-from agent_atc.engine import recovery
-from agent_atc.engine import tasks as managed_tasks
-from agent_atc.engine import worker as task_worker
-from agent_atc.engine import delivery as delivery_engine
-from agent_atc.engine import reminders as reminder_policy
-from agent_atc.engine import resume_environment
-from agent_atc.harness.codex import app_server
-from agent_atc.owners import host
-from agent_atc import runtime as atc_runtime
-from agent_atc.store import records as queue_store
-from agent_atc.system import shell
-from agent_atc.store import layout
-from agent_atc.core import ids
-import atc_records
+from harness_reins import cli
+from harness_reins.commands import callbacks as callback_commands
+from harness_reins.commands import goals as goal_commands
+from harness_reins.commands import work as work_commands
+from harness_reins.install import services
+from harness_reins.install import skills as skill_install
+from harness_reins.tower import environment as tower_environment
+from harness_reins.tower import main as tower
+from harness_reins.engine import dispatch
+from harness_reins.engine import goals
+from harness_reins.engine import recovery
+from harness_reins.engine import tasks as managed_tasks
+from harness_reins.engine import worker as task_worker
+from harness_reins.engine import delivery as delivery_engine
+from harness_reins.engine import reminders as reminder_policy
+from harness_reins.engine import resume_environment
+from harness_reins.harness.codex import app_server
+from harness_reins.owners import host
+from harness_reins import runtime as reins_runtime
+from harness_reins.store import records as queue_store
+from harness_reins.system import shell
+from harness_reins.store import layout
+from harness_reins.core import ids
+import reins_records
 
 
 def assert_private_file(test: unittest.TestCase, path: Path) -> None:
@@ -160,7 +160,7 @@ class CliTests(unittest.TestCase):
             task = managed_tasks.load_managed_task(manifests[0])
             self.assertEqual(task["state"], "submitted")
             self.assertEqual(task["wrapped_command"], args.wrapped_command)
-            self.assertEqual(task["id"], task["screen_session"].removeprefix("atc-"))
+            self.assertEqual(task["id"], task["screen_session"].removeprefix("reins-"))
             self.assertTrue(Path(str(task["environment_path"])).exists())
             self.assertFalse(list((root / "pending").glob("*.json")))
 
@@ -217,7 +217,7 @@ class CliTests(unittest.TestCase):
                 sys,
                 "argv",
                 [
-                    "atc",
+                    "reins",
                     "agent",
                     "claude",
                     "--session",
@@ -245,7 +245,7 @@ class CliTests(unittest.TestCase):
                 mock.patch.object(managed_tasks, "screen_binary", return_value="/usr/bin/screen"),
                 mock.patch.dict(
                     os.environ,
-                    {"ATC_CODEX_BIN": "/opt/codex/bin/codex"},
+                    {"REINS_CODEX_BIN": "/opt/codex/bin/codex"},
                     clear=False,
                 ),
             ):
@@ -257,7 +257,7 @@ class CliTests(unittest.TestCase):
             result_path = Path(str(task["agent_result_path"]))
             self.assertEqual(task["task_kind"], "agent")
             self.assertEqual(task["agent_worker"], "codex")
-            self.assertEqual(prompt_path.read_text(encoding="utf-8"), atc_records.agent_prompt("Fix the confirmed parser defect.", task))
+            self.assertEqual(prompt_path.read_text(encoding="utf-8"), reins_records.agent_prompt("Fix the confirmed parser defect.", task))
             assert_private_file(self, prompt_path)
             self.assertEqual(result_path.parent, task_path.parent)
             self.assertEqual(
@@ -291,11 +291,11 @@ class CliTests(unittest.TestCase):
                 mock.patch.dict(
                     os.environ,
                     {
-                        "ATC_CODEX_BIN": str(fake_codex),
+                        "REINS_CODEX_BIN": str(fake_codex),
                         "CODEX_THREAD_ID": "parent-codex-thread",
                         "CLAUDE_CODE_SESSION_ID": "stale-claude-thread",
                         "CLAUDECODE": "1",
-                        "ATC_TEST_SENTINEL": "codex-submission-environment",
+                        "REINS_TEST_SENTINEL": "codex-submission-environment",
                     },
                     clear=False,
                 ),
@@ -313,7 +313,7 @@ class CliTests(unittest.TestCase):
             task = managed_tasks.load_managed_task(task_path)
             result_path = Path(str(task["agent_result_path"]))
             result = json.loads(result_path.read_text(encoding="utf-8"))
-            self.assertEqual(result["prompt"], atc_records.agent_prompt("Implement the parser fix and run tests.", task))
+            self.assertEqual(result["prompt"], reins_records.agent_prompt("Implement the parser fix and run tests.", task))
             self.assertEqual(result["sentinel"], "codex-submission-environment")
             self.assertIsNone(result["codex_thread_id"])
             self.assertIsNone(result["claude_session_id"])
@@ -331,14 +331,14 @@ class CliTests(unittest.TestCase):
             fake_claude = self._fake_child_agent(Path(tmp))
             args = self._agent_args(tmp, root, "claude", "Audit the parser and return evidence.")
             submit_environment = {
-                "ATC_CLAUDE_BIN": str(fake_claude),
+                "REINS_CLAUDE_BIN": str(fake_claude),
                 "CODEX_THREAD_ID": "codex-parent",
                 "CLAUDE_CODE_SESSION_ID": "claude-parent",
                 "CLAUDECODE": "1",
                 "CLAUDE_CONFIG_DIR": str(Path(tmp) / "claude-config"),
                 "ANTHROPIC_API_KEY": "secret-sentinel-value",
                 "ANTHROPIC_BASE_URL": "https://example.invalid/anthropic",
-                "ATC_TEST_SENTINEL": "submission-environment",
+                "REINS_TEST_SENTINEL": "submission-environment",
             }
             with (
                 mock.patch.object(managed_tasks, "screen_binary", return_value="/usr/bin/screen"),
@@ -381,7 +381,7 @@ class CliTests(unittest.TestCase):
             task = managed_tasks.load_managed_task(task_path)
             result_path = Path(str(task["agent_result_path"]))
             result = json.loads(result_path.read_text(encoding="utf-8"))
-            self.assertEqual(result["prompt"], atc_records.agent_prompt("Audit the parser and return evidence.", task))
+            self.assertEqual(result["prompt"], reins_records.agent_prompt("Audit the parser and return evidence.", task))
             self.assertEqual(result["sentinel"], "submission-environment")
             self.assertTrue(result["api_key_present"])
             self.assertEqual(result["base_url"], "https://example.invalid/anthropic")
@@ -406,7 +406,7 @@ class CliTests(unittest.TestCase):
     def test_via_daemon_is_hidden_compatibility_flag(self) -> None:
         help_output = io.StringIO()
         with (
-            mock.patch.object(sys, "argv", ["atc", "run", "--help"]),
+            mock.patch.object(sys, "argv", ["reins", "run", "--help"]),
             mock.patch("sys.stdout", help_output),
             self.assertRaises(SystemExit) as help_exit,
         ):
@@ -418,7 +418,7 @@ class CliTests(unittest.TestCase):
             mock.patch.object(
                 sys,
                 "argv",
-                ["atc", "run", "--via-daemon", "--session", "compat-session", "--", "true"],
+                ["reins", "run", "--via-daemon", "--session", "compat-session", "--", "true"],
             ),
             mock.patch.object(work_commands, "run", return_value=0) as parsed_run,
         ):
@@ -430,7 +430,7 @@ class CliTests(unittest.TestCase):
             mock.patch.object(
                 sys,
                 "argv",
-                ["atc", "_screen-worker", "--task-file", "/tmp/task.json", "--token=-abc"],
+                ["reins", "_screen-worker", "--task-file", "/tmp/task.json", "--token=-abc"],
             ),
             mock.patch.object(task_worker, "run_screen_worker", return_value=0) as worker,
         ):
@@ -449,7 +449,7 @@ class CliTests(unittest.TestCase):
                 self.assertEqual(work_commands.run(args), 0)
 
             task_path = next(layout.managed_tasks_root(root).glob("*/task.json"))
-            self.assertEqual(managed_tasks.load_managed_task(task_path)["token"], "atc_-abc")
+            self.assertEqual(managed_tasks.load_managed_task(task_path)["token"], "reins_-abc")
 
     def test_daemon_launches_submitted_task_through_screen(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -466,15 +466,15 @@ class CliTests(unittest.TestCase):
             with (
                 mock.patch.object(managed_tasks, "screen_binary", return_value="/usr/bin/screen"),
                 mock.patch.object(managed_tasks, "screen_owner_state", return_value=cli.OwnerState.ABSENT),
-                mock.patch("agent_atc.owners.screen.screen_binary", return_value="/usr/bin/screen"),
-                mock.patch.object(atc_runtime, "console_script_path", return_value="/usr/bin/atc"),
+                mock.patch("harness_reins.owners.screen.screen_binary", return_value="/usr/bin/screen"),
+                mock.patch.object(reins_runtime, "console_script_path", return_value="/usr/bin/reins"),
                 mock.patch.object(cli.subprocess, "run", return_value=completed) as launch,
             ):
                 self.assertEqual(managed_tasks.recover_managed_tasks(root), 1)
 
             command = launch.call_args.args[0]
             self.assertEqual(command[0], "/usr/bin/screen")
-            self.assertEqual(command[command.index("-dmS") + 1], f"atc-{task_path.parent.name}")
+            self.assertEqual(command[command.index("-dmS") + 1], f"reins-{task_path.parent.name}")
             self.assertEqual("-Logfile" in command, sys.platform != "darwin")
             self.assertIn("_screen-worker", command)
             self.assertIn("--token=-abc", command)
@@ -495,7 +495,7 @@ class CliTests(unittest.TestCase):
             with (
                 mock.patch.object(managed_tasks, "screen_binary", return_value="/usr/bin/screen"),
                 mock.patch.object(managed_tasks, "screen_owner_state", return_value=cli.OwnerState.ABSENT),
-                mock.patch("agent_atc.owners.screen.screen_binary", return_value="/usr/bin/screen"),
+                mock.patch("harness_reins.owners.screen.screen_binary", return_value="/usr/bin/screen"),
                 mock.patch.object(cli.subprocess, "run", return_value=completed) as launch,
                 mock.patch.object(managed_tasks, "MANAGED_WORKER_HANDSHAKE_SECONDS", 60.0),
             ):
@@ -519,7 +519,7 @@ class CliTests(unittest.TestCase):
             with (
                 mock.patch.object(managed_tasks, "screen_binary", return_value="/usr/bin/screen"),
                 mock.patch.object(managed_tasks, "screen_owner_state", return_value=cli.OwnerState.ABSENT),
-                mock.patch("agent_atc.owners.screen.screen_binary", return_value="/usr/bin/screen"),
+                mock.patch("harness_reins.owners.screen.screen_binary", return_value="/usr/bin/screen"),
                 mock.patch.object(cli.subprocess, "run", return_value=completed) as launch,
                 mock.patch.object(managed_tasks, "MANAGED_WORKER_HANDSHAKE_SECONDS", 0.0),
                 mock.patch.object(managed_tasks, "MANAGED_LAUNCH_MAX_ATTEMPTS", 2),
@@ -832,7 +832,7 @@ class CliTests(unittest.TestCase):
         return managed_tasks.load_managed_task(task_path)
 
     def test_input_piped_into_atc_run_becomes_the_task_stdin(self) -> None:
-        # atc run -- python3 - <<EOF: the heredoc reaches atc, so atc must hand it to the task.
+        # reins run -- python3 - <<EOF: the heredoc reaches reins, so reins must hand it to the task.
         read_end, write_end = os.pipe()
         with tempfile.TemporaryDirectory() as tmp, os.fdopen(read_end, "rb") as piped:
             output = Path(tmp) / "out.txt"
@@ -994,7 +994,7 @@ class CliTests(unittest.TestCase):
             self.assertEqual(len(queued), 1)
             request = json.loads(queued[0].read_text(encoding="utf-8"))
 
-            self.assertRegex(request["prompt"], r"(atc|agent-atc|_entry\.py)")
+            self.assertRegex(request["prompt"], r"(reins|harness-reins|_entry\.py)")
             self.assertIn(" 'ack' " if os.name == "nt" else " ack ", request["prompt"])
             details = Path(request["prompt_details_path"]).read_text()
             self.assertRegex(details, r"Callback time: .+[+-]\d{2}:\d{2}")
@@ -1007,7 +1007,7 @@ class CliTests(unittest.TestCase):
 
     def test_there_is_no_most_recent_session_fallback(self) -> None:
         for argv in (["run", "--last", "--", "true"], ["doctor", "--last"]):
-            with self.subTest(argv=argv), mock.patch.object(sys, "argv", ["atc", *argv]), \
+            with self.subTest(argv=argv), mock.patch.object(sys, "argv", ["reins", *argv]), \
                     contextlib.redirect_stderr(io.StringIO()) as errors, self.assertRaises(SystemExit) as caught:
                 cli.main()
             self.assertEqual(caught.exception.code, 2)
@@ -1099,7 +1099,7 @@ class CliTests(unittest.TestCase):
             "prompt": "hello",
             "permission_mode": "acceptEdits",
         }
-        with mock.patch.dict(os.environ, {"ATC_CLAUDE_BIN": "/opt/claude"}, clear=False):
+        with mock.patch.dict(os.environ, {"REINS_CLAUDE_BIN": "/opt/claude"}, clear=False):
             command = delivery_engine.resume_command(request)
 
         self.assertEqual(command, ["/opt/claude", "-p", "--permission-mode", "acceptEdits", "--resume", "claude-session-1"])
@@ -1115,9 +1115,9 @@ class CliTests(unittest.TestCase):
         )
         prompt = dispatch.build_prompt(args)
         self.assertIn("called back into Claude Code", prompt)
-        ack_text = dispatch.build_acknowledgement_text("atc ack --queue-dir /q --id abc", agent="claude")
+        ack_text = dispatch.build_acknowledgement_text("reins ack --queue-dir /q --id abc", agent="claude")
         self.assertIn("Claude Code headless", ack_text)
-        self.assertIn("atc ack --queue-dir /q --id abc", ack_text)
+        self.assertIn("reins ack --queue-dir /q --id abc", ack_text)
 
     def test_desktop_delivery_skipped_for_claude_requests(self) -> None:
         payload = {
@@ -1142,7 +1142,7 @@ class CliTests(unittest.TestCase):
             fake_claude = self._fake_codex(Path(tmp), ack=True, queue=root, request_id="claude-acked")
             args = argparse.Namespace(retries=3, retry_delay=0.0, retry_backoff=2.0)
 
-            with mock.patch.dict(os.environ, {"ATC_CLAUDE_BIN": str(fake_claude)}):
+            with mock.patch.dict(os.environ, {"REINS_CLAUDE_BIN": str(fake_claude)}):
                 self.assertTrue(delivery_engine.process_one(root, args))
 
             deadline = time.monotonic() + 5.0
@@ -1166,13 +1166,13 @@ class CliTests(unittest.TestCase):
             ):
                 self.assertEqual(skill_install.install_skill(args), 0)
 
-            codex_skill = codex_home / "skills" / "agent-atc"
-            claude_skill = claude_home / "skills" / "agent-atc"
+            codex_skill = codex_home / "skills" / "harness-reins"
+            claude_skill = claude_home / "skills" / "harness-reins"
             self.assertTrue((codex_skill / "SKILL.md").exists())
             self.assertTrue((codex_skill / "agents" / "openai.yaml").exists())
             self.assertTrue((claude_skill / "SKILL.md").exists())
             self.assertFalse((claude_skill / "agents").exists())
-            self.assertIn("atc wait", (claude_skill / "SKILL.md").read_text(encoding="utf-8"))
+            self.assertIn("reins wait", (claude_skill / "SKILL.md").read_text(encoding="utf-8"))
             self.assertIn("End your turn", (codex_skill / "SKILL.md").read_text(encoding="utf-8"))
             self.assertEqual(
                 (claude_skill / "REFERENCE.md").read_text(encoding="utf-8"),
@@ -1192,7 +1192,7 @@ class CliTests(unittest.TestCase):
                 self.assertEqual(skill_install.install_skill(args), 0)
 
             self.assertFalse((codex_home / "skills").exists())
-            self.assertTrue((claude_home / "skills" / "agent-atc" / "SKILL.md").exists())
+            self.assertTrue((claude_home / "skills" / "harness-reins" / "SKILL.md").exists())
 
     def test_install_skill_all_keeps_each_agents_delivery_to_itself(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -1200,14 +1200,14 @@ class CliTests(unittest.TestCase):
                      "PI_CODING_AGENT_DIR": Path(tmp) / "pi"}
             with mock.patch.dict(os.environ, {name: str(path) for name, path in homes.items()}, clear=False):
                 self.assertEqual(skill_install.install_skill(argparse.Namespace(path=None, target="all", force=False)), 0)
-            skills = {name: (path / "skills" / "agent-atc") for name, path in homes.items()}
+            skills = {name: (path / "skills" / "harness-reins") for name, path in homes.items()}
             codex = (skills["CODEX_HOME"] / "SKILL.md").read_text(encoding="utf-8")
             claude = (skills["CLAUDE_CONFIG_DIR"] / "SKILL.md").read_text(encoding="utf-8")
             pi = (skills["PI_CODING_AGENT_DIR"] / "SKILL.md").read_text(encoding="utf-8")
             self.assertIn("steer", pi)
-            self.assertNotIn("atc wait", pi)
+            self.assertNotIn("reins wait", pi)
             self.assertNotIn("steer", claude)
-            # Codex names `atc wait` only to rule it out; it never runs Claude Code background commands.
+            # Codex names `reins wait` only to rule it out; it never runs Claude Code background commands.
             self.assertIn("End your turn", codex)
             self.assertNotIn("run_in_background", codex)
             self.assertNotIn("install-pi-extension", codex)
@@ -1222,7 +1222,7 @@ class CliTests(unittest.TestCase):
             fake_codex = self._fake_codex(Path(tmp), ack=False, queue=root, request_id="missing-ack")
             args = argparse.Namespace(retries=3, retry_delay=0.0, retry_backoff=2.0)
 
-            with mock.patch.dict(os.environ, {"ATC_CODEX_BIN": str(fake_codex)}):
+            with mock.patch.dict(os.environ, {"REINS_CODEX_BIN": str(fake_codex)}):
                 self.assertTrue(delivery_engine.process_one(root, args))
 
             pending = root / "pending" / "missing-ack.json"
@@ -1239,7 +1239,7 @@ class CliTests(unittest.TestCase):
             fake_codex = self._fake_codex(Path(tmp), ack=True, queue=root, request_id="acked")
             args = argparse.Namespace(retries=3, retry_delay=0.0, retry_backoff=2.0)
 
-            with mock.patch.dict(os.environ, {"ATC_CODEX_BIN": str(fake_codex)}):
+            with mock.patch.dict(os.environ, {"REINS_CODEX_BIN": str(fake_codex)}):
                 self.assertTrue(delivery_engine.process_one(root, args))
 
             deadline = time.monotonic() + 5.0
@@ -1295,7 +1295,7 @@ class CliTests(unittest.TestCase):
 
     def test_move_request_collision_is_idempotent_only_for_same_valid_id(self) -> None:
         def payload(request_id: str, cwd: str, prompt: str) -> dict[str, object]:
-            return atc_records.callback_record(request_id, cwd, target={"kind": "session", "session": "fixture-session"}, prompt=prompt, created_at=1.0)
+            return reins_records.callback_record(request_id, cwd, target={"kind": "session", "session": "fixture-session"}, prompt=prompt, created_at=1.0)
 
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "queue"
@@ -1548,7 +1548,7 @@ class CliTests(unittest.TestCase):
             args = argparse.Namespace(retries=3, retry_delay=0.0, retry_backoff=2.0, resume_timeout=10.0)
 
             started = time.monotonic()
-            with mock.patch.dict(os.environ, {"ATC_CODEX_BIN": str(fake_codex)}):
+            with mock.patch.dict(os.environ, {"REINS_CODEX_BIN": str(fake_codex)}):
                 self.assertTrue(delivery_engine.process_one(root, args))
             self.assertLess(time.monotonic() - started, 2.0)
             self.assertTrue(layout.request_path(root, "running", "a-running").exists())
@@ -1604,7 +1604,7 @@ class CliTests(unittest.TestCase):
             fake = Path(tmp) / "fake-codex"
             fake.write_text(
                 f"#!{sys.executable}\nimport json, os, sys\nsys.stdin.read()\n"
-                f"names = ('MODEL_ENDPOINT', 'CLAUDECODE', 'STY', 'ATC_HOME')\n"
+                f"names = ('MODEL_ENDPOINT', 'CLAUDECODE', 'STY', 'REINS_HOME')\n"
                 f"open({str(seen)!r}, 'w').write(json.dumps({{n: os.environ.get(n) for n in names}}))\n",
                 encoding="utf-8")
             executable_python_fixture(fake)
@@ -1613,10 +1613,10 @@ class CliTests(unittest.TestCase):
             # What the submitting shell had, including markers that must not reach the resumed CLI.
             resume_environment.capture(root, "env-check", {
                 "PATH": os.environ.get("PATH", ""), "MODEL_ENDPOINT": "https://models.example/v1",
-                "CLAUDECODE": "1", "STY": "parent-screen", "ATC_HOME": str(Path(tmp) / "elsewhere")})
+                "CLAUDECODE": "1", "STY": "parent-screen", "REINS_HOME": str(Path(tmp) / "elsewhere")})
             assert_private_file(self, resume_environment.path(root, "env-check"))
-            coordinator_home = os.environ.get("ATC_HOME")
-            with mock.patch.dict(os.environ, {"ATC_CODEX_BIN": str(fake), "ATC_DESKTOP_APP_SERVER": "0"}):
+            coordinator_home = os.environ.get("REINS_HOME")
+            with mock.patch.dict(os.environ, {"REINS_CODEX_BIN": str(fake), "REINS_DESKTOP_APP_SERVER": "0"}):
                 result, _, _ = delivery_engine.run_resume_until_exit_or_ack(
                     root, "env-check", request, argparse.Namespace(resume_timeout=30.0))
             self.assertEqual(result.returncode, 0)
@@ -1624,7 +1624,7 @@ class CliTests(unittest.TestCase):
             self.assertEqual(environment["MODEL_ENDPOINT"], "https://models.example/v1")
             self.assertIsNone(environment["CLAUDECODE"])
             self.assertIsNone(environment["STY"])
-            self.assertEqual(environment["ATC_HOME"], coordinator_home, "the coordinator's queue home wins")
+            self.assertEqual(environment["REINS_HOME"], coordinator_home, "the coordinator's queue home wins")
 
     def test_submission_keeps_the_session_environment_for_its_callback(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -1651,10 +1651,10 @@ class CliTests(unittest.TestCase):
             queue_store.move_request(layout.request_path(root, "pending", "done-c1"), root / "done")
             resume_environment.prune(root)
             left = sorted(p.stem for p in (root / resume_environment.DIRECTORY_NAME).glob("*.json"))
-            self.assertEqual(left, ["failed-c1", "pending-c1"], "failed callbacks keep theirs for atc retry")
-            self.assertEqual(resume_environment.merged({"ATC_HOME": "/coordinator", "PATH": "/svc"},
-                                                       {"ATC_HOME": "/session", "PATH": "/session/bin"}),
-                             {"ATC_HOME": "/coordinator", "PATH": "/session/bin"})
+            self.assertEqual(left, ["failed-c1", "pending-c1"], "failed callbacks keep theirs for reins retry")
+            self.assertEqual(resume_environment.merged({"REINS_HOME": "/coordinator", "PATH": "/svc"},
+                                                       {"REINS_HOME": "/session", "PATH": "/session/bin"}),
+                             {"REINS_HOME": "/coordinator", "PATH": "/session/bin"})
 
     def test_canceled_live_delivery_retains_target_lease_after_memory_loss(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -1739,7 +1739,7 @@ class CliTests(unittest.TestCase):
             root_a = Path(tmp) / "queue-a"
             root_b = Path(tmp) / "queue-b"
             target = {"kind": "session", "session": "stale-selection-session"}
-            failed = atc_records.callback_record("desktop-unknown", tmp, target=target, prompt="wake up", created_at=1.0, retain_target_lease=True)
+            failed = reins_records.callback_record("desktop-unknown", tmp, target=target, prompt="wake up", created_at=1.0, retain_target_lease=True)
             queue_store.ensure_daemon_dirs(root_a)
             queue_store.write_request(layout.request_path(root_a, "failed", "desktop-unknown"), failed)
             self._write_request(root_b, "contender", tmp, target=target)
@@ -1781,7 +1781,7 @@ class CliTests(unittest.TestCase):
             with mock.patch.dict(
                 os.environ,
                 {
-                    "ATC_CODEX_BIN": str(fake_codex),
+                    "REINS_CODEX_BIN": str(fake_codex),
                     layout.TARGET_LOCK_DIR_ENV: str(Path(tmp) / "global-target-locks"),
                 },
             ):
@@ -1834,11 +1834,11 @@ class CliTests(unittest.TestCase):
             )
             env = os.environ.copy()
             env["PYTHONPATH"] = str(Path(cli.__file__).parents[1])
-            env["ATC_CODEX_BIN"] = str(fake_codex)
+            env["REINS_CODEX_BIN"] = str(fake_codex)
             daemon_command = [
                 sys.executable,
                 "-m",
-                "agent_atc",
+                "harness_reins",
                 "daemon",
                 "--queue-dir",
                 str(root),
@@ -1910,7 +1910,7 @@ class CliTests(unittest.TestCase):
             args = argparse.Namespace(retries=3, retry_delay=0.0, retry_backoff=2.0, resume_timeout=10.0)
             descendant_pid = None
             try:
-                with mock.patch.dict(os.environ, {"ATC_CODEX_BIN": str(fake_codex)}):
+                with mock.patch.dict(os.environ, {"REINS_CODEX_BIN": str(fake_codex)}):
                     self.assertTrue(delivery_engine.process_one(root, args))
                 descendant_pid = int(descendant_pid_path.read_text(encoding="utf-8"))
                 os.kill(descendant_pid, 0)
@@ -1926,7 +1926,7 @@ class CliTests(unittest.TestCase):
     def test_setup_installs_skill_then_systemd(self) -> None:
         args = argparse.Namespace(
             skill_path="/tmp/skills",
-            name="agent-atc",
+            name="harness-reins",
             queue_dir="/tmp/queue",
             interval=2.0,
             retries=3,
@@ -1948,7 +1948,7 @@ class CliTests(unittest.TestCase):
             mock.patch.object(reminder_policy, "ensure_callback_hook_file") as ensure_callback_hook_file,
             mock.patch.object(services, "report_claude_agent_readiness") as report_claude_agent_readiness,
             mock.patch.object(services, "install_systemd", return_value=0) as install_systemd,
-            mock.patch.dict(os.environ, {"ATC_HOME": self._temporary_directory()}),
+            mock.patch.dict(os.environ, {"REINS_HOME": self._temporary_directory()}),
         ):
             self.assertEqual(services.setup(args), 0)
 
@@ -2009,23 +2009,23 @@ class CliTests(unittest.TestCase):
 
         auth_status.assert_not_called()
         self.assertIn("setup will continue", errors.getvalue())
-        self.assertIn("atc agent claude", errors.getvalue())
+        self.assertIn("reins agent claude", errors.getvalue())
 
     def test_state_home_is_independent_of_the_codex_profile(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            with mock.patch.dict(os.environ, {"ATC_HOME": str(Path(tmp) / "atc"), "CODEX_HOME": str(Path(tmp) / "codex")}):
-                self.assertEqual(layout.daemon_state_dir(), Path(tmp) / "atc")
-                self.assertEqual(layout.queue_dir(), Path(tmp) / "atc" / "queue")
-                self.assertEqual(layout.callback_hook_path(), Path(tmp) / "atc" / "callback-hook.md")
-            environment = {name: value for name, value in os.environ.items() if name != "ATC_HOME"}
+            with mock.patch.dict(os.environ, {"REINS_HOME": str(Path(tmp) / "reins"), "CODEX_HOME": str(Path(tmp) / "codex")}):
+                self.assertEqual(layout.daemon_state_dir(), Path(tmp) / "reins")
+                self.assertEqual(layout.queue_dir(), Path(tmp) / "reins" / "queue")
+                self.assertEqual(layout.callback_hook_path(), Path(tmp) / "reins" / "callback-hook.md")
+            environment = {name: value for name, value in os.environ.items() if name != "REINS_HOME"}
             environment.update(HOME=tmp, USERPROFILE=tmp)
             with mock.patch.dict(os.environ, environment, clear=True):
-                self.assertEqual(layout.daemon_state_dir(), Path(tmp) / ".atc")
+                self.assertEqual(layout.daemon_state_dir(), Path(tmp) / ".reins")
 
     def test_callback_hook_file_is_created_once_and_preserves_user_content(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            home = Path(tmp) / "atc-home"
-            with mock.patch.dict(os.environ, {"ATC_HOME": str(home)}):
+            home = Path(tmp) / "reins-home"
+            with mock.patch.dict(os.environ, {"REINS_HOME": str(home)}):
                 path = reminder_policy.ensure_callback_hook_file()
                 self.assertEqual(path, home / "callback-hook.md")
                 self.assertEqual(path.read_text(encoding="utf-8"), "")
@@ -2039,7 +2039,7 @@ class CliTests(unittest.TestCase):
             path = Path(tmp) / "callback-hook.md"
             path.write_text("First instruction.\n", encoding="utf-8")
             first = reminder_policy.attach_callback_hook("wake up", path)
-            self.assertEqual(first, "wake up\n\n[atc-user-hook]\nFirst instruction.")
+            self.assertEqual(first, "wake up\n\n[reins-user-hook]\nFirst instruction.")
 
             path.write_text("Second instruction.\n", encoding="utf-8")
             second = reminder_policy.attach_callback_hook("wake up", path)
@@ -2068,7 +2068,7 @@ class CliTests(unittest.TestCase):
                 encoding="utf-8",
             )
             args = argparse.Namespace(
-                name="agent-atc",
+                name="harness-reins",
                 queue_dir="/tmp/queue",
                 interval=2.0,
                 retries=3,
@@ -2086,9 +2086,9 @@ class CliTests(unittest.TestCase):
                 now=False,
                 print=False,
             )
-            home = Path(tmp) / "atc-home"
+            home = Path(tmp) / "reins-home"
             with (
-                mock.patch.dict(os.environ, {"ATC_HOME": str(home)}, clear=False),
+                mock.patch.dict(os.environ, {"REINS_HOME": str(home)}, clear=False),
                 mock.patch.object(services, "systemd_user_dir", return_value=Path(tmp) / "systemd"),
                 mock.patch.object(cli.shutil, "which", return_value=None),
             ):
@@ -2100,7 +2100,7 @@ class CliTests(unittest.TestCase):
                 "no_proxy": "localhost,127.0.0.1",
             })
             assert_private_file(self, proxy_file)
-            service = (Path(tmp) / "systemd" / "agent-atc.service").read_text(encoding="utf-8")
+            service = (Path(tmp) / "systemd" / "harness-reins.service").read_text(encoding="utf-8")
             self.assertIn(f"EnvironmentFile=-{proxy_file}", service)
             self.assertIn("ExecReload=/bin/kill -HUP $MAINPID", service)
             self.assertNotIn("proxy.example", service)
@@ -2112,7 +2112,7 @@ class CliTests(unittest.TestCase):
             self._write_request(root, "inflight", tmp)
             queue_store.move_request(root / "pending" / "inflight.json", root / "running")
             args = argparse.Namespace(
-                name="agent-atc",
+                name="harness-reins",
                 queue_dir=str(root),
                 interval=2.0,
                 retries=3,
@@ -2131,14 +2131,14 @@ class CliTests(unittest.TestCase):
                 print=False,
             )
             with (
-                mock.patch.dict(os.environ, {"ATC_HOME": str(Path(tmp) / "atc-home")}, clear=False),
+                mock.patch.dict(os.environ, {"REINS_HOME": str(Path(tmp) / "reins-home")}, clear=False),
                 mock.patch.object(services, "systemd_user_dir", return_value=Path(tmp) / "systemd"),
                 mock.patch.object(cli.shutil, "which", side_effect=lambda command: "/usr/bin/systemctl" if command == "systemctl" else None),
                 mock.patch.object(services, "run_systemctl", return_value=0) as run_systemctl,
             ):
                 self.assertEqual(services.install_systemd(args), 0)
 
-            self.assertEqual(run_systemctl.call_args_list, [mock.call(["daemon-reload"]), mock.call(["enable", "agent-atc.service"])])
+            self.assertEqual(run_systemctl.call_args_list, [mock.call(["daemon-reload"]), mock.call(["enable", "harness-reins.service"])])
 
     def test_install_systemd_reloads_supported_daemon_while_delivery_is_running(self) -> None:
         with tempfile.TemporaryDirectory() as tmp, mock.patch.object(
@@ -2147,7 +2147,7 @@ class CliTests(unittest.TestCase):
             root = Path(tmp) / "queue"
             self._write_request(root, "inflight", tmp)
             queue_store.move_request(root / "pending" / "inflight.json", root / "running")
-            home = Path(tmp) / "atc-home"
+            home = Path(tmp) / "reins-home"
             runtime = home / "daemon-runtime.json"
             runtime.parent.mkdir(parents=True)
             runtime.write_text(
@@ -2157,7 +2157,7 @@ class CliTests(unittest.TestCase):
                 encoding="utf-8",
             )
             args = argparse.Namespace(
-                name="agent-atc",
+                name="harness-reins",
                 queue_dir=str(root),
                 interval=2.0,
                 retries=3,
@@ -2176,7 +2176,7 @@ class CliTests(unittest.TestCase):
                 print=False,
             )
             with (
-                mock.patch.dict(os.environ, {"ATC_HOME": str(home)}, clear=False),
+                mock.patch.dict(os.environ, {"REINS_HOME": str(home)}, clear=False),
                 mock.patch.object(services, "systemd_user_dir", return_value=Path(tmp) / "systemd"),
                 mock.patch.object(cli.shutil, "which", side_effect=lambda command: "/usr/bin/systemctl" if command == "systemctl" else None),
                 mock.patch.object(services, "run_systemctl", return_value=0) as run_systemctl,
@@ -2187,30 +2187,30 @@ class CliTests(unittest.TestCase):
                 run_systemctl.call_args_list,
                 [
                     mock.call(["daemon-reload"]),
-                    mock.call(["enable", "agent-atc.service"]),
-                    mock.call(["reload", "agent-atc.service"]),
+                    mock.call(["enable", "harness-reins.service"]),
+                    mock.call(["reload", "harness-reins.service"]),
                 ],
             )
 
     def test_supervisor_config_does_not_embed_proxy_credentials(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            home = Path(tmp) / "atc-home"
+            home = Path(tmp) / "reins-home"
             proxy = home / "service-proxy.env"
             proxy.parent.mkdir(parents=True)
             proxy.write_text("HTTPS_PROXY=https://user:secret@proxy.example:8443\n", encoding="utf-8")
             args = argparse.Namespace(
-                name="agent-atc",
+                name="harness-reins",
                 queue_dir="/tmp/queue",
                 interval=2.0,
                 retries=3,
                 retry_delay=30.0,
                 retry_backoff=2.0,
                 resume_timeout=3600.0,
-                exec_start="/usr/local/bin/agent-atc",
+                exec_start="/usr/local/bin/harness-reins",
                 codex_bin="/usr/local/bin/codex",
                 path="/bin",
             )
-            with mock.patch.dict(os.environ, {"ATC_HOME": str(home)}, clear=False):
+            with mock.patch.dict(os.environ, {"REINS_HOME": str(home)}, clear=False):
                 text = services.supervisor_config_text(args)
 
             self.assertIn(f"{tower_environment.PROXY_ENV_FILE_ENV}=", text)
@@ -2226,13 +2226,13 @@ class CliTests(unittest.TestCase):
 
     def test_clear_proxy_removes_persisted_proxy_file(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            home = Path(tmp) / "atc-home"
+            home = Path(tmp) / "reins-home"
             proxy = home / "service-proxy.env"
             proxy.parent.mkdir(parents=True)
             proxy.write_text("HTTP_PROXY=http://proxy.example:8080\n", encoding="utf-8")
             args = argparse.Namespace(proxy_env_file=None, inherit_proxy=False, clear_proxy=True)
 
-            with mock.patch.dict(os.environ, {"ATC_HOME": str(home)}, clear=False):
+            with mock.patch.dict(os.environ, {"REINS_HOME": str(home)}, clear=False):
                 self.assertIsNone(tower_environment.configure_proxy_environment(args))
 
             self.assertFalse(proxy.exists())
@@ -2302,7 +2302,7 @@ class CliTests(unittest.TestCase):
     def test_install_systemd_starts_supervisor_in_container(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             args = argparse.Namespace(
-                name="agent-atc",
+                name="harness-reins",
                 queue_dir="/tmp/queue",
                 interval=2.0,
                 retries=3,
@@ -2326,13 +2326,13 @@ class CliTests(unittest.TestCase):
             ):
                 self.assertEqual(services.install_systemd(args), 0)
 
-            self.assertTrue((Path(tmp) / "agent-atc.service").exists())
+            self.assertTrue((Path(tmp) / "harness-reins.service").exists())
             install_supervisor.assert_called_once()
 
     def test_install_systemd_starts_standalone_without_supervisor(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             args = argparse.Namespace(
-                name="agent-atc",
+                name="harness-reins",
                 queue_dir="/tmp/queue",
                 interval=2.0,
                 retries=3,
@@ -2356,13 +2356,13 @@ class CliTests(unittest.TestCase):
             ):
                 self.assertEqual(services.install_systemd(args), 0)
 
-            self.assertTrue((Path(tmp) / "agent-atc.service").exists())
+            self.assertTrue((Path(tmp) / "harness-reins.service").exists())
             start_standalone.assert_called_once()
 
     def test_install_systemd_falls_back_when_user_bus_is_unavailable(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             args = argparse.Namespace(
-                name="agent-atc",
+                name="harness-reins",
                 queue_dir="/tmp/queue",
                 interval=2.0,
                 retries=3,
@@ -2390,20 +2390,20 @@ class CliTests(unittest.TestCase):
 
     def test_supervisor_config_uses_autorestart(self) -> None:
         args = argparse.Namespace(
-            name="agent-atc",
+            name="harness-reins",
             queue_dir="/tmp/queue",
             interval=2.0,
             retries=3,
             retry_delay=30.0,
             retry_backoff=2.0,
-            exec_start="/usr/local/bin/agent-atc",
+            exec_start="/usr/local/bin/harness-reins",
             codex_bin="/usr/local/bin/codex",
             path="/bin",
         )
 
         text = services.supervisor_config_text(args)
 
-        self.assertIn("[program:agent-atc]", text)
+        self.assertIn("[program:harness-reins]", text)
         self.assertIn("autostart=true", text)
         self.assertIn("autorestart=true", text)
         self.assertIn("--queue-dir " + shlex.quote(str(Path("/tmp/queue"))), text)
@@ -2430,7 +2430,7 @@ class CliTests(unittest.TestCase):
             (root / "running").mkdir(parents=True)
             (root / "running" / "running-one.json").write_text(
                 json.dumps(
-                    atc_records.callback_record("running-one", tmp, target={"kind": "session", "session": "fixture-session"}, prompt="wake up", created_at=1.0)
+                    reins_records.callback_record("running-one", tmp, target={"kind": "session", "session": "fixture-session"}, prompt="wake up", created_at=1.0)
                 )
                 + "\n",
                 encoding="utf-8",
@@ -2447,7 +2447,7 @@ class CliTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "queue"
             (root / "pending").mkdir(parents=True)
-            request = atc_records.callback_record("pending-id", tmp, target={"kind": "session", "session": "thread-1"}, prompt="[atc]\nTask: train model\n", created_at=1.0)
+            request = reins_records.callback_record("pending-id", tmp, target={"kind": "session", "session": "thread-1"}, prompt="[reins]\nTask: train model\n", created_at=1.0)
             (root / "pending" / "pending-id.json").write_text(json.dumps(request), encoding="utf-8")
             args = argparse.Namespace(queue_dir=str(root), state=None, limit=5, quiet_empty=False, shell_hook=True)
 
@@ -2470,7 +2470,7 @@ class CliTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             rc_file = Path(tmp) / ".bashrc"
             rc_file.write_text("export EXISTING=1\n", encoding="utf-8")
-            args = argparse.Namespace(rc_file=str(rc_file), command="/opt/bin/agent-atc")
+            args = argparse.Namespace(rc_file=str(rc_file), command="/opt/bin/harness-reins")
 
             self.assertEqual(skill_install.install_shell_hook(args), 0)
             self.assertEqual(skill_install.install_shell_hook(args), 0)
@@ -2479,7 +2479,7 @@ class CliTests(unittest.TestCase):
             self.assertIn("export EXISTING=1", rendered)
             self.assertEqual(rendered.count(skill_install.SHELL_HOOK_BEGIN), 1)
             self.assertEqual(rendered.count(skill_install.SHELL_HOOK_END), 1)
-            self.assertIn("timeout 2s /opt/bin/agent-atc status", rendered)
+            self.assertIn("timeout 2s /opt/bin/harness-reins status", rendered)
 
     def test_completed_goal_is_terminal_and_suppresses_reminders(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -2506,7 +2506,7 @@ class CliTests(unittest.TestCase):
             self.assertEqual(
                 dispatch.enqueue_existing_request(
                     root,
-                    atc_records.callback_record("terminal-callback", tmp, target={"kind": "session", "session": "thread-1"}, prompt="Task: stale callback", created_at=time.time(), target_source="--session", goal_id="terminal-goal"),
+                    reins_records.callback_record("terminal-callback", tmp, target={"kind": "session", "session": "thread-1"}, prompt="Task: stale callback", created_at=time.time(), target_source="--session", goal_id="terminal-goal"),
                     "Task: stale callback",
                 ),
                 1,
@@ -2687,8 +2687,8 @@ class CliTests(unittest.TestCase):
             self.assertEqual(len(pending), 1)
             reminder = dispatch.load_request(pending[0])
             self.assertTrue(reminder["goal_reminder"])
-            self.assertIn(atc_runtime.control_command("goal", "ack", "--queue-dir", str(root), "--id", "reminder-goal"), reminder["prompt"])
-            self.assertIn(atc_runtime.control_command("goal", "check", "--queue-dir", str(root), "--id", "reminder-goal"), reminder["prompt"])
+            self.assertIn(reins_runtime.control_command("goal", "ack", "--queue-dir", str(root), "--id", "reminder-goal"), reminder["prompt"])
+            self.assertIn(reins_runtime.control_command("goal", "check", "--queue-dir", str(root), "--id", "reminder-goal"), reminder["prompt"])
             self.assertIn("--condition", reminder["prompt"])
             self.assertIn("Current item: finish [pending]", reminder["prompt"])
             self.assertIn("Remaining path:", reminder["prompt"])
@@ -2727,7 +2727,7 @@ class CliTests(unittest.TestCase):
             callback_time = time.time()
             queue_store.write_request(
                 root / "pending" / "crash-window.json",
-                atc_records.callback_record("crash-window", tmp, target={"kind": "session", "session": "thread-1"}, prompt="Task: callback persisted before goal timestamp", created_at=callback_time, goal_id="recovery-goal"),
+                reins_records.callback_record("crash-window", tmp, target={"kind": "session", "session": "thread-1"}, prompt="Task: callback persisted before goal timestamp", created_at=callback_time, goal_id="recovery-goal"),
             )
 
             self.assertFalse(goals.process_goal_reminders(root))
@@ -2737,7 +2737,7 @@ class CliTests(unittest.TestCase):
 
     def test_blocked_goal_email_is_configured_and_sent_once_after_delay(self) -> None:
         with tempfile.TemporaryDirectory() as tmp, mock.patch.dict(
-            os.environ, {"ATC_BLOCKED_EMAIL_TO": "owner@example.test"}, clear=False
+            os.environ, {"REINS_BLOCKED_EMAIL_TO": "owner@example.test"}, clear=False
         ):
             root = Path(tmp) / "queue"
             start_args = argparse.Namespace(
@@ -2769,7 +2769,7 @@ class CliTests(unittest.TestCase):
 
     def test_blocked_goal_email_requires_one_recipient_and_stops_after_three_failures(self) -> None:
         with tempfile.TemporaryDirectory() as tmp, mock.patch.dict(
-            os.environ, {"ATC_BLOCKED_EMAIL_TO": "owner@example.test"}, clear=False
+            os.environ, {"REINS_BLOCKED_EMAIL_TO": "owner@example.test"}, clear=False
         ):
             root = Path(tmp) / "queue"
             start_args = argparse.Namespace(
@@ -3159,7 +3159,7 @@ class CliTests(unittest.TestCase):
             popen.assert_called_once()
             process.communicate.assert_called_once_with(
                 input=(
-                    "wake up\n\n[atc-user-hook]\n"
+                    "wake up\n\n[reins-user-hook]\n"
                     "Use the custom callback policy."
                 ),
                 timeout=1.0,
@@ -3180,7 +3180,7 @@ class CliTests(unittest.TestCase):
 
             delivery = IncompleteDelivery()
             queue_root = Path(tmp) / "queue"
-            request = atc_records.callback_record("desktop-timeout", tmp, target={"kind": "session", "session": "desktop-thread"}, prompt="wake up", created_at=1.0)
+            request = reins_records.callback_record("desktop-timeout", tmp, target={"kind": "session", "session": "desktop-thread"}, prompt="wake up", created_at=1.0)
             payload = {
                 "command": ["unused"],
                 "prompt": "wake up",
@@ -3231,7 +3231,7 @@ class CliTests(unittest.TestCase):
                     pass
 
             queue_root = Path(tmp) / "queue"
-            request = atc_records.callback_record("desktop-late-ack", tmp, target={"kind": "session", "session": "desktop-thread"}, prompt="wake up", created_at=1.0)
+            request = reins_records.callback_record("desktop-late-ack", tmp, target={"kind": "session", "session": "desktop-thread"}, prompt="wake up", created_at=1.0)
             ack = Path(tmp) / "acks" / "callback.json"
             payload = {
                 "command": ["unused"],
@@ -3278,7 +3278,7 @@ class CliTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "queue"
             queue_store.ensure_daemon_dirs(root)
-            request = atc_records.callback_record("desktop-unknown", tmp, target={"kind": "session", "session": "desktop-thread"}, prompt="wake up", created_at=1.0, retain_target_lease=True)
+            request = reins_records.callback_record("desktop-unknown", tmp, target={"kind": "session", "session": "desktop-thread"}, prompt="wake up", created_at=1.0, retain_target_lease=True)
             queue_store.write_request(layout.request_path(root, "failed", "desktop-unknown"), request)
             with mock.patch.dict(os.environ, {layout.TARGET_LOCK_DIR_ENV: str(Path(tmp) / "target-locks")}, clear=False):
                 delivery_engine.retain_target_lease(root, request)
@@ -3291,7 +3291,7 @@ class CliTests(unittest.TestCase):
             root_a = Path(tmp) / "queue-a"
             root_b = Path(tmp) / "queue-b"
             target = {"kind": "session", "session": "desktop-thread"}
-            failed = atc_records.callback_record("desktop-unknown", tmp, target=target, prompt="wake up", created_at=1.0, retain_target_lease=True)
+            failed = reins_records.callback_record("desktop-unknown", tmp, target=target, prompt="wake up", created_at=1.0, retain_target_lease=True)
             queue_store.ensure_daemon_dirs(root_a)
             queue_store.write_request(layout.request_path(root_a, "failed", "desktop-unknown"), failed)
             self._write_request(root_b, "same-session", tmp, target=target)
@@ -3324,7 +3324,7 @@ class CliTests(unittest.TestCase):
         target: dict[str, str] | None = None,
     ) -> None:
         (root / "pending").mkdir(parents=True, exist_ok=True)
-        request = atc_records.callback_record(request_id, cwd, target=target or {"kind": "session", "session": "fixture-session"}, prompt="wake up", created_at=1.0)
+        request = reins_records.callback_record(request_id, cwd, target=target or {"kind": "session", "session": "fixture-session"}, prompt="wake up", created_at=1.0)
         (root / "pending" / f"{request_id}.json").write_text(
             json.dumps(request) + "\n",
             encoding="utf-8",
@@ -3382,7 +3382,7 @@ class CliTests(unittest.TestCase):
 
                 payload = {{
                     "prompt": sys.stdin.read(),
-                    "sentinel": os.environ.get("ATC_TEST_SENTINEL"),
+                    "sentinel": os.environ.get("REINS_TEST_SENTINEL"),
                     "api_key_present": bool(os.environ.get("ANTHROPIC_API_KEY")),
                     "base_url": os.environ.get("ANTHROPIC_BASE_URL"),
                     "config_dir": os.environ.get("CLAUDE_CONFIG_DIR"),
@@ -3415,7 +3415,7 @@ class CliTests(unittest.TestCase):
         src_path = Path(cli.__file__).parents[1]
         ack_code = (
             f"os.environ['PYTHONPATH'] = {str(src_path)!r} + os.pathsep + os.environ.get('PYTHONPATH', ''); "
-            "subprocess.run([sys.executable, '-m', 'agent_atc', 'ack', "
+            "subprocess.run([sys.executable, '-m', 'harness_reins', 'ack', "
             f"'--queue-dir', {str(queue)!r}, '--id', {request_id!r}], check=True)"
             if ack
             else "pass"

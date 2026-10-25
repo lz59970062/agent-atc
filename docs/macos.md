@@ -6,7 +6,7 @@ For the 0.7.1 preview's Desktop automatic callback configuration, see
 Use branch `codex/macos-desktop-callback` for this preview. Stable
 `v0.7.0` does not include its automatic launcher setup.
 
-ATC supports macOS through the system launchd manager. The coordinator runs as a
+Reins supports macOS through the system launchd manager. The coordinator runs as a
 user LaunchAgent, and each task has its own one-shot launchd job. The default
 native backend does not need Homebrew screen or systemd.
 
@@ -16,21 +16,21 @@ Use Python 3.9 or newer and a logged-in macOS GUI session. A virtual environment
 avoids modifying Homebrew's managed Python installation:
 
 ```bash
-git clone --branch v0.7.0 --depth 1 https://github.com/lz59970062/agent-atc.git
-cd agent-atc
+git clone --branch v0.7.0 --depth 1 https://github.com/lz59970062/harness-reins.git
+cd harness-reins
 python3 -m venv .venv
 .venv/bin/python -m pip install .
 source .venv/bin/activate
-atc setup --force --enable --now
+reins setup --force --enable --now
 ```
 
 Keep the installed virtual environment at that path; launchd uses its absolute
 Python/runtime paths. The normal commands work unchanged:
 
 ```bash
-atc run --task "build project" -- make
-atc agent codex --task "review changes" -- "Review this repository's changes."
-atc done --task "external job" --exit-code 0
+reins run --task "build project" -- make
+reins agent codex --task "review changes" -- "Review this repository's changes."
+reins done --task "external job" --exit-code 0
 ```
 
 Run from the original Agent conversation's shell so its session can be detected,
@@ -43,16 +43,16 @@ Clone the preview branch, install into your chosen virtual environment and run
 the standard setup step:
 
 ```bash
-git clone --branch codex/macos-desktop-callback https://github.com/lz59970062/agent-atc.git
-cd agent-atc
+git clone --branch codex/macos-desktop-callback https://github.com/lz59970062/harness-reins.git
+cd harness-reins
 python3 -m venv .venv
 .venv/bin/python -m pip install .
-.venv/bin/atc setup --force --enable --now
+.venv/bin/reins setup --force --enable --now
 source .venv/bin/activate
 ```
 
-On Mac, this setup also generates `Start ATC Desktop.command` and a private Core
-wrapper under `${CODEX_HOME:-~/.codex}/agent-atc`. The launcher is bound to
+On Mac, this setup also generates `Start Reins Desktop.command` and a private Core
+wrapper under `${CODEX_HOME:-~/.codex}/harness-reins`. The launcher is bound to
 this installation's Python runtime. Its absolute paths are calculated locally;
 no username or checkout location is hardcoded in the distributed source. Generate
 it on each machine, and rerun setup after moving or replacing the environment.
@@ -62,15 +62,15 @@ required for a complete installation.
 Setup discovers valid `Codex.app` and `ChatGPT.app` bundles in `/Applications`
 and `~/Applications`, preserving an existing app or custom wrapper selection.
 If several valid apps are found, choose one with
-`atc setup --desktop-app /path/to/Codex.app --force --enable --now`.
+`reins setup --desktop-app /path/to/Codex.app --force --enable --now`.
 Use `--no-desktop-launcher` to skip generation. Desktop does not need to be
 installed for CLI setup or launcher generation; after installing it, open the
-launcher or run `atc desktop prepare` to complete discovery.
+launcher or run `reins desktop prepare` to complete discovery.
 
 The preview's Git installation helper combines pip and setup using one Python:
 
 ```text
-ATC_PYTHON=/absolute/path/to/python bash scripts/install_from_git.sh <github-https-url> [subdirectory] -- [setup flags]
+REINS_PYTHON=/absolute/path/to/python bash scripts/install_from_git.sh <github-https-url> [subdirectory] -- [setup flags]
 ```
 
 It runs `setup --force --enable --now`; extra setup flags follow `--`, for example
@@ -86,19 +86,19 @@ the Unix socket path-length limit and pending acceptance checks.
 ## Inspect and repair
 
 ```bash
-atc install-launchd --print
-launchctl print "gui/$(id -u)/agent-atc"
-tail -f "${ATC_HOME:-$HOME/.atc}/daemon.log"
-atc doctor --agent codex --session <original-session-id>
+reins install-launchd --print
+launchctl print "gui/$(id -u)/harness-reins"
+tail -f "${REINS_HOME:-$HOME/.reins}/daemon.log"
+reins doctor --agent codex --session <original-session-id>
 ```
 
-The coordinator plist is `~/Library/LaunchAgents/agent-atc.plist`.
+The coordinator plist is `~/Library/LaunchAgents/harness-reins.plist`.
 Installing that file registers it for future GUI logins; `--enable` also clears
 any launchctl disabled override and `--now` loads it immediately. Custom names,
 queues, Agent profile paths and daemon PATH are supported. Proxy values are read
-from ATC's private proxy file, not embedded in the plist or printed by `--print`.
+from Reins's private proxy file, not embedded in the plist or printed by `--print`.
 
-After updating the installation, rerun `atc setup --keep-skill --force --enable --now`.
+After updating the installation, rerun `reins setup --keep-skill --force --enable --now`.
 A verified live coordinator receives a reload request and waits for delivery workers
 to drain before re-exec. Updated LaunchAgent environment/arguments apply on its next
 load; changing those settings does not forcibly restart a live coordinator.
@@ -116,8 +116,8 @@ For an SSH/headless session without a GUI domain, select the bundled screen and
 standalone coordinator explicitly:
 
 ```bash
-atc setup --backend screen --service standalone --now
-atc run --backend screen --task "build project" -- make
+reins setup --backend screen --service standalone --now
+reins run --backend screen --task "build project" -- make
 ```
 
 If screen is missing, install it with `brew install screen`. Apple's bundled
@@ -126,7 +126,7 @@ Agent profile across commands. `--enable` has no startup effect for standalone m
 
 Tasks survive terminal closure and native coordinator restart during the GUI
 session. Logout, reboot or shutting down the machine interrupts execution; sleep
-pauses it. ATC neither prevents sleep nor automatically reruns interrupted work.
+pauses it. Reins neither prevents sleep nor automatically reruns interrupted work.
 Inspect saved results and checkpoints before submitting follow-up work.
 
 Local process identity and service control need the corresponding OS permissions.
@@ -138,14 +138,14 @@ files the LaunchAgent and workload access.
 
 ```bash
 source .venv/bin/activate
-test_root="$(mktemp -d /tmp/atc-tests.XXXXXX)"
+test_root="$(mktemp -d /tmp/reins-tests.XXXXXX)"
 TMPDIR=/tmp CODEX_HOME="$test_root/codex" CLAUDE_CONFIG_DIR="$test_root/claude" \
-ATC_TARGET_LOCK_DIR="$test_root/locks" \
-ATC_TEST_LAUNCHD=1 ATC_TEST_SCREEN=1 python -m unittest discover -s tests -q
+REINS_TARGET_LOCK_DIR="$test_root/locks" \
+REINS_TEST_LAUNCHD=1 REINS_TEST_SCREEN=1 python -m unittest discover -s tests -q
 ```
 
 Use disposable `CODEX_HOME`, `CLAUDE_CONFIG_DIR` and
-`ATC_TARGET_LOCK_DIR` directories for tests. Native integration
+`REINS_TARGET_LOCK_DIR` directories for tests. Native integration
 tests create uniquely named temporary launchd jobs and remove them afterward;
 they use isolated profiles and never invoke a real model or touch an installed
 coordinator. The LaunchAgent smoke test covers setup, doctor and in-place reload;

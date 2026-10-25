@@ -15,35 +15,35 @@ import time
 import unittest
 from unittest import mock
 
-from agent_atc import cli
-from agent_atc.commands import callbacks as callback_commands
-from agent_atc.commands import work as work_commands
-from agent_atc.engine import dispatch
-from agent_atc.engine import tasks as managed_tasks
-from agent_atc.engine import worker as task_worker
-from agent_atc.engine import delivery as delivery_engine
-from agent_atc.owners import host
-from agent_atc import runtime as atc_runtime
-from agent_atc.store import records as queue_store
-from agent_atc.store import layout
-from agent_atc.owners import LaunchError, OwnerState
-from agent_atc.owners.windows import WindowsBackend
-from agent_atc.system import windows_process
-from agent_atc.core import ids
-import atc_records
+from harness_reins import cli
+from harness_reins.commands import callbacks as callback_commands
+from harness_reins.commands import work as work_commands
+from harness_reins.engine import dispatch
+from harness_reins.engine import tasks as managed_tasks
+from harness_reins.engine import worker as task_worker
+from harness_reins.engine import delivery as delivery_engine
+from harness_reins.owners import host
+from harness_reins import runtime as reins_runtime
+from harness_reins.store import records as queue_store
+from harness_reins.store import layout
+from harness_reins.owners import LaunchError, OwnerState
+from harness_reins.owners.windows import WindowsBackend
+from harness_reins.system import windows_process
+from harness_reins.core import ids
+import reins_records
 
 
 @unittest.skipUnless(os.name == "nt", "requires native Windows locks, ACLs and processes")
 class WindowsLifecycleTests(unittest.TestCase):
     def setUp(self):
-        temporary = tempfile.TemporaryDirectory(prefix="atc Windows 生命周期 ")
+        temporary = tempfile.TemporaryDirectory(prefix="reins Windows 生命周期 ")
         self.addCleanup(temporary.cleanup)
         self.directory = Path(temporary.name).resolve()
         self.root = self.directory / "queue 中文 space & 'quote"
         self.stack = contextlib.ExitStack()
         self.addCleanup(self.stack.close)
         self.stack.enter_context(mock.patch.dict(os.environ, {
-            "CODEX_HOME": str(self.directory / "codex-profile"), "ATC_HOME": str(self.directory / "codex-profile" / "atc-home"),
+            "CODEX_HOME": str(self.directory / "codex-profile"), "REINS_HOME": str(self.directory / "codex-profile" / "reins-home"),
             "CLAUDE_CONFIG_DIR": str(self.directory / "claude-profile"),
             layout.TARGET_LOCK_DIR_ENV: str(self.directory / "global-target-locks"),
             "PYTHONPATH": str(Path(cli.__file__).resolve().parents[1]),
@@ -73,7 +73,7 @@ class WindowsLifecycleTests(unittest.TestCase):
         return managed_tasks.load_managed_task(path)
 
     def request(self, root, ident, state="pending"):
-        request = atc_records.callback_record(ident, str(self.directory), target={"kind": "session", "session": "windows-original-session"}, prompt="Model-free Windows lifecycle fixture", created_at=time.time(), agent="codex", target_source="explicit", queue_dir=str(root), lifecycle_state=state, attempts=0)
+        request = reins_records.callback_record(ident, str(self.directory), target={"kind": "session", "session": "windows-original-session"}, prompt="Model-free Windows lifecycle fixture", created_at=time.time(), agent="codex", target_source="explicit", queue_dir=str(root), lifecycle_state=state, attempts=0)
         queue_store.ensure_daemon_dirs(root)
         queue_store.write_request(layout.request_path(root, state, ident), request)
         return request
@@ -199,7 +199,7 @@ class WindowsLifecycleTests(unittest.TestCase):
         powershell = shutil.which("powershell.exe") or shutil.which("pwsh.exe")
         self.assertIsNotNone(powershell)
         request = self.request(self.root, "powershell-ack", state="running")
-        command = atc_runtime.control_command("ack", "--queue-dir", str(self.root), "--id", request["id"])
+        command = reins_runtime.control_command("ack", "--queue-dir", str(self.root), "--id", request["id"])
         result = subprocess.run([powershell, "-NoProfile", "-NonInteractive", "-Command", command],
                                 capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=20,
                                 **windows_process.background_popen_kwargs())
@@ -224,7 +224,7 @@ class WindowsLifecycleTests(unittest.TestCase):
             encoding="utf-8",
         )
         coordinator_program = (
-            "import argparse,json,sys\nfrom pathlib import Path\nfrom agent_atc import cli\n"
+            "import argparse,json,sys\nfrom pathlib import Path\nfrom harness_reins import cli\n"
             f"root=Path({str(self.root)!r})\nrequest=json.loads({json.dumps(owner)!r})\n"
             f"delivery_engine.resume_command=lambda request:[sys.executable,{str(fixture)!r}]\n"
             "delivery_engine.run_resume_until_exit_or_ack(root,'owner',request,argparse.Namespace(resume_timeout=25))\n"

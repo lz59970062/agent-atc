@@ -1,10 +1,10 @@
 <p align="center">
-  <img src="./assets/readme/hero.svg" width="100%" alt="ATC (Agent Traffic Control)">
+  <img src="./assets/readme/hero.svg" width="100%" alt="Harness Reins">
 </p>
 
-# ATC（Agent Traffic Control）
+# Reins（Harness Reins）
 
-**把工作派给任何一个 Agent，结果回到发起它的那个会话。**
+**给 harness 配的 harness：把工作派给任何一个 Agent，结果回到发起它的那个会话。**
 
 [English](README.md) · [文档站](docs/index.md) · [快速开始](docs/quickstart.md) · [更新记录](CHANGELOG.md)
 
@@ -17,21 +17,21 @@
 - 或者任务**挂在 Agent 的 shell 下面**，回合一结束、超时或者应用重启，任务就跟着没了。
 - 或者另一个 Agent 的结论落在别的窗口里，**要你手工搬回**原来的对话。
 
-## ATC 怎么做
+## Reins 怎么做
 
-ATC 把工作（一条命令，或任何 Harness 里的一个全新 Agent）交给操作系统原生的进程托管者独立运行。
-完成后，ATC **回到原来那个会话**，送上一条简短的结果：观察到了什么、子代理报告了什么、文件在哪里，
+Reins 把工作（一条命令，或任何 Harness 里的一个全新 Agent）交给操作系统原生的进程托管者独立运行。
+完成后，Reins **回到原来那个会话**，送上一条简短的结果：观察到了什么、子代理报告了什么、文件在哪里，
 以及确认收到的命令。
 
 ```text
-[atc] <task-id>-c1
+[reins] <task-id>-c1
 Task: train model
 Result: exited 0 · 2h 3m 32s
 From: run on systemd-user
-Files: ~/.atc/tasks/<task-id>/ (attempt-1.log, result.json)
+Files: ~/.reins/tasks/<task-id>/ (attempt-1.log, result.json)
 Details: .../details/<task-id>-c1.md (as needed)
 Session: <session-id> (only)
-ACK after inspection: atc ack <task-id>-c1
+ACK after inspection: reins ack <task-id>-c1
 ```
 
 等待期间不消耗任何模型调用。
@@ -49,58 +49,59 @@ Pi 这类开源 Harness 正好相反，给它什么模型它就跑什么模型�
 想让每件事都交给合适的模型，就得让几个 Harness 并行工作，有闭源的，也有开源的。可它们彼此并不知道对方存在：
 Codex 会话没法把任务交给 Claude Code 再把结果拿回来，Pi 里的 Agent 也没法向它们汇报。
 
-本项目要补的就是这块空白。在 Codex、Claude Code 或 Pi 的任一会话里，`atc agent codex|claude|pi`
+本项目要补的就是这块空白。在 Codex、Claude Code 或 Pi 的任一会话里，`reins agent codex|claude|pi`
 都能把一个全新的子代理作为持久任务启动，结果回到发起任务的那个会话。一套横跨闭源与开源 Harness 的调度层，
-也是 Long Task Callback 演进为 **Agent Traffic Control** 的原因。
+Codex、Claude Code、Pi 都是 harness，Reins 是握住它们的那副缰绳，这也是 Long Task Callback 先演进为 ATC、再改名为 **Harness Reins** 的原因。
 
 ## 快速开始
 
 ```bash
 # 1. 安装（目前提供 Linux x64 预编译包；其他平台见下文）
-npm install -g agent-atc
+npm install -g harness-reins
 
-# 2. 设为本机唯一的 ATC，安装 Codex 和 Claude Code 的 skill，启动协调服务
-atc setup --force --enable --now
+# 2. 设为本机唯一的 Reins，安装 Codex 和 Claude Code 的 skill，启动协调服务
+reins setup --force --enable --now
 #    同时使用 Pi？加上 --with-pi-extension
 
 # 3. 检查
-atc --version
-atc doctor --agent codex --session <会话ID>
+reins --version
+reins doctor --agent codex --session <会话ID>
 ```
 
-没有 Node，或者在 macOS、Windows 的预编译包发布之前，可以从源码安装，再运行同样的 `atc setup`：
+没有 Node，或者在 macOS、Windows 的预编译包发布之前，可以从源码安装，再运行同样的 `reins setup`：
 
 ```bash
-python3 -m pip install "git+https://github.com/lz59970062/agent-atc.git"
+python3 -m pip install "git+https://github.com/lz59970062/harness-reins.git"
 ```
 
-`atc setup` 会把当前这份安装登记为唯一的 `~/.atc/bin/atc`。其他环境里装的 `atc` 会把命令转发给它，
+`reins setup` 会把当前这份安装登记为唯一的 `~/.reins/bin/reins`。其他环境里装的 `reins` 会把命令转发给它，
 不同版本不会混用。
 
-### 从 Long Task Callback（`ltc`）迁移
+### 从 ATC（`atc`）或 Long Task Callback（`ltc`）迁移
 
-ATC 不读取 LTC 的记录，需要一次显式迁移：
+Reins 不读取这两代的记录，需要一次显式迁移：
 
 ```bash
-atc migrate            # 只显示会改什么，不做任何改动
-atc migrate --apply    # 存档 ~/.ltc，卸载旧服务、skill 和 hook
-atc setup --force --enable --now
+reins migrate            # 只显示会改什么，不做任何改动
+reins migrate --apply    # 存档 ~/.atc 和 ~/.ltc，卸载旧服务、skill 和 hook
+reins setup --force --enable --now
 ```
 
-LTC 还有待投递的回调或正在运行的任务时，`atc migrate` 会拒绝执行；加 `--wait` 等旧 daemon 处理完。
-旧状态目录只会改名存档，不会删除。
+两代各自迁移：哪一代还有待投递的回调或正在运行的任务，就先保持原样并报告出来，不会因为 LTC 忙着就拖住空闲的 ATC。
+加 `--wait` 等旧 daemon 处理完，或用 `--only atc|ltc` 只迁其中一代。旧状态目录只会改名存档，不会删除。
+ATC 的 systemd drop-in 和 `experts.yaml` 会带到 Reins。
 
 ## 常用命令
 
 | 命令 | 作用 |
 | --- | --- |
-| `atc run -- <命令>` | 把一条命令交给系统托管，完成后回调 |
-| `atc agent codex\|claude\|pi -- <任务>` | 启动一个全新的子代理；它会写一份结构化报告，信封里标注为"声称，未经验证" |
-| `atc done --exit-code <N>` | 任务由 Slurm、tmux 等外部调度器托管时，只负责报告结束 |
-| `atc ack <回调ID>` | 确认已经收到并看过结果（不等于任务完成） |
-| `atc status` | 查看还需要处理的回调 |
-| `atc doctor` | 检查环境，给出可以交给 Agent 执行的修复计划 |
-| `atc migrate` | 从 LTC 迁移 |
+| `reins run -- <命令>` | 把一条命令交给系统托管，完成后回调 |
+| `reins agent codex\|claude\|pi -- <任务>` | 启动一个全新的子代理；它会写一份结构化报告，信封里标注为"声称，未经验证" |
+| `reins done --exit-code <N>` | 任务由 Slurm、tmux 等外部调度器托管时，只负责报告结束 |
+| `reins ack <回调ID>` | 确认已经收到并看过结果（不等于任务完成） |
+| `reins status` | 查看还需要处理的回调 |
+| `reins doctor` | 检查环境，给出可以交给 Agent 执行的修复计划 |
+| `reins migrate` | 从 LTC 迁移 |
 
 ## 文档
 
@@ -115,4 +116,4 @@ LTC 还有待投递的回调或正在运行的任务时，`atc migrate` 会拒�
 
 ## 许可证
 
-[MIT](LICENSE) · ATC 的前身是 Long Task Callback（`ltc`）。
+[MIT](LICENSE) · Reins 的前身是 Agent Traffic Control（`atc`），更早是 Long Task Callback（`ltc`）。

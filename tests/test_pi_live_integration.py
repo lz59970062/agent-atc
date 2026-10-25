@@ -1,6 +1,6 @@
 """Opt-in real Pi, deterministic loopback provider, no paid model or home writes.
 
-Run: ATC_TEST_REAL_PI=1 PYTHONPATH=src python -m unittest discover -s tests -p test_pi_live_integration.py -q
+Run: REINS_TEST_REAL_PI=1 PYTHONPATH=src python -m unittest discover -s tests -p test_pi_live_integration.py -q
 """
 import argparse
 from collections import Counter
@@ -20,17 +20,17 @@ import tempfile
 import unittest
 from unittest import mock
 
-from agent_atc import cli
-from agent_atc.install import services
-from agent_atc.engine import dispatch
-from agent_atc.engine import delivery as delivery_engine
-from agent_atc.harness.codex import app_server
-from agent_atc.store import records as queue_store
-from agent_atc.system import shell
-from agent_atc.store import layout
-from agent_atc.harness.pi import channel as bridge
-from agent_atc.runtime import worker_command
-from agent_atc.core import capabilities
+from harness_reins import cli
+from harness_reins.install import services
+from harness_reins.engine import dispatch
+from harness_reins.engine import delivery as delivery_engine
+from harness_reins.harness.codex import app_server
+from harness_reins.store import records as queue_store
+from harness_reins.system import shell
+from harness_reins.store import layout
+from harness_reins.harness.pi import channel as bridge
+from harness_reins.runtime import worker_command
+from harness_reins.core import capabilities
 
 
 
@@ -129,7 +129,7 @@ class RpcPi:
             except subprocess.TimeoutExpired:
                 # End the actual fixture Pi first, keeping its wrapper's lease
                 # until Pi exits. Never terminate an unrelated session.
-                for file in (self.profile/'agent-atc/channels').glob('*/owner.json'):
+                for file in (self.profile/'harness-reins/channels').glob('*/owner.json'):
                     owner = bridge.read_record(file)
                     if owner.get('lease_pid') == self.process.pid and services.pid_is_running(owner['owner_pid']):
                         os.kill(owner['owner_pid'], signal.SIGTERM)
@@ -143,11 +143,11 @@ def runtime_fixture(tmp_path):
     provider = Provider()
     temporary_home = tmp_path / 'home'; temporary_home.mkdir()
     profile = tmp_path / 'pi'; profile.mkdir(mode=0o700)
-    (profile/'models.json').write_text(json.dumps({'providers':{'atc-fixture':{
+    (profile/'models.json').write_text(json.dumps({'providers':{'reins-fixture':{
         'baseUrl':f'http://127.0.0.1:{provider.server.server_port}/v1', 'api':'openai-completions',
         'apiKey':'fixture', 'models':[{'id':'fixture','reasoning':False,'input':['text'],
                                     'contextWindow':65536,'maxTokens':1024}]}}}))
-    (profile/'settings.json').write_text(json.dumps({'defaultProvider':'atc-fixture','defaultModel':'fixture',
+    (profile/'settings.json').write_text(json.dumps({'defaultProvider':'reins-fixture','defaultModel':'fixture',
         'compaction':{'enabled':False}, 'retry':{'enabled':False}}))
     # No inherited real-provider credentials or personal Pi configuration.
     environment = {'PATH':os.environ['PATH'], 'HOME':str(temporary_home), 'LANG':'C.UTF-8',
@@ -181,11 +181,11 @@ def entries(session):
     return [json.loads(line) for line in session.read_text().splitlines()]
 
 
-@unittest.skipUnless(os.environ.get('ATC_TEST_REAL_PI') == '1' and shutil.which('pi'),
+@unittest.skipUnless(os.environ.get('REINS_TEST_REAL_PI') == '1' and shutil.which('pi'),
                      'opt-in installed real Pi and loopback provider')
 class NativePiCallbackTests(unittest.TestCase):
     def setUp(self):
-        temporary = tempfile.TemporaryDirectory(prefix='atc-native-pi-')
+        temporary = tempfile.TemporaryDirectory(prefix='reins-native-pi-')
         self.addCleanup(temporary.cleanup)
         self.fixture = runtime_fixture(Path(temporary.name))
         self.runtime = next(self.fixture)
@@ -196,16 +196,16 @@ class NativePiCallbackTests(unittest.TestCase):
         provider.tool_loop = directory
         if managed:
             command = worker_command('pi', '--cwd', str(directory), '--', '--mode', 'rpc',
-                                     '--model', 'atc-fixture/fixture')
+                                     '--model', 'reins-fixture/fixture')
         else:
             session = directory/'ordinary-loop.jsonl'
             session.write_text(json.dumps({'type':'session', 'version':3, 'id':'ordinary-loop',
                                            'cwd':str(directory), 'timestamp':'2026-10-09T00:00:00.000Z'})+'\n')
             command = [shutil.which('pi'), '--session', str(session), '--extension', str(bridge.extension_path()),
-                       '--mode', 'rpc', '--model', 'atc-fixture/fixture']
+                       '--mode', 'rpc', '--model', 'reins-fixture/fixture']
         rpc = RpcPi(command, environment, directory)
         try:
-            owner_path = wait_for(lambda: next((profile/'agent-atc/channels').glob('*/owner.json'), None))
+            owner_path = wait_for(lambda: next((profile/'harness-reins/channels').glob('*/owner.json'), None))
             owner = wait_for(lambda: (v if (v := bridge.read_record(owner_path)).get('state') == 'active' else None))
             session = Path(owner['session_file'])
             rpc.send({'id':'loop', 'type':'prompt', 'message':'TOOL_LOOP_FIXTURE'})
@@ -269,10 +269,10 @@ class NativePiCallbackTests(unittest.TestCase):
         provider, environment, directory, profile=runtime
         # An installed copy plus bundled --extension must create only one owner/consumer.
         bridge.install_extension(argparse.Namespace(profile=str(profile),force=False))
-        rpc=RpcPi(worker_command('pi','--cwd',str(directory),'--','--mode','rpc','--model','atc-fixture/fixture'),
+        rpc=RpcPi(worker_command('pi','--cwd',str(directory),'--','--mode','rpc','--model','reins-fixture/fixture'),
                   environment,directory)
         try:
-            channels=profile/'agent-atc/channels'
+            channels=profile/'harness-reins/channels'
             owner_path=wait_for(lambda: next(channels.glob('*/owner.json'),None))
             owner=wait_for(lambda: (v if (v:=bridge.read_record(owner_path)).get('state')=='active' and v.get('owner_identity') else None))
             session=Path(owner['session_file']); owner_pid=owner['owner_pid']
@@ -284,9 +284,9 @@ class NativePiCallbackTests(unittest.TestCase):
             request,payload=callback(runtime,session,'idle')
             root=Path(payload['queue_dir'])
             request=dispatch.prepare_request_for_queue(root,request,payload['prompt'])
-            # Exercise the actual ATC delivery worker. An online callback must not
+            # Exercise the actual Reins delivery worker. An online callback must not
             # execute this deliberately invalid Pi binary.
-            with mock.patch.dict(os.environ, {'ATC_PI_BIN':str(directory/'must-not-launch-pi')}):
+            with mock.patch.dict(os.environ, {'REINS_PI_BIN':str(directory/'must-not-launch-pi')}):
                 queue_store.write_request(root/'pending'/f"{request['id']}.json",request)
                 started=time.monotonic()
                 assert delivery_engine.process_one(root,argparse.Namespace(resume_timeout=20,retries=0,retry_delay=0,retry_backoff=1))
@@ -357,9 +357,9 @@ class NativePiCallbackTests(unittest.TestCase):
         session.write_text(json.dumps({'type':'session','version':3,'id':'ordinary',
             'timestamp':'2026-10-04T00:00:00.000Z','cwd':str(directory)})+'\n')
         rpc=RpcPi([shutil.which('pi'),'--session',str(session),'--extension',str(bridge.extension_path()),
-                   '--mode','rpc','--model','atc-fixture/fixture'],environment,directory)
+                   '--mode','rpc','--model','reins-fixture/fixture'],environment,directory)
         try:
-            owner_path=bridge.channel_dir(str(session),profile/'agent-atc/channels')/'owner.json'
+            owner_path=bridge.channel_dir(str(session),profile/'harness-reins/channels')/'owner.json'
             wait_for(lambda: owner_path.exists())
             request,payload=callback(runtime,session,'ordinary')
             plan=bridge.prepare_delivery(payload)
@@ -374,11 +374,11 @@ class NativePiCallbackTests(unittest.TestCase):
     def test_busy_cancel_and_managed_launcher_loss_never_dispatch(self):
         runtime = self.runtime
         provider,environment,directory,profile=runtime
-        rpc=RpcPi(worker_command('pi','--cwd',str(directory),'--','--mode','rpc','--model','atc-fixture/fixture'),
+        rpc=RpcPi(worker_command('pi','--cwd',str(directory),'--','--mode','rpc','--model','reins-fixture/fixture'),
                   environment,directory)
         owner_pid=None
         try:
-            owner_path=wait_for(lambda: next((profile/'agent-atc/channels').glob('*/owner.json'),None))
+            owner_path=wait_for(lambda: next((profile/'harness-reins/channels').glob('*/owner.json'),None))
             def active_owner():
                 assert rpc.process.poll() is None, ''.join(rpc.stderr)
                 value=bridge.read_record(owner_path)
@@ -413,10 +413,10 @@ class NativePiCallbackTests(unittest.TestCase):
     def test_mailbox_error_keeps_author_input_and_offline_cancel_blocks_model(self):
         runtime = self.runtime
         provider,environment,directory,profile=runtime
-        rpc=RpcPi(worker_command('pi','--cwd',str(directory),'--','--mode','rpc','--model','atc-fixture/fixture'),
+        rpc=RpcPi(worker_command('pi','--cwd',str(directory),'--','--mode','rpc','--model','reins-fixture/fixture'),
                   environment,directory)
         try:
-            owner_path=wait_for(lambda: next((profile/'agent-atc/channels').glob('*/owner.json'),None))
+            owner_path=wait_for(lambda: next((profile/'harness-reins/channels').glob('*/owner.json'),None))
             owner=wait_for(lambda: (v if (v:=bridge.read_record(owner_path)).get('state')=='active' and v.get('owner_identity') else None))
             session=Path(owner['session_file'])
             (owner_path.parent/'inbox'/('0'*64+'.json')).write_text('broken-json')

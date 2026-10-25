@@ -11,14 +11,14 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from agent_atc import cli
-from agent_atc.install import services
-from agent_atc.install import skills as skill_install
-from agent_atc.tower import environment as tower_environment
-from agent_atc.engine import tasks as managed_tasks
-from agent_atc.engine import reminders as reminder_policy
-from agent_atc.store import layout
-from agent_atc.owners import SystemdUserBackend
+from harness_reins import cli
+from harness_reins.install import services
+from harness_reins.install import skills as skill_install
+from harness_reins.tower import environment as tower_environment
+from harness_reins.engine import tasks as managed_tasks
+from harness_reins.engine import reminders as reminder_policy
+from harness_reins.store import layout
+from harness_reins.owners import SystemdUserBackend
 
 
 class DaemonServiceSelectionTests(unittest.TestCase):
@@ -29,14 +29,14 @@ class DaemonServiceSelectionTests(unittest.TestCase):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         self.directory = Path(temporary.name)
-        home = mock.patch.dict(os.environ, {"ATC_HOME": str(self.directory / "atc-home")})
+        home = mock.patch.dict(os.environ, {"REINS_HOME": str(self.directory / "reins-home")})
         home.start()  # setup installs the canonical launcher here, not in a shared home
         self.addCleanup(home.stop)
 
     def arguments(self, service="auto", *, now=True):
         return argparse.Namespace(
             backend="screen", service=service, skill_path=None, skill_target="both",
-            force=False, name="atc-container-test", queue_dir=str(self.directory / "queue"),
+            force=False, name="reins-container-test", queue_dir=str(self.directory / "queue"),
             interval=2.0, retries=3, retry_delay=30.0, retry_backoff=2.0,
             resume_timeout=60.0, restart_sec=2.0, exec_start=None, codex_bin=None,
             claude_bin=None, path=None, proxy_env_file=None, inherit_proxy=False,
@@ -108,7 +108,7 @@ class DaemonServiceSelectionTests(unittest.TestCase):
     def test_parser_exposes_all_service_choices_without_starting_anything(self) -> None:
         for service in ("auto", "systemd", "supervisor", "standalone"):
             with self.subTest(service=service), mock.patch.object(
-                sys, "argv", ["atc", "setup", "--service", service]
+                sys, "argv", ["reins", "setup", "--service", service]
             ), mock.patch.object(services, "setup", return_value=0) as setup:
                 self.assertEqual(cli.main(), 0)
                 self.assertEqual(setup.call_args.args[0].service, service)
@@ -118,7 +118,7 @@ class DaemonServiceSelectionTests(unittest.TestCase):
             services.select_daemon_service(self.arguments("unknown-future-service"))
 
     def test_keep_skill_cli_option_is_forwarded_to_skill_installer(self) -> None:
-        with mock.patch.object(sys, "argv", ["atc", "setup", "--keep-skill", "--force"]), mock.patch.object(
+        with mock.patch.object(sys, "argv", ["reins", "setup", "--keep-skill", "--force"]), mock.patch.object(
             services, "setup", return_value=0
         ) as setup:
             self.assertEqual(cli.main(), 0)
@@ -132,7 +132,7 @@ class DaemonServiceSelectionTests(unittest.TestCase):
         self.assertTrue(forwarded.force)
 
     def test_callback_only_setup_can_start_standalone_without_any_task_backend(self) -> None:
-        with mock.patch.object(sys, "argv", ["atc", "setup", "--callback-only"]), mock.patch.object(
+        with mock.patch.object(sys, "argv", ["reins", "setup", "--callback-only"]), mock.patch.object(
             services, "setup", return_value=0
         ) as setup:
             self.assertEqual(cli.main(), 0)
@@ -165,7 +165,7 @@ class DaemonServiceSelectionTests(unittest.TestCase):
             reminder_policy, "ensure_callback_hook_file"
         ), mock.patch.object(services, "report_claude_agent_readiness"), mock.patch.object(
             tower_environment, "configure_proxy_environment"
-        ), mock.patch.object(services, "systemd_service_text", return_value="[Service]\nExecStart=/fixture/atc daemon\n"), mock.patch.object(
+        ), mock.patch.object(services, "systemd_service_text", return_value="[Service]\nExecStart=/fixture/reins daemon\n"), mock.patch.object(
             services.service_sandbox, "probe", return_value=[]
         ), mock.patch.object(
             services, "run_systemctl", return_value=1

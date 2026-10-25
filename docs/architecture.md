@@ -18,7 +18,7 @@ intent. Existing versions remain readable. The 0.7.0 material below is the
 released baseline; the preview's live Mac Desktop acceptance is still pending.
 
 The preview also adds Pi as both a child worker and a callback-session adapter.
-`atc agent pi` reuses task ownership and the private environment/prompt/result
+`reins agent pi` reuses task ownership and the private environment/prompt/result
 artifacts; `--agent pi` resumes the persisted PI session file that the launching
 shell recorded (`PI_SESSION_FILE`).
 
@@ -53,7 +53,7 @@ coordinator before submitting new tasks.
 | `harness/pi/adapter.py` | Pi child command, stdout result capture, thinking levels, and print-mode resume of the bound session file | Open the interactive TUI or resume an ephemeral session |
 | `core/envelope.py` | Compact, transport-independent envelopes | Drop custom instructions without an explicit details-read requirement |
 | `install/diagnostics.py` | Environment, configuration and lifecycle observations with Agent-owned recovery guidance | Execute repairs, change producer exit codes, or equate local checks with authenticated delivery |
-| `runtime.py`, `_entry.py` | Launch workers from this exact installation | Rediscover another ATC on PATH |
+| `runtime.py`, `_entry.py` | Launch workers from this exact installation | Rediscover another Reins on PATH |
 | `templates.py` | Validated user and built-in task templates | Execute template text as a shell command |
 
 The existing queue and goal coordinator remains in `cli.py` during this migration.
@@ -68,7 +68,7 @@ own their data and operations without circular imports or large callback bundles
 CLI -> private task.json + environment.json (+ queue/environments/<callback>.json) -> coordinator
                                               |
                          systemd-run --user -> separate per-task service
-                                              -> ATC worker -> user command
+                                              -> Reins worker -> user command
                                               -> result.json -> callback queue
 coordinator -> agent adapter / optional Codex Desktop transport -> original session
 ```
@@ -215,7 +215,7 @@ Desktop launches `harness/codex/desktop/core.py` through an explicit CLI overrid
 Desktop's stdio protocol and preserves the environment and configuration that
 Desktop supplies for its tools and approvals. `harness/codex/desktop/bridge.py` owns one App
 Server and a gateway that verifies connected Windows peers before adding a
-private upstream Bearer token. Desktop and ATC must use that same server.
+private upstream Bearer token. Desktop and Reins must use that same server.
 `harness/codex/desktop/connection.py` validates metadata/profile,
 and `system/windows_tcp.py` authenticates the connected reverse TCP tuple,
 PID, SID and creation identity. No unauthenticated upstream is exposed; browser
@@ -227,7 +227,7 @@ cross-queue lease instead of authorizing another delivery.
 
 The initial desktop contract covers terminal closure and independent coordinator
 restart while the user session exists. Logout, reboot and WSL shutdown can
-interrupt execution. Sleep pauses compute. WSL initially keeps ATC, its agent and
+interrupt execution. Sleep pauses compute. WSL initially keeps Reins, its agent and
 work in the same distro, with state on its Linux filesystem. Unattended logout
 survival requires a separately specified service/credential setup.
 
@@ -243,7 +243,7 @@ session discovery or resume. Pi uses `--print --mode text --no-session`, prompt
 stdin and stdout result capture; it retains submission-time profile/authentication,
 API and extension configuration while stripping parent Codex/Claude and
 `PI_SESSION_ID`/`PI_SESSION_FILE`/`PI_CODING_AGENT` markers.
-`ATC_PI_BIN` selects its executable. `--model` passes through
+`REINS_PI_BIN` selects its executable. `--model` passes through
 (including `provider/model`) and `--reasoning-effort` becomes Pi `--thinking` with
 `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, or `max`; `ultra` is rejected.
 Pi's tool permissions and project extension trust follow its own noninteractive
@@ -251,14 +251,14 @@ configuration, without an automatic `--approve`. Codex sandbox and Claude
 permission flags do not apply to Pi. The command contract was checked against
 Pi 0.87.1; this session has not verified native Windows/macOS Pi launch. Built-in
 Codex template defaults are not merged into Pi's profile. Diagnostics use
-`atc doctor --operation agent --agent-worker pi`.
+`reins doctor --operation agent --agent-worker pi`.
 
 Pi also implements the callback transport. Binding prefers `PI_SESSION_FILE`
 (absolute session JSONL) over `PI_SESSION_ID`, and PI takes detection precedence
 over inherited Codex/Claude markers because its session variables are injected
 only into a live PI shell tool. Delivery runs `pi --print --session <file>` with
-the callback prompt on stdin, appending one turn and exiting. An ephemeral session (`--no-session`) has no file to resume, so ATC
-asks for explicit `--session`. `atc setup --pi-bin` pins the daemon executable.
+the callback prompt on stdin, appending one turn and exiting. An ephemeral session (`--no-session`) has no file to resume, so Reins
+asks for explicit `--session`. `reins setup --pi-bin` pins the daemon executable.
 
 Pi-only `--system-prompt-file` selects a separate nonempty UTF-8 system prompt
 file. CLI relative paths use the submitting shell directory, independent of the
@@ -283,7 +283,7 @@ separate, Codex-specific path; adapters can use CLI resume without implementing 
 
 ## Compact callback protocol
 
-New `run`, `agent` and `done` callbacks default to `atc-compact/1`: callback ID, task, observed result and
+New `run`, `agent` and `done` callbacks default to `reins-compact/1`: callback ID, task, observed result and
 runtime, who did the work, artifact directory, bound session and a one-line ACK. Command lines, timestamps and full handoff prose
 are in the private `details/<id>.md` artifact. Envelopes explicitly require reading
 it when custom messages/handoffs or recovery instructions apply. `--callback-format
@@ -299,7 +299,7 @@ measurements and do not cap arbitrary user-hook content or filesystem path lengt
 
 Public task producers run diagnostics after admission (including failed admission).
 Healthy invocations add no output; configuration or runtime faults produce a versioned
-`[atc-status]` JSON envelope on stderr. `doctor` provides the same report explicitly.
+`[reins-status]` JSON envelope on stderr. `doctor` provides the same report explicitly.
 Reports preserve the actual work state: persisted IDs must not be resubmitted,
 and ambiguous writes require inspection before retry. The checker probes existing
 queue/lock/runtime state and transient private file writes, never starts a service
@@ -323,7 +323,7 @@ progress; local readiness does not prove authentication or end-to-end delivery.
 
 Run `PYTHONPATH=src python -m unittest discover -s tests -q`. Socket and process
 integration tests require an ordinary local process environment. Set
-`ATC_TARGET_LOCK_DIR` to a test-only directory. Native systemd
+`REINS_TARGET_LOCK_DIR` to a test-only directory. Native systemd
 integration is opt-in (see tests/test_systemd_integration.py); use only temporary
 queues and units. Never restart the production daemon for a test.
 

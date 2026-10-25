@@ -15,7 +15,7 @@ def main():
         raise SystemExit("DOCS_GITLAB_REPOSITORY must be an HTTPS repository URL without credentials")
     if not os.environ.get("DOCS_GITLAB_TOKEN"):
         raise SystemExit("Configure the DOCS_GITLAB_TOKEN Actions secret with write_repository access")
-    with tempfile.TemporaryDirectory(prefix="atc-docs-gitlab-") as directory:
+    with tempfile.TemporaryDirectory(prefix="reins-docs-gitlab-") as directory:
         askpass = Path(directory) / "askpass"
         askpass.write_text(
             '#!/bin/sh\ncase "$1" in\n'

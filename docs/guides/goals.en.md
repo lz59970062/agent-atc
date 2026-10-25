@@ -29,14 +29,14 @@ Step statuses are `pending`, `in_progress`, `blocked`, and `completed`. Keep the
 Ask Codex to execute this in the current session's tool environment:
 
 ```bash
-atc goal start --id baseline-report --agent codex --session "$CODEX_THREAD_ID" \
+reins goal start --id baseline-report --agent codex --session "$CODEX_THREAD_ID" \
   --cwd "$PWD" --task "Complete the baseline report" --plan-file goal-plan.yaml
 ```
 
 Attach the goal ID when submitting related tasks:
 
 ```bash
-atc run --goal-id baseline-report --cwd "$PWD" --task "Train the baseline" -- python train.py
+reins run --goal-id baseline-report --cwd "$PWD" --task "Train the baseline" -- python train.py
 ```
 
 When the task finishes, the Agent reads the result, acknowledges the callback, and updates the plan. By default, an active goal sends a progress check every three hours to help the original conversation continue the current step.
@@ -46,19 +46,19 @@ When the task finishes, the Agent reads the result, acknowledges the callback, a
 Once the artifacts have been checked, mark every plan step `completed` and run:
 
 ```bash
-atc goal check --id baseline-report
+reins goal check --id baseline-report
 ```
 
 Copy the plan digest from the output and confirm completion:
 
 ```bash
-atc goal ack --id baseline-report --state completed --plan-sha256 <plan-digest>
+reins goal ack --id baseline-report --state completed --plan-sha256 <plan-digest>
 ```
 
 If the work is waiting for data or another external condition, record that condition:
 
 ```bash
-atc goal ack --id baseline-report --state blocked_conditions --condition "Waiting for the dataset download"
+reins goal ack --id baseline-report --state blocked_conditions --condition "Waiting for the dataset download"
 ```
 
-Run `atc goal resume --id baseline-report` when it is ready to continue. When the plan changes, update `revision` and record the reason in the file.
+Run `reins goal resume --id baseline-report` when it is ready to continue. When the plan changes, update `revision` and record the reason in the file.

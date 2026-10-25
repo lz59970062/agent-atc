@@ -11,8 +11,8 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from agent_atc import cli
-from agent_atc.install import diagnostics, service_sandbox, services
+from harness_reins import cli
+from harness_reins.install import diagnostics, service_sandbox, services
 
 SUDO_ERROR = ("sudo: effective uid is not 0, is /usr/bin/sudo on a file system with the 'nosuid' "
               "option set or an NFS file system without root privileges?")
@@ -57,7 +57,7 @@ class ServiceSandboxProbeTests(unittest.TestCase):
         self.codex = self.write("codex", PLAIN_CLI)
         self.path = f"{self.bin}:/usr/bin:/bin"
         environment = {"PATH": self.path, "FAKE_SYSTEMD_RUN_LOG": str(self.log),
-                       "ATC_HOME": str(self.root / "atc-home"), "XDG_CONFIG_HOME": str(self.root / "config")}
+                       "REINS_HOME": str(self.root / "reins-home"), "XDG_CONFIG_HOME": str(self.root / "config")}
         for patch in (mock.patch.dict(os.environ, environment), mock.patch.object(service_sandbox.sys, "platform", "linux")):
             patch.start()
             self.addCleanup(patch.stop)
@@ -73,8 +73,8 @@ class ServiceSandboxProbeTests(unittest.TestCase):
         return self.log.read_text(encoding="utf-8").splitlines() if self.log.exists() else []
 
     def service_args(self, **updates):
-        values = dict(name="agent-atc", queue_dir=None, interval=2.0, retries=3, retry_delay=30.0, retry_backoff=2.0,
-                      resume_timeout=3600.0, restart_sec=5.0, exec_start="/fixture/atc", codex_bin=self.codex,
+        values = dict(name="harness-reins", queue_dir=None, interval=2.0, retries=3, retry_delay=30.0, retry_backoff=2.0,
+                      resume_timeout=3600.0, restart_sec=5.0, exec_start="/fixture/reins", codex_bin=self.codex,
                       claude_bin=self.claude, pi_bin=str(self.bin / "pi"), path=self.path, proxy_env_file=None,
                       inherit_proxy=False, clear_proxy=False, force=True, enable=False, now=False, print=False,
                       allow_privilege_escalation=False)
@@ -118,7 +118,7 @@ class ServiceSandboxProbeTests(unittest.TestCase):
         self.assertNotIn("NoNewPrivileges=yes", opted_out)
         self.assertIn(service_sandbox.OPT_OUT_COMMENT, opted_out.splitlines())
 
-        unit = self.root / "agent-atc.service"
+        unit = self.root / "harness-reins.service"
         unit.write_text(hardened, encoding="utf-8")
         parsed = service_sandbox.read_unit(unit)
         self.assertEqual(parsed["hardening"], ("NoNewPrivileges=yes",))
@@ -129,9 +129,9 @@ class ServiceSandboxProbeTests(unittest.TestCase):
 
     def test_a_dropin_that_turns_hardening_off_is_honored(self):
         # An administrator's or user's <unit>.d/*.conf overrides the unit, as systemd applies it.
-        unit = self.root / "agent-atc.service"
+        unit = self.root / "harness-reins.service"
         unit.write_text(services.systemd_service_text(self.service_args()), encoding="utf-8")
-        dropins = self.root / "agent-atc.service.d"
+        dropins = self.root / "harness-reins.service.d"
         dropins.mkdir()
         (dropins / "10-allow.conf").write_text("[Service]\nNoNewPrivileges=no\n", encoding="utf-8")
         parsed = service_sandbox.read_unit(unit)
@@ -149,11 +149,11 @@ class ServiceSandboxProbeTests(unittest.TestCase):
         for argv, handler in ((["setup", "--allow-privilege-escalation"], "setup"),
                               (["install-systemd", "--allow-privilege-escalation"], "install_systemd"),
                               (["setup"], "setup")):
-            with self.subTest(argv=argv), mock.patch.object(sys, "argv", ["atc", *argv]), \
+            with self.subTest(argv=argv), mock.patch.object(sys, "argv", ["reins", *argv]), \
                     mock.patch.object(services, handler, return_value=0) as called:
                 self.assertEqual(cli.main(), 0)
             self.assertEqual(called.call_args.args[0].allow_privilege_escalation, "--allow-privilege-escalation" in argv)
-        with mock.patch.object(sys, "argv", ["atc", "install-launchd", "--allow-privilege-escalation"]), \
+        with mock.patch.object(sys, "argv", ["reins", "install-launchd", "--allow-privilege-escalation"]), \
                 contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
             cli.main()
 
@@ -161,12 +161,12 @@ class ServiceSandboxProbeTests(unittest.TestCase):
         args = argparse.Namespace(**{**vars(self.service_args(allow_privilege_escalation=True)),
                                      "service": "systemd", "skill_path": None, "callback_only": True})
         with mock.patch.object(services, "select_daemon_service", return_value="systemd"), \
-                mock.patch("agent_atc.install.canonical.ensure", return_value={"version": "x", "build": "y"}), \
+                mock.patch("harness_reins.install.canonical.ensure", return_value={"version": "x", "build": "y"}), \
                 mock.patch.object(services.skill_install, "install_skill", return_value=0), \
                 mock.patch.object(services.reminder_policy, "ensure_callback_hook_file"), \
                 mock.patch.object(services, "report_claude_agent_readiness"), \
-                mock.patch("agent_atc.harness.codex.desktop.launcher.validate_setup"), \
-                mock.patch("agent_atc.harness.codex.desktop.launcher.install_for_setup"), \
+                mock.patch("harness_reins.harness.codex.desktop.launcher.validate_setup"), \
+                mock.patch("harness_reins.harness.codex.desktop.launcher.install_for_setup"), \
                 mock.patch.object(services, "install_systemd", return_value=0) as install, \
                 contextlib.redirect_stdout(io.StringIO()):
             self.assertEqual(services.setup(args), 0)
@@ -181,13 +181,13 @@ class ServiceSandboxProbeTests(unittest.TestCase):
         self.assertIn(self.claude, output)
         self.assertIn(SUDO_ERROR[:80], output)
         self.assertIn("--allow-privilege-escalation", output)
-        self.assertIn("NoNewPrivileges=yes", (self.root / "systemd" / "agent-atc.service").read_text(encoding="utf-8"))
+        self.assertIn("NoNewPrivileges=yes", (self.root / "systemd" / "harness-reins.service").read_text(encoding="utf-8"))
 
     def test_install_systemd_opt_out_writes_unhardened_unit_and_skips_probe(self):
         with mock.patch.object(services, "systemd_user_dir", return_value=self.root / "systemd"), \
                 contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()) as errors:
             services.install_systemd(self.service_args(allow_privilege_escalation=True))
-        unit = (self.root / "systemd" / "agent-atc.service").read_text(encoding="utf-8")
+        unit = (self.root / "systemd" / "harness-reins.service").read_text(encoding="utf-8")
         self.assertNotIn("NoNewPrivileges=yes", unit)
         self.assertEqual(self.calls(), [])
         self.assertIn("omits NoNewPrivileges=yes", errors.getvalue())
@@ -195,10 +195,10 @@ class ServiceSandboxProbeTests(unittest.TestCase):
 
     def doctor_args(self, mode="doctor"):
         return argparse.Namespace(mode=mode, operation="done", backend="auto", agent="codex", session="bound-session",
-                                  queue_dir=str(self.root / "atc-home" / "queue"), callback_mode="auto", dry_run=False)
+                                  queue_dir=str(self.root / "reins-home" / "queue"), callback_mode="auto", dry_run=False)
 
     def install_unit(self, **updates):
-        unit = services.systemd_user_dir() / "agent-atc.service"
+        unit = services.systemd_user_dir() / "harness-reins.service"
         unit.parent.mkdir(parents=True, exist_ok=True)
         unit.write_text(services.systemd_service_text(self.service_args(**updates)), encoding="utf-8")
 
@@ -221,7 +221,7 @@ class ServiceSandboxProbeTests(unittest.TestCase):
                 mock.patch.object(diagnostics.shutil, "which", return_value="/fixture/codex"), \
                 mock.patch.object(diagnostics.routes, "inspect_route", return_value={"status": "ready"}), \
                 mock.patch.dict(os.environ, {"CODEX_HOME": str(self.root / "codex")}):
-            skill = self.root / "codex" / "skills" / "agent-atc" / "SKILL.md"
+            skill = self.root / "codex" / "skills" / "harness-reins" / "SKILL.md"
             skill.parent.mkdir(parents=True)
             skill.write_text("fixture", encoding="utf-8")
             report = diagnostics.inspect(self.doctor_args())
@@ -243,7 +243,7 @@ class ServiceSandboxProbeTests(unittest.TestCase):
 
     def test_doctor_ignores_a_unit_serving_another_atc_home(self):
         self.install_unit()
-        with mock.patch.dict(os.environ, {"ATC_HOME": str(self.root / "other-home")}):
+        with mock.patch.dict(os.environ, {"REINS_HOME": str(self.root / "other-home")}):
             report = diagnostics.inspect(self.doctor_args())
         self.assertNotIn("agent_cli_blocked_by_service_sandbox", {issue["code"] for issue in report["issues"]})
         self.assertEqual(self.calls(), [])

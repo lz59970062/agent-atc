@@ -1,0 +1,32 @@
+{
+  "name": "harness-reins",
+  "version": "0.0.0",
+  "description": "Harness Reins: dispatch work to any agent and route the result back to the session that asked",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lz59970062/harness-reins.git"
+  },
+  "homepage": "https://github.com/lz59970062/harness-reins#readme",
+  "keywords": [
+    "agents",
+    "codex",
+    "claude-code",
+    "pi",
+    "callback",
+    "long-running",
+    "orchestration"
+  ],
+  "bin": {
+    "reins": "bin/reins.js"
+  },
+  "files": [
+    "bin"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "optionalDependencies": {
+    "@harness-reins/linux-x64": "0.0.0"
+  }
+}

@@ -11,33 +11,33 @@ import tempfile
 import unittest
 from unittest import mock
 
-from agent_atc.engine import routes as transport
-from agent_atc import cli
-from agent_atc.commands import callbacks as callback_commands
-from agent_atc.engine import dispatch
-from agent_atc.engine import tasks as managed_tasks
-from agent_atc.engine import delivery as delivery_engine
-from agent_atc.harness.codex import app_server
-from agent_atc.store import records as queue_store
-from agent_atc.store import layout
-import atc_records
+from harness_reins.engine import routes as transport
+from harness_reins import cli
+from harness_reins.commands import callbacks as callback_commands
+from harness_reins.engine import dispatch
+from harness_reins.engine import tasks as managed_tasks
+from harness_reins.engine import delivery as delivery_engine
+from harness_reins.harness.codex import app_server
+from harness_reins.store import records as queue_store
+from harness_reins.store import layout
+import reins_records
 
 
 class CallbackModeTests(unittest.TestCase):
     def setUp(self):
-        temporary = tempfile.TemporaryDirectory(prefix="atc-modes-")
+        temporary = tempfile.TemporaryDirectory(prefix="reins-modes-")
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
         self.stack = contextlib.ExitStack()
         self.addCleanup(self.stack.close)
         self.stack.enter_context(mock.patch.dict(os.environ, {
-            "CODEX_HOME": str(self.root / "profile"), "ATC_HOME": str(self.root / "profile" / "atc-home"),
-            "ATC_TARGET_LOCK_DIR": str(self.root / "target-locks"),
+            "CODEX_HOME": str(self.root / "profile"), "REINS_HOME": str(self.root / "profile" / "reins-home"),
+            "REINS_TARGET_LOCK_DIR": str(self.root / "target-locks"),
         }, clear=True))
         self.stack.enter_context(contextlib.redirect_stderr(io.StringIO()))
 
     def request(self, mode="manual"):
-        return atc_records.callback_record("fixture", str(self.root), target={"kind": "session", "session": "original"}, prompt="inspect the saved fixture", agent="codex", target_source="fixture", callback_mode=mode, attempts=1)
+        return reins_records.callback_record("fixture", str(self.root), target={"kind": "session", "session": "original"}, prompt="inspect the saved fixture", agent="codex", target_source="fixture", callback_mode=mode, attempts=1)
 
     def test_auto_desktop_is_distinct_from_cli_and_manual(self):
         args = argparse.Namespace(agent="codex", callback_mode="auto")
@@ -59,7 +59,7 @@ class CallbackModeTests(unittest.TestCase):
 
     def test_windows_desktop_default_matches_existing_launcher(self):
         with mock.patch.object(transport.sys, "platform", "win32"):
-            self.assertEqual(transport.bridge_file(self.root), self.root / "agent-atc/desktop-bridge.json")
+            self.assertEqual(transport.bridge_file(self.root), self.root / "harness-reins/desktop-bridge.json")
 
     def test_unconfigured_desktop_refuses_before_workload_admission(self):
         args = argparse.Namespace(agent="codex", callback_mode="desktop", session="original", last=False)

@@ -12,12 +12,12 @@ import textwrap
 import unittest
 from unittest import mock
 
-from agent_atc import cli
-from agent_atc.engine import tasks as managed_tasks
-from agent_atc.engine import worker as task_worker
-from agent_atc.core import ids
+from harness_reins import cli
+from harness_reins.engine import tasks as managed_tasks
+from harness_reins.engine import worker as task_worker
+from harness_reins.core import ids
 from test_cli import executable_python_fixture, patch_fixture_commands
-import atc_records
+import reins_records
 
 
 class TemplateContractTests(unittest.TestCase):
@@ -31,12 +31,12 @@ class TemplateContractTests(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
         self.cwd = Path(self.tmp.name)
         self.queue = self.cwd / "test-queue"
-        template_env = mock.patch.dict(os.environ, {"ATC_TEMPLATE_DIR": str(self.cwd / "templates")})
+        template_env = mock.patch.dict(os.environ, {"REINS_TEMPLATE_DIR": str(self.cwd / "templates")})
         template_env.start()
         self.addCleanup(template_env.stop)
 
     def invoke(self, worker="codex", options=(), prompt="Reject negative amounts; accept zero."):
-        argv = ["atc", "agent", worker, "--cwd", str(self.cwd),
+        argv = ["reins", "agent", worker, "--cwd", str(self.cwd),
                 "--queue-dir", str(self.queue), "--session", "parent-session",
                 "--agent", "claude", "--task", "independent contract tests",
                 *options, "--", prompt]
@@ -90,7 +90,7 @@ class TemplateContractTests(unittest.TestCase):
         self.assertIsNone(task.get("child_reasoning_effort"))
         self.assertNotIn("--model", task["wrapped_command"])
         self.assertFalse(any(arg.startswith("model_reasoning_effort=") for arg in task["wrapped_command"]))
-        self.assertEqual(Path(task["agent_prompt_path"]).read_text(encoding="utf-8"), atc_records.agent_prompt(prompt, task))
+        self.assertEqual(Path(task["agent_prompt_path"]).read_text(encoding="utf-8"), reins_records.agent_prompt(prompt, task))
 
     def test_claude_template_inherits_cli_model_and_does_not_receive_codex_effort(self):
         self.assertEqual(self.invoke(worker="claude", options=["--template", "test"]), 0)
@@ -153,8 +153,8 @@ class TemplateContractTests(unittest.TestCase):
             import sys
 
             payload = {{"argv": sys.argv[1:], "prompt": sys.stdin.read()}}
-            Path(os.environ["ATC_TEST_CAPTURE"]).write_text(json.dumps(payload))
-            code = int(os.environ["ATC_TEST_EXIT"])
+            Path(os.environ["REINS_TEST_CAPTURE"]).write_text(json.dumps(payload))
+            code = int(os.environ["REINS_TEST_EXIT"])
             if code == 0:
                 Path(sys.argv[sys.argv.index("-o") + 1]).write_text("Tests have NOT been run. Authored.")
             sys.exit(code)
@@ -164,8 +164,8 @@ class TemplateContractTests(unittest.TestCase):
             with self.subTest(exit_code=exit_code):
                 self.queue = self.cwd / f"worker-queue-{exit_code}"
                 capture = self.cwd / f"capture-{exit_code}.json"
-                environment = {"ATC_CODEX_BIN": str(fake_child),
-                               "ATC_TEST_CAPTURE": str(capture), "ATC_TEST_EXIT": str(exit_code)}
+                environment = {"REINS_CODEX_BIN": str(fake_child),
+                               "REINS_TEST_CAPTURE": str(capture), "REINS_TEST_EXIT": str(exit_code)}
                 with mock.patch.dict(os.environ, environment):
                     self.assertEqual(self.invoke(options=["--template", "test", "--model", "contract-model",
                                                           "--reasoning-effort", "high"]), 0)

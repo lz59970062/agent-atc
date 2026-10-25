@@ -7,9 +7,9 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from agent_atc.core import ids
-from agent_atc.engine import dispatch
-from agent_atc.store import layout
+from harness_reins.core import ids
+from harness_reins.engine import dispatch
+from harness_reins.store import layout
 
 
 class IdentifierTests(unittest.TestCase):

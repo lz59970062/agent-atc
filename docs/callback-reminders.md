@@ -12,11 +12,11 @@ prose without truncating saved results or user instructions.
 
 ## User callback hook
 
-`atc setup` also creates an empty, user-editable callback prompt hook at
-`${ATC_HOME:-~/.atc}/callback-hook.md`. Existing hook content is never
+`reins setup` also creates an empty, user-editable callback prompt hook at
+`${REINS_HOME:-~/.reins}/callback-hook.md`. Existing hook content is never
 overwritten, including by `setup --force`. The file is read again before each due user-reminder
 attempt, so edits apply to the next due callback without restarting the daemon. Non-empty
-content is appended to the callback prompt under `[atc-user-hook]`; a missing,
+content is appended to the callback prompt under `[reins-user-hook]`; a missing,
 empty, or temporarily unreadable file does not block callback delivery.
 
 ## Callback reminder intervals (0.6.6)
@@ -24,13 +24,13 @@ empty, or temporarily unreadable file does not block callback delivery.
 Repeated standard instructions and the user callback hook have separate intervals:
 
 ```bash
-atc prompt-policy --system-every 4 --user-every 3
-atc prompt-policy                       # show effective settings without modifying state
-atc prompt-policy --user-every 1        # change just the user interval; keep the other
+reins prompt-policy --system-every 4 --user-every 3
+reins prompt-policy                       # show effective settings without modifying state
+reins prompt-policy --user-every 1        # change just the user interval; keep the other
 ```
 
 Both values must be positive integers; `1` restores reminders on every callback.
-Settings are saved in `${ATC_HOME:-~/.atc}/callback-prompts.yaml`:
+Settings are saved in `${REINS_HOME:-~/.reins}/callback-prompts.yaml`:
 
 ```yaml
 system_every: 4
@@ -61,5 +61,5 @@ standard text; their user hook can still follow the new cadence.
 
 The counter and per-callback allocations are atomically saved together under
 `<queue>/prompt-counters/`, with a separate file lock. If configuration or counter
-state cannot be read/validated/written, ATC warns and sends full reminders instead
+state cannot be read/validated/written, Reins warns and sends full reminders instead
 of suppressing them or blocking the result. It does not overwrite corrupt history.

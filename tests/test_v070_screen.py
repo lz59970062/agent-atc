@@ -8,8 +8,8 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from agent_atc.owners import LaunchError, OwnerState, ScreenBackend
-from agent_atc.owners import screen
+from harness_reins.owners import LaunchError, OwnerState, ScreenBackend
+from harness_reins.owners import screen
 
 
 class ScreenOwnershipTests(unittest.TestCase):
@@ -38,29 +38,29 @@ class ScreenOwnershipTests(unittest.TestCase):
     def test_owner_name_preserves_legacy_short_and_long_identifiers(self) -> None:
         for ident in ("abcd1234", "0123456789abcdef0123456789abcdef"):
             for attempt in (1, 2):
-                self.assertEqual(self.backend.owner_name(ident, attempt, self.directory), f"atc-{ident}")
+                self.assertEqual(self.backend.owner_name(ident, attempt, self.directory), f"reins-{ident}")
 
     def test_exact_live_owner_is_required_not_a_matching_name_prefix(self) -> None:
         for status in ("Attached", "Detached"):
-            output = f"There is a screen on:\n\t1234.atc-abcd1234\t(09/25/26 10:00:00)\t({status})\n1 Socket in /tmp/private.\n"
+            output = f"There is a screen on:\n\t1234.reins-abcd1234\t(09/25/26 10:00:00)\t({status})\n1 Socket in /tmp/private.\n"
             with self.subTest(status=status), mock.patch(
                 "subprocess.run", return_value=subprocess.CompletedProcess([], 0, output, "")
             ) as run:
-                self.assertEqual(self.backend.probe("atc-abcd1234"), OwnerState.ALIVE)
+                self.assertEqual(self.backend.probe("reins-abcd1234"), OwnerState.ALIVE)
                 self.assertEqual(run.call_args.kwargs["env"]["LC_ALL"], "C")
-        other = "There is a screen on:\n\t1234.atc-abcd1234-extra\t(Detached)\n1 Socket in /tmp/private.\n"
+        other = "There is a screen on:\n\t1234.reins-abcd1234-extra\t(Detached)\n1 Socket in /tmp/private.\n"
         with mock.patch("subprocess.run", return_value=subprocess.CompletedProcess([], 0, other, "")):
-            self.assertEqual(self.backend.probe("atc-abcd1234"), OwnerState.ABSENT)
+            self.assertEqual(self.backend.probe("reins-abcd1234"), OwnerState.ABSENT)
 
     def test_only_explicit_empty_directory_or_dead_owner_establish_absence(self) -> None:
         for code, output in (
             (1, "No Sockets found in /tmp/private.\n"),
-            (0, "There is a screen on:\n\t1234.atc-abcd1234\t(Dead ???)\n1 Socket in /tmp/private.\n"),
+            (0, "There is a screen on:\n\t1234.reins-abcd1234\t(Dead ???)\n1 Socket in /tmp/private.\n"),
         ):
             with self.subTest(output=output), mock.patch(
                 "subprocess.run", return_value=subprocess.CompletedProcess([], code, output, "")
             ):
-                self.assertEqual(self.backend.probe("atc-abcd1234"), OwnerState.ABSENT)
+                self.assertEqual(self.backend.probe("reins-abcd1234"), OwnerState.ABSENT)
 
     def test_screen_socket_permission_error_timeout_or_empty_output_is_unknown(self) -> None:
         for response in (
@@ -69,19 +69,19 @@ class ScreenOwnershipTests(unittest.TestCase):
             subprocess.CompletedProcess([], 1, "unrecognized localized error", ""),
         ):
             with self.subTest(response=response), mock.patch("subprocess.run", return_value=response):
-                self.assertEqual(self.backend.probe("atc-abcd1234"), OwnerState.UNKNOWN)
+                self.assertEqual(self.backend.probe("reins-abcd1234"), OwnerState.UNKNOWN)
         for error in (PermissionError("socket directory"), subprocess.TimeoutExpired("screen", 1)):
             with self.subTest(error=error), mock.patch("subprocess.run", side_effect=error):
-                self.assertEqual(self.backend.probe("atc-abcd1234"), OwnerState.UNKNOWN)
+                self.assertEqual(self.backend.probe("reins-abcd1234"), OwnerState.UNKNOWN)
 
     def test_launch_uses_literal_argv_and_does_not_attach_coordinator_pipes(self) -> None:
-        arguments = [str(self.directory / "ATC runtime/python"), "/tmp/entry.py", "_screen-worker", "--task-file",
+        arguments = [str(self.directory / "Reins runtime/python"), "/tmp/entry.py", "_screen-worker", "--task-file",
                      "/tmp/space $name;literal/task.json", "--token=fixture"]
         log = self.directory / "log with spaces"
         with mock.patch("subprocess.run", return_value=subprocess.CompletedProcess([], 0, "", "")) as run:
-            self.backend.launch("atc-abcd1234", arguments, self.directory, log)
+            self.backend.launch("reins-abcd1234", arguments, self.directory, log)
         argv = run.call_args.args[0]
-        self.assertEqual(argv, ["/usr/bin/screen", "-dmS", "atc-abcd1234", "-L", "-Logfile", str(log.resolve()), *arguments])
+        self.assertEqual(argv, ["/usr/bin/screen", "-dmS", "reins-abcd1234", "-L", "-Logfile", str(log.resolve()), *arguments])
         self.assertFalse(run.call_args.kwargs.get("shell", False))
         self.assertEqual(run.call_args.kwargs["stdout"], subprocess.DEVNULL)
         self.assertEqual(run.call_args.kwargs["stderr"], subprocess.DEVNULL)
@@ -92,10 +92,10 @@ class ScreenOwnershipTests(unittest.TestCase):
         cases = ((subprocess.TimeoutExpired("screen", 1), True), (FileNotFoundError("screen"), False))
         for failure, uncertain in cases:
             with self.subTest(failure=failure), mock.patch("subprocess.run", side_effect=failure), self.assertRaises(LaunchError) as caught:
-                self.backend.launch("atc-abcd1234", [sys.executable], self.directory, self.directory / "log")
+                self.backend.launch("reins-abcd1234", [sys.executable], self.directory, self.directory / "log")
             self.assertEqual(caught.exception.uncertain, uncertain)
         with mock.patch("subprocess.run", return_value=subprocess.CompletedProcess([], 1)), self.assertRaises(LaunchError) as caught:
-            self.backend.launch("atc-abcd1234", [sys.executable], self.directory, self.directory / "log")
+            self.backend.launch("reins-abcd1234", [sys.executable], self.directory, self.directory / "log")
         self.assertTrue(caught.exception.uncertain)
 
 

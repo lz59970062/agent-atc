@@ -1,4 +1,4 @@
-"""Contexts and nodes: continue and fork child agents by ATC names, for every harness.
+"""Contexts and nodes: continue and fork child agents by Reins names, for every harness.
 
 The fake harnesses keep a session as a history file. A new session holds the
 prompt; forking copies the parent's history and appends the new prompt; the
@@ -17,13 +17,13 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from agent_atc.commands import work as work_commands
-from agent_atc.core import ids
-from agent_atc.engine import contexts as contexts_engine
-from agent_atc.engine import dispatch
-from agent_atc.engine import tasks as managed_tasks
-from agent_atc.engine import worker as task_worker
-from agent_atc.store import contexts, layout
+from harness_reins.commands import work as work_commands
+from harness_reins.core import ids
+from harness_reins.engine import contexts as contexts_engine
+from harness_reins.engine import dispatch
+from harness_reins.engine import tasks as managed_tasks
+from harness_reins.engine import worker as task_worker
+from harness_reins.store import contexts, layout
 from test_cli import executable_python_fixture, patch_fixture_commands
 
 FAKE = r'''#!{python}
@@ -66,8 +66,8 @@ class ContextTests(unittest.TestCase):
         self.directory = Path(temporary.name)
         self.root = self.directory / "queue"
         self.environment = mock.patch.dict(os.environ, {
-            "ATC_HOME": str(self.directory / "atc-home"), "FAKE_SESSIONS": str(self.directory / "sessions"),
-            f"ATC_{self.harness.upper()}_BIN": str(self.fake()),
+            "REINS_HOME": str(self.directory / "reins-home"), "FAKE_SESSIONS": str(self.directory / "sessions"),
+            f"REINS_{self.harness.upper()}_BIN": str(self.fake()),
         })
         self.environment.start()
         self.addCleanup(self.environment.stop)
@@ -170,11 +170,11 @@ if __name__ == "__main__":
 
 
 class ContextViewTests(ContextTests):
-    """atc context list/show give summaries and never print a raw session."""
+    """reins context list/show give summaries and never print a raw session."""
 
     def view(self, function, **options) -> str:
         import contextlib, io
-        from agent_atc.commands import contexts as context_commands
+        from harness_reins.commands import contexts as context_commands
         output = io.StringIO()
         with contextlib.redirect_stdout(output):
             status = getattr(context_commands, function)(argparse.Namespace(queue_dir=str(self.root), **options))
@@ -197,7 +197,7 @@ class ContextViewTests(ContextTests):
         self.assertIn("result: exited 0", shown)
         self.assertIn("(not printed; read the report instead)", shown)
         self.assertNotIn('["investigate X in depth", "write a review"]', shown, "the raw session stays unprinted")
-        self.assertIn("Continue: atc agent continue research/review", shown)
+        self.assertIn("Continue: reins agent continue research/review", shown)
         data = json.loads(self.view("list_contexts", all=False, json=True))
         self.assertEqual([len(v["nodes"]) for v in data], [2, 1])
         self.assertEqual(self.view("archive_context", node="research/plan").count("Archived"), 1)
@@ -209,13 +209,13 @@ class AgentCommandLineTests(unittest.TestCase):
     """The real parser: options after a node or expert name must not become prompt text."""
 
     def parse(self, *argv: str) -> argparse.Namespace:
-        from agent_atc import cli
+        from harness_reins import cli
         captured = {}
         def fake_agent(args):
             captured["args"] = args
             return 0
         with mock.patch.object(work_commands, "agent", side_effect=fake_agent), \
-                mock.patch.object(sys, "argv", ["atc", *argv]), mock.patch("sys.stderr"):
+                mock.patch.object(sys, "argv", ["reins", *argv]), mock.patch("sys.stderr"):
             self.assertEqual(cli.main(), 0)
         return captured["args"]
 

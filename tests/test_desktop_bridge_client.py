@@ -14,21 +14,21 @@ import threading
 import unittest
 from unittest import mock
 
-from agent_atc import cli
-from agent_atc.tower import environment as tower_environment
-from agent_atc.tower import main as tower
-from agent_atc.engine import delivery as delivery_engine
-from agent_atc.harness.codex import app_server
-from agent_atc.store import layout
-from agent_atc.install import windows_service
-from agent_atc.harness.codex.desktop.connection import BridgeEndpoint, load_bridge_endpoint
-from agent_atc.owners import windows
+from harness_reins import cli
+from harness_reins.tower import environment as tower_environment
+from harness_reins.tower import main as tower
+from harness_reins.engine import delivery as delivery_engine
+from harness_reins.harness.codex import app_server
+from harness_reins.store import layout
+from harness_reins.install import windows_service
+from harness_reins.harness.codex.desktop.connection import BridgeEndpoint, load_bridge_endpoint
+from harness_reins.owners import windows
 
 
 @unittest.skipUnless(os.name == "nt", "native Windows bridge peer verification")
 class BridgeClientTests(unittest.TestCase):
     def setUp(self):
-        temporary = tempfile.TemporaryDirectory(prefix="atc-bridge-client-")
+        temporary = tempfile.TemporaryDirectory(prefix="reins-bridge-client-")
         self.addCleanup(temporary.cleanup)
         self.directory = Path(temporary.name)
         self.profile = self.directory / "profile"

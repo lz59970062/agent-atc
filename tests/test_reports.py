@@ -1,4 +1,4 @@
-"""Child agent reports: validated claims, kept apart from what ATC observed."""
+"""Child agent reports: validated claims, kept apart from what Reins observed."""
 from __future__ import annotations
 
 import argparse
@@ -11,13 +11,13 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-import atc_records
-from agent_atc.commands import work as work_commands
-from agent_atc.core import ids, results
-from agent_atc.engine import dispatch
-from agent_atc.engine import tasks as managed_tasks
-from agent_atc.engine import worker as task_worker
-from agent_atc.store import layout
+import reins_records
+from harness_reins.commands import work as work_commands
+from harness_reins.core import ids, results
+from harness_reins.engine import dispatch
+from harness_reins.engine import tasks as managed_tasks
+from harness_reins.engine import worker as task_worker
+from harness_reins.store import layout
 from test_cli import executable_python_fixture, patch_fixture_commands
 
 CHILD = """\
@@ -25,7 +25,7 @@ CHILD = """\
 import json, os, sys
 from pathlib import Path
 prompt = sys.stdin.read()
-report_file = os.environ.get("ATC_REPORT_FILE")
+report_file = os.environ.get("REINS_REPORT_FILE")
 Path(sys.argv[sys.argv.index("-o") + 1]).write_text(
     json.dumps({{"prompt": prompt, "report_file": report_file}}), encoding="utf-8")
 REPORT = {report!r}
@@ -55,7 +55,7 @@ class ChildReportTests(unittest.TestCase):
             wrapped_command=[], agent="codex", agent_worker="codex", agent_prompt=["--", "Write the guide."],
             permission_mode="auto", no_report=no_report)
         with mock.patch.object(managed_tasks, "screen_binary", return_value="/usr/bin/screen"), \
-                mock.patch.dict(os.environ, {"ATC_CODEX_BIN": str(child)}), mock.patch("sys.stderr"):
+                mock.patch.dict(os.environ, {"REINS_CODEX_BIN": str(child)}), mock.patch("sys.stderr"):
             self.assertEqual(work_commands.agent(args), 0)
         path = next(layout.managed_tasks_root(self.root).glob("*/task.json"))
         task = managed_tasks.load_managed_task(path)
@@ -120,7 +120,7 @@ class ChildReportTests(unittest.TestCase):
         self.run_worker(path, task)
         seen = json.loads(Path(str(task["agent_result_path"])).read_text(encoding="utf-8"))
         self.assertEqual(seen["report_file"], task["report_path"])
-        self.assertEqual(seen["prompt"], atc_records.agent_prompt("Write the guide.", task))
+        self.assertEqual(seen["prompt"], reins_records.agent_prompt("Write the guide.", task))
         self.assertIn(str(task["report_path"]), seen["prompt"])
 
 
@@ -183,7 +183,7 @@ class UnfinishedResultTests(unittest.TestCase):
                     results.observed_exit(result, "1a2b3c4d")
 
     def test_an_observed_exit_is_never_overwritten(self):
-        exited = atc_records.result_record(self.task, exit_code=3, ended_at=150.0)
+        exited = reins_records.result_record(self.task, exit_code=3, ended_at=150.0)
         layout.managed_result_path(self.root, "1a2b3c4d").write_text(json.dumps(exited), encoding="utf-8")
         managed_tasks.record_unfinished_result(self.root, self.task, "interrupted", "late_reboot", 200.0)
         self.assertEqual(results.observed_exit(self.result(), "1a2b3c4d"), 3)

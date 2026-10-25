@@ -1,7 +1,7 @@
 """Opt-in macOS lifetime tests with disposable jobs, queues and fake agents.
 
 No installed coordinator is touched; all launchd registrations are removed.
-Run with ATC_TEST_LAUNCHD=1 in a logged-in macOS GUI session.
+Run with REINS_TEST_LAUNCHD=1 in a logged-in macOS GUI session.
 """
 from __future__ import annotations
 
@@ -19,22 +19,22 @@ import time
 import unittest
 from unittest import mock
 
-from agent_atc import cli
-from agent_atc.commands import work as work_commands
-from agent_atc.install import services
-from agent_atc.tower import main as tower
-from agent_atc.engine import dispatch
-from agent_atc.engine import tasks as managed_tasks
-from agent_atc.harness.codex import app_server
-from agent_atc.owners import host
-from agent_atc.store import layout
-from agent_atc.install import diagnostics, launchd_service
-from agent_atc.owners import LaunchdBackend, OwnerState, macos
-from agent_atc.core import ids
+from harness_reins import cli
+from harness_reins.commands import work as work_commands
+from harness_reins.install import services
+from harness_reins.tower import main as tower
+from harness_reins.engine import dispatch
+from harness_reins.engine import tasks as managed_tasks
+from harness_reins.harness.codex import app_server
+from harness_reins.owners import host
+from harness_reins.store import layout
+from harness_reins.install import diagnostics, launchd_service
+from harness_reins.owners import LaunchdBackend, OwnerState, macos
+from harness_reins.core import ids
 
 
-@unittest.skipUnless(sys.platform == "darwin" and os.environ.get("ATC_TEST_LAUNCHD") == "1",
-                     "set ATC_TEST_LAUNCHD=1 for real macOS jobs")
+@unittest.skipUnless(sys.platform == "darwin" and os.environ.get("REINS_TEST_LAUNCHD") == "1",
+                     "set REINS_TEST_LAUNCHD=1 for real macOS jobs")
 class RealLaunchdTests(unittest.TestCase):
     def wait_until(self, predicate, message, timeout=12):
         deadline = time.monotonic() + timeout
@@ -50,7 +50,7 @@ class RealLaunchdTests(unittest.TestCase):
     def test_task_survives_coordinator_exit_with_one_result_and_callback(self):
         self.assertTrue(macos.manager_available(), "macOS GUI domain is required")
         backend = LaunchdBackend()
-        with tempfile.TemporaryDirectory(prefix="atc-launchd-", dir="/tmp") as temporary:
+        with tempfile.TemporaryDirectory(prefix="reins-launchd-", dir="/tmp") as temporary:
             directory = Path(temporary).resolve()
             root = directory / "queue"
             started, release, executions = (directory / name for name in ("started", "release", "executions"))
@@ -89,15 +89,15 @@ class RealLaunchdTests(unittest.TestCase):
                 import sys, time
                 from pathlib import Path
                 sys.path.insert(0, {source!r})
-                from agent_atc import cli
-                from agent_atc.commands import work as work_commands
-                from agent_atc.install import services
-                from agent_atc.tower import main as tower
-                from agent_atc.engine import dispatch
-                from agent_atc.engine import tasks as managed_tasks
-                from agent_atc.harness.codex import app_server
-                from agent_atc.owners import host
-                from agent_atc.store import layout
+                from harness_reins import cli
+                from harness_reins.commands import work as work_commands
+                from harness_reins.install import services
+                from harness_reins.tower import main as tower
+                from harness_reins.engine import dispatch
+                from harness_reins.engine import tasks as managed_tasks
+                from harness_reins.harness.codex import app_server
+                from harness_reins.owners import host
+                from harness_reins.store import layout
                 managed_tasks.recover_managed_tasks(Path(sys.argv[1]))
                 time.sleep(40)
                 """))
@@ -129,7 +129,7 @@ class RealLaunchdTests(unittest.TestCase):
 
     def test_launchagent_setup_doctor_and_reload_use_isolated_profile(self):
         self.assertTrue(macos.manager_available(), "macOS GUI domain is required")
-        with tempfile.TemporaryDirectory(prefix="atc-agent-", dir="/tmp") as temporary:
+        with tempfile.TemporaryDirectory(prefix="reins-agent-", dir="/tmp") as temporary:
             directory = Path(temporary).resolve()
             queue = directory / "queue"
             name = LaunchdBackend().owner_name("test-daemon", 1, queue)
@@ -137,10 +137,10 @@ class RealLaunchdTests(unittest.TestCase):
             fake = directory / "fake-codex"
             fake.write_text("#!/bin/sh\nexit 97\n")
             fake.chmod(0o700)
-            env = {"CODEX_HOME": str(home), "ATC_HOME": str(home / "atc-home"), "CLAUDE_CONFIG_DIR": str(directory / "claude"),
+            env = {"CODEX_HOME": str(home), "REINS_HOME": str(home / "reins-home"), "CLAUDE_CONFIG_DIR": str(directory / "claude"),
                    layout.TARGET_LOCK_DIR_ENV: str(directory / "locks"), app_server.DESKTOP_APP_SERVER_ENV: "0",
-                   "ATC_CODEX_BIN": str(fake)}
-            argv = ["atc", "setup", "--callback-only", "--name", name, "--queue-dir", str(queue),
+                   "REINS_CODEX_BIN": str(fake)}
+            argv = ["reins", "setup", "--callback-only", "--name", name, "--queue-dir", str(queue),
                     "--service", "launchd", "--skill-target", "codex", "--codex-bin", str(fake),
                     "--interval", "0.05", "--force", "--enable", "--now"]
             with mock.patch.dict(os.environ, env), mock.patch.object(

@@ -1,6 +1,6 @@
-# Agent Traffic Control
+# Harness Reins
 
-Agent Traffic Control (ATC) brings an Agent back to the same conversation when a long task finishes. Submit a training run, test suite, or code review, and let it run in the background. ATC sends the result paths back to the conversation so the Agent can read the logs and artifacts and continue working.
+Harness Reins (Reins) brings an Agent back to the same conversation when a long task finishes. Submit a training run, test suite, or code review, and let it run in the background. Reins sends the result paths back to the conversation so the Agent can read the logs and artifacts and continue working.
 
 [Get started](quickstart.md){ .md-button .md-button--primary }
 [Explore the architecture](overview.md){ .md-button }
@@ -10,10 +10,10 @@ Agent Traffic Control (ATC) brings an Agent back to the same conversation when a
 Ask the Agent to submit a training command from its current session:
 
 ```bash
-atc run --cwd "$PWD" --task "Train the model" -- python train.py --config configs/exp.yaml
+reins run --cwd "$PWD" --task "Train the model" -- python train.py --config configs/exp.yaml
 ```
 
-ATC returns a task ID and a log path. When the task finishes, the original session receives a callback. The Agent checks the output and runs the ACK command included in the callback. Start with the ten-second example in [Your first task](quickstart.md).
+Reins returns a task ID and a log path. When the task finishes, the original session receives a callback. The Agent checks the output and runs the ACK command included in the callback. Start with the ten-second example in [Your first task](quickstart.md).
 
 ## Choose an entry point
 
@@ -29,7 +29,7 @@ For worked examples, see [Use cases](guides/use-cases.md).
 
 ## Set up your environment
 
-ATC runs on Linux, macOS, and Windows. Follow [Installation](installation.md), then choose your Agent: [Codex CLI](integrations/codex.md), [Claude Code](integrations/claude.md), [Pi](integrations/pi.md), or [Codex Desktop](integrations/desktop.md). The [support matrix](integrations/support.md) lists versions, callback routes, and validation records.
+Reins runs on Linux, macOS, and Windows. Follow [Installation](installation.md), then choose your Agent: [Codex CLI](integrations/codex.md), [Claude Code](integrations/claude.md), [Pi](integrations/pi.md), or [Codex Desktop](integrations/desktop.md). The [support matrix](integrations/support.md) lists versions, callback routes, and validation records.
 
 The quickstart uses stable version `0.7.0`. Claude live callbacks, Pi, and the Desktop launcher use the `0.7.1` preview, with setup steps on each integration page.
 

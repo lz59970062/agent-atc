@@ -6,9 +6,9 @@ set -euo pipefail
 version=$1
 platform=$2
 stage=$(mktemp -d)
-cp -r /src/packaging/npm/atc "$stage/atc"
+cp -r /src/packaging/npm/reins "$stage/reins"
 mkdir -p "$stage/$platform/dist"
-cp -a /out/dist/atc "$stage/$platform/dist/atc"
+cp -a /out/dist/reins "$stage/$platform/dist/reins"
 
 node - "$stage" "$version" "$platform" <<'EOF'
 const fs = require("fs");
@@ -16,16 +16,16 @@ const path = require("path");
 const [stage, version, platform] = process.argv.slice(2);
 const [os, cpu] = platform.split("-");
 
-const mainFile = path.join(stage, "atc", "package.json");
+const mainFile = path.join(stage, "reins", "package.json");
 const main = JSON.parse(fs.readFileSync(mainFile, "utf8"));
 main.version = version;
 for (const name of Object.keys(main.optionalDependencies)) main.optionalDependencies[name] = version;
 fs.writeFileSync(mainFile, JSON.stringify(main, null, 2) + "\n");
 
 fs.writeFileSync(path.join(stage, platform, "package.json"), JSON.stringify({
-  name: `@agent-atc/${platform}`,
+  name: `@harness-reins/${platform}`,
   version,
-  description: `Prebuilt ATC (Agent Traffic Control) binary for ${platform}`,
+  description: `Prebuilt Harness Reins binary for ${platform}`,
   license: "MIT",
   os: [os],
   cpu: [cpu],
@@ -35,5 +35,5 @@ fs.writeFileSync(path.join(stage, platform, "package.json"), JSON.stringify({
 EOF
 
 mkdir -p /out/npm
-(cd "$stage/atc" && npm pack --silent --pack-destination /out/npm)
+(cd "$stage/reins" && npm pack --silent --pack-destination /out/npm)
 (cd "$stage/$platform" && npm pack --silent --pack-destination /out/npm)

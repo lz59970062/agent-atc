@@ -12,8 +12,8 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from agent_atc.owners import LaunchError, OwnerState, SystemdUserBackend
-from agent_atc.owners import linux
+from harness_reins.owners import LaunchError, OwnerState, SystemdUserBackend
+from harness_reins.owners import linux
 
 
 class SystemdOwnershipTests(unittest.TestCase):
@@ -65,7 +65,7 @@ class SystemdOwnershipTests(unittest.TestCase):
         owner = self.backend.owner_name("0a1b2c3d", 1, self.directory)
         cwd = self.directory / "work with spaces"
         log = self.directory / "attempt log.txt"
-        worker = [str(self.directory / "atc program/bin/atc"), "_task-worker", "--task-file", "a path/task.json", "--attempt", "1"]
+        worker = [str(self.directory / "reins program/bin/reins"), "_task-worker", "--task-file", "a path/task.json", "--attempt", "1"]
         with mock.patch("subprocess.run", return_value=subprocess.CompletedProcess([], 0, "", "")) as run:
             self.backend.launch(owner, worker, str(cwd), str(log))
         command = run.call_args.args[0]
@@ -85,20 +85,20 @@ class SystemdOwnershipTests(unittest.TestCase):
     def test_launch_timeout_is_uncertain_because_manager_may_have_accepted_unit(self) -> None:
         with mock.patch("subprocess.run", side_effect=subprocess.TimeoutExpired("systemd-run", 5)):
             with self.assertRaises(LaunchError) as caught:
-                self.backend.launch("atc-example.service", [sys.executable], str(self.directory), str(self.directory / "log"))
+                self.backend.launch("reins-example.service", [sys.executable], str(self.directory), str(self.directory / "log"))
         self.assertTrue(caught.exception.uncertain)
 
     def test_nonzero_launch_response_is_not_proof_no_workload_exists(self) -> None:
         result = subprocess.CompletedProcess([], 1, "", "Unit already exists or reply lost")
         with mock.patch("subprocess.run", return_value=result):
             with self.assertRaises(LaunchError) as caught:
-                self.backend.launch("atc-example.service", [sys.executable], str(self.directory), str(self.directory / "log"))
+                self.backend.launch("reins-example.service", [sys.executable], str(self.directory), str(self.directory / "log"))
         self.assertTrue(caught.exception.uncertain)
 
     def test_missing_launcher_is_definitive_prelaunch_failure(self) -> None:
         with mock.patch("subprocess.run", side_effect=FileNotFoundError("systemd-run")):
             with self.assertRaises(LaunchError) as caught:
-                self.backend.launch("atc-example.service", [sys.executable], str(self.directory), str(self.directory / "log"))
+                self.backend.launch("reins-example.service", [sys.executable], str(self.directory), str(self.directory / "log"))
         self.assertFalse(caught.exception.uncertain)
 
     def test_query_errors_and_malformed_status_are_unknown_not_absent(self) -> None:
@@ -111,10 +111,10 @@ class SystemdOwnershipTests(unittest.TestCase):
         ]
         for response in responses:
             with self.subTest(response=response), mock.patch("subprocess.run", return_value=response):
-                self.assertEqual(self.backend.probe("atc-example.service"), OwnerState.UNKNOWN)
+                self.assertEqual(self.backend.probe("reins-example.service"), OwnerState.UNKNOWN)
         for error in (FileNotFoundError("systemctl"), subprocess.TimeoutExpired("systemctl", 5)):
             with self.subTest(error=error), mock.patch("subprocess.run", side_effect=error):
-                self.assertEqual(self.backend.probe("atc-example.service"), OwnerState.UNKNOWN)
+                self.assertEqual(self.backend.probe("reins-example.service"), OwnerState.UNKNOWN)
 
     def test_active_or_stopping_service_cannot_be_treated_as_relaunchable(self) -> None:
         for state in ("active", "activating", "deactivating", "reloading"):
@@ -122,12 +122,12 @@ class SystemdOwnershipTests(unittest.TestCase):
             with self.subTest(state=state), mock.patch(
                 "subprocess.run", return_value=subprocess.CompletedProcess([], 0, status, "")
             ):
-                self.assertEqual(self.backend.probe("atc-example.service"), OwnerState.ALIVE)
+                self.assertEqual(self.backend.probe("reins-example.service"), OwnerState.ALIVE)
 
     def test_inactive_service_with_pending_start_job_is_still_owned(self) -> None:
         status = "LoadState=loaded\nActiveState=inactive\nJob=314\n"
         with mock.patch("subprocess.run", return_value=subprocess.CompletedProcess([], 0, status, "")):
-            self.assertEqual(self.backend.probe("atc-example.service"), OwnerState.ALIVE)
+            self.assertEqual(self.backend.probe("reins-example.service"), OwnerState.ALIVE)
 
     def test_older_systemd_empty_job_property_means_no_pending_job(self) -> None:
         for load, state, expected in (
@@ -139,7 +139,7 @@ class SystemdOwnershipTests(unittest.TestCase):
             with self.subTest(status=status), mock.patch(
                 "subprocess.run", return_value=subprocess.CompletedProcess([], 0, status, "")
             ):
-                self.assertEqual(self.backend.probe("atc-example.service"), expected)
+                self.assertEqual(self.backend.probe("reins-example.service"), expected)
 
     def test_only_successful_explicit_absence_is_absent(self) -> None:
         for status in (
@@ -150,7 +150,7 @@ class SystemdOwnershipTests(unittest.TestCase):
             with self.subTest(status=status), mock.patch(
                 "subprocess.run", return_value=subprocess.CompletedProcess([], 0, status, "")
             ):
-                self.assertEqual(self.backend.probe("atc-example.service"), OwnerState.ABSENT)
+                self.assertEqual(self.backend.probe("reins-example.service"), OwnerState.ABSENT)
 
 
 if __name__ == "__main__":
@@ -182,7 +182,7 @@ class UserManagerEnvironmentTests(unittest.TestCase):
             self.assertEqual((kept["XDG_RUNTIME_DIR"], kept["DBUS_SESSION_BUS_ADDRESS"]), ("/custom", "x"))
 
     def test_missing_or_foreign_runtime_dir_is_left_unset(self) -> None:
-        with mock.patch.object(linux, "Path", side_effect=lambda value, *rest: Path("/nonexistent-atc-runtime")):
+        with mock.patch.object(linux, "Path", side_effect=lambda value, *rest: Path("/nonexistent-reins-runtime")):
             self.assertNotIn("XDG_RUNTIME_DIR", linux.user_manager_environment({"PATH": "/bin"}))
 
     def test_systemd_control_commands_receive_the_filled_environment(self) -> None:

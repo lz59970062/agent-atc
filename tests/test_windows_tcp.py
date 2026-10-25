@@ -9,8 +9,8 @@ import sys
 import unittest
 from unittest import mock
 
-from agent_atc.owners import windows
-from agent_atc.system import windows_tcp
+from harness_reins.owners import windows
+from harness_reins.system import windows_tcp
 
 
 class WindowsTcpContracts(unittest.TestCase):

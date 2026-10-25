@@ -1,8 +1,8 @@
-site_name: Agent Traffic Control
+site_name: Harness Reins
 site_description: 长任务结束后，让 Agent 回到原会话继续工作。
-site_url: !ENV [ATC_DOCS_SITE_URL, 'https://lz59970062.github.io/agent-atc/']
-repo_url: https://github.com/lz59970062/agent-atc
-repo_name: lz59970062/agent-atc
+site_url: !ENV [REINS_DOCS_SITE_URL, 'https://lz59970062.github.io/harness-reins/']
+repo_url: https://github.com/lz59970062/harness-reins
+repo_name: lz59970062/harness-reins
 edit_uri: edit/main/docs/
 strict: true
 hooks:
@@ -147,4 +147,4 @@ nav:
       - 开发资料: reference/engineering.md
       - 参与文档维护: reference/contributing.md
       - 文档发布与同步: reference/publishing.md
-      - 版本记录: https://github.com/lz59970062/agent-atc/blob/main/CHANGELOG.md
+      - 版本记录: https://github.com/lz59970062/harness-reins/blob/main/CHANGELOG.md

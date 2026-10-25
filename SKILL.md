@@ -1,9 +1,9 @@
 ---
-name: agent-atc
-description: Submit durable Codex, Claude or Pi child agents using registered task templates, or arrange callbacks for long-running commands, training, benchmarks, tests, builds and data jobs. Use when independent task ownership or a return to the original Codex, Claude Code or PI Agent session is needed. Repair ATC configuration status blocks; inspect results, ACK callbacks and continue the original goal.
+name: harness-reins
+description: Submit durable Codex, Claude or Pi child agents using registered task templates, or arrange callbacks for long-running commands, training, benchmarks, tests, builds and data jobs. Use when independent task ownership or a return to the original Codex, Claude Code or PI Agent session is needed. Repair Reins configuration status blocks; inspect results, ACK callbacks and continue the original goal.
 ---
 
-# Agent Traffic Control
+# Harness Reins
 
 ## Rule
 
@@ -12,11 +12,11 @@ Code turn.
 
 There are three public workflows:
 
-- `atc run -- <command>` submits a new long-running task. The daemon launches it through an independent task owner (systemd on Linux, launchd on macOS, Task Scheduler on Windows; screen fallback on Linux/macOS).
-- `atc agent codex|claude|pi -- <prompt>` submits a fresh child agent through the same durable
+- `reins run -- <command>` submits a new long-running task. The daemon launches it through an independent task owner (systemd on Linux, launchd on macOS, Task Scheduler on Windows; screen fallback on Linux/macOS).
+- `reins agent codex|claude|pi -- <prompt>` submits a fresh child agent through the same durable
   lifecycle. Codex/Claude are available since `0.6.5`; Pi is a child worker and callback
   parent in the current preview.
-- `atc done ...` queues a completion callback for work already owned by screen, tmux,
+- `reins done ...` queues a completion callback for work already owned by screen, tmux,
   Slurm, another scheduler, or an existing script.
 
 Daemon handoff is unconditional and requires no opt-in flag. Never add `--via-daemon` to newly
@@ -27,23 +27,23 @@ behavior change the task's original exit code unless the user explicitly request
 
 ## Registered task templates
 
-`atc template register NAME --file /path/to/template.yaml` installs a user template,
-copies its system-prompt dependencies, and creates a short `atc-NAME` discovery skill.
+`reins template register NAME --file /path/to/template.yaml` installs a user template,
+copies its system-prompt dependencies, and creates a short `reins-NAME` discovery skill.
 The YAML's `worker` and `description` describe the capability; CLI options can supply
-or override them. `atc template list --json` shows the registered capabilities.
+or override them. `reins template list --json` shows the registered capabilities.
 The generated entrypoint binds the installed template file so another workspace's
-`ATC_TEMPLATE_DIR` cannot select a different same-named template. Keep Agent profile
+`REINS_TEMPLATE_DIR` cannot select a different same-named template. Keep Agent profile
 settings and the current parent's callback binding.
 
 Read the matching entrypoint and pass actual task scope, target paths and evidence
-constraints. Check readiness with `atc doctor --operation agent --agent-worker WORKER`
+constraints. Check readiness with `reins doctor --operation agent --agent-worker WORKER`
 and validate submission with `--dry-run` when needed. Routine local edits need not be
 delegated. On completion, inspect the real result and edits, ACK and continue.
 
 Registration maintains only the following index; preserve the surrounding instructions.
 
-<!-- atc:registered-templates:begin -->
-<!-- atc:registered-templates:end -->
+<!-- reins:registered-templates:begin -->
+<!-- reins:registered-templates:end -->
 
 ## Callback rules that always apply
 
@@ -59,7 +59,7 @@ Do not force CLI mode to conceal a Desktop ownership conflict.
 
 `manual` explicitly saves results/callbacks for later receipt and does not start
 an Agent automatically. Choose it only when the user accepts this limitation.
-On Mac and Windows, `atc setup` automatically generates a private double-click
+On Mac and Windows, `reins setup` automatically generates a private double-click
 launcher bound to the installed Python and current profile: `.command` on Mac,
 `.cmd` plus `.ps1` on Windows. `setup --desktop-app PATH` selects a Mac `.app`
 or Windows `.exe`; `--no-desktop-launcher` skips generation. Missing Desktop does
@@ -68,8 +68,8 @@ the Store manifest and matching Core during launch/preflight. Windows helpers
 ship inside the wheel; do not depend on a checkout or its examples directory.
 Generated absolute paths belong to that machine; regenerate them after moving
 the Python installation rather than copying another user's files.
-`atc desktop prepare` is available for later configuration changes;
-`atc desktop launch --check-only` checks launch blockers, and `atc desktop launch`
+`reins desktop prepare` is available for later configuration changes;
+`reins desktop launch --check-only` checks launch blockers, and `reins desktop launch`
 requires existing Desktop work to be saved and the app closed. Obtain permission
 before interrupting active Desktop work. Preparation and checks need no restart.
 Windows defaults to direct startup. `setup --desktop-launch-mode package-context`
@@ -82,7 +82,7 @@ only generates files and performs no native GUI creation probe.
 Read `doctor`'s separate `callback` field. `owner_reachable` is a read-only
 observation, not proof of end-to-end receipt. Sandboxed tools may need authorized
 ordinary-user execution to inspect native peers; never weaken identity checks.
-After repairing a known failed handoff, `atc retry --id ID --callback-mode desktop`
+After repairing a known failed handoff, `reins retry --id ID --callback-mode desktop`
 requeues the original callback without rerunning its workload. Unknown submission
 outcomes, active deliveries, ACKs and cancellations prevent ordinary retry.
 Inspect manual results in the bound session before ACK, and label that receipt
@@ -97,8 +97,8 @@ next step is clear and safe. Inspect existing work before relaunching it. Then r
 the supplied ACK command; ACK confirms receipt, not completion of the overall goal.
 Resume only the bound conversation, never redirect to another session.
 
-Read the user callback hook at initial ATC use when present. Its instructions still
-apply when not repeated. Since ATC 0.6.6, standard reminders appear on the first callback and every
+Read the user callback hook at initial Reins use when present. Its instructions still
+apply when not repeated. Since Reins 0.6.6, standard reminders appear on the first callback and every
 4 distinct callbacks thereafter; user-hook reminders on the first and every 3.
 A short callback omits repeated prose, not these responsibilities. Task results,
 routing and the ACK command remain present. In 0.7.0, full commands, timestamps and handoff text are saved at the supplied Details path. Read that file before acting when the envelope says so; otherwise inspect relevant result artifacts directly. An exit code is process status, not proof of test success.
@@ -106,9 +106,9 @@ When reporting a callback to the user, include the recorded task runtime in one
 short phrase when available, such as `Finished in 2m 5.5s`. Use execution duration,
 not the time spent waiting for delivery; do not invent a duration when it is unknown.
 
-Configure with `atc prompt-policy --system-every 4 --user-every 3`; no options shows
+Configure with `reins prompt-policy --system-every 4 --user-every 3`; no options shows
 the effective policy. `1` means every callback. The file is
-`${ATC_HOME:-~/.atc}/callback-prompts.yaml`. Counters are per
+`${REINS_HOME:-~/.reins}/callback-prompts.yaml`. Counters are per
 queue, agent and bound session, allocated at first delivery attempt. Retries reuse
 the same sequence and reminder decisions across restarts. Queuing/dry-run does not
 count.
@@ -118,8 +118,8 @@ count.
 The 0.7 topology separates the coordinator and task owners:
 
 ```text
-systemd user service / macOS LaunchAgent / Windows login task -> atc daemon (recovery and callbacks)
-independent systemd service / launchd job / Windows scheduled runner -> ATC worker -> command / child agent
+systemd user service / macOS LaunchAgent / Windows login task -> reins daemon (recovery and callbacks)
+independent systemd service / launchd job / Windows scheduled runner -> Reins worker -> command / child agent
 ```
 
 `--backend auto` prefers an available systemd user manager (v240+) on Linux or
@@ -144,7 +144,7 @@ Choose the execution path before launching the command:
 - If the command is reliably expected to finish within 60 seconds, one foreground wait is
   acceptable.
 - If it may take about one minute or longer, its duration is uncertain, or a second status check
-  might be needed, use `atc run` from the start.
+  might be needed, use `reins run` from the start.
 - Do not keep a prompt cache warm by polling. A few-minute task should normally use callback
   delivery: the daemon and screen wait without model turns, then resume the same conversation
   when work completes; ACK and existing-artifact checks handle possible duplicate delivery.
@@ -154,25 +154,25 @@ Choose the execution path before launching the command:
 If a supposedly short foreground command unexpectedly remains active, keep the current turn
 responsible for it; do not abandon it as an agent-owned background process.
 
-The command name is `atc`.
+The command name is `reins`.
 
 ## Install
 
 ### Automatic configuration checks
 
-`atc run`, `atc agent` and `atc done` automatically check ATC's supported environment,
+`reins run`, `reins agent` and `reins done` automatically check Reins's supported environment,
 configuration and observed runtime chain: storage, coordinator, recorded task
 owners, saved results and callback handoff. These checks follow the selected
 platform adapter and each task's recorded backend, not a fixed list of software
 to install on every host.
 Healthy calls add no diagnostic text. A failed check appends a JSON block between
-`[atc-status]` and `[/atc-status]` on stderr. This is an action request to the
-**calling Agent**: diagnose the listed issues, configure ATC in the current
+`[reins-status]` and `[/reins-status]` on stderr. This is an action request to the
+**calling Agent**: diagnose the listed issues, configure Reins in the current
 environment, run its `recheck_command`, then continue the user's task. Do not hand
 ordinary installation, service startup or configuration commands back to the user.
 
 The block supplies `repair_command` and `recheck_command` as argument arrays pinned
-to the current ATC installation and queue. Address missing prerequisites first;
+to the current Reins installation and queue. Address missing prerequisites first;
 preserve the original Agent session, profile paths and existing custom settings.
 Read `environment`, `checks.configuration`, `checks.runtime` and each issue's
 `kind`/`code` to distinguish missing setup from a runtime fault or unsupported OS.
@@ -181,7 +181,7 @@ artifact/session inspection and lifecycle recovery, not a generic reinstall.
 Windows checks Task Scheduler, private state and coordinator identity; macOS checks
 launchd/screen readiness. Repair commands follow the selected platform and queue.
 The setup repair uses `--keep-skill` to retain an installed skill while installing
-one when missing. It can update the ATC coordinator configuration; inspect existing
+one when missing. It can update the Reins coordinator configuration; inspect existing
 service customizations before doing so. Never replace a missing binding with an
 invented session.
 For `done`, repair adds `setup --callback-only`: externally owned work needs the
@@ -190,11 +190,11 @@ callback coordinator, not a local business-task execution backend.
 Check `work.state` before retrying: `task_persisted` or `callback_queued` means
 repair the infrastructure around that existing ID, **do not submit it again**.
 For `unknown`, inspect that ID's task/queue records before deciding whether a retry
-is needed. For `not_submitted`, retry the original ATC invocation only after the
+is needed. For `not_submitted`, retry the original Reins invocation only after the
 prerequisites pass. A `done` invocation reports work already performed; repair or
 retry its callback without rerunning that work.
 
-Use `atc doctor` for an explicit JSON check (exit 0 for local readiness, 1 for
+Use `reins doctor` for an explicit JSON check (exit 0 for local readiness, 1 for
 configuration needed). Pass the same queue, backend and session options; for a
 child task include `--operation agent --agent-worker <agent>`. Readiness checks
 local state and observed liveness, not task progress, authentication, the
@@ -214,19 +214,19 @@ without this automatic check.
 
 ```bash
 # Install screen only if using the compatibility backend.
-python3 -m pip install "git+https://github.com/lz59970062/agent-atc.git@codex/macos-desktop-callback"
-atc setup --force --enable --now
+python3 -m pip install "git+https://github.com/lz59970062/harness-reins.git@codex/macos-desktop-callback"
+reins setup --force --enable --now
 ```
 
 `setup` installs this skill for Codex and Claude Code and configures the selected coordinator service. It requires a reachable native manager (systemd/launchd/Task Scheduler) or screen for the Linux/macOS compatibility backend. It creates the user-editable fixed prompt hook at
-`${ATC_HOME:-~/.atc}/callback-hook.md` without overwriting existing content.
+`${REINS_HOME:-~/.reins}/callback-hook.md` without overwriting existing content.
 The delivery worker reads that UTF-8 file on attempts whose saved user-reminder decision is
 due, so edits apply on the next due attempt without a restart. Non-empty content is appended
-under `[atc-user-hook]`; hook read failures warn and continue with the callback.
+under `[reins-user-hook]`; hook read failures warn and continue with the callback.
 
 `setup` also checks for the Claude Code CLI and runs `claude auth status` with output suppressed.
 This check is advisory and must not block Codex-only installation or print credentials/account
-details. Claude configuration must be present in the shell that later submits `atc agent claude`.
+details. Claude configuration must be present in the shell that later submits `reins agent claude`.
 
 ## Windows
 
@@ -236,17 +236,17 @@ the ordinary logged-in user's Task Scheduler session. `--backend auto` and
 from the release checkout in PowerShell without activating the venv:
 
 ```powershell
-git clone --branch codex/macos-desktop-callback --depth 1 https://github.com/lz59970062/agent-atc.git
-Set-Location agent-atc
+git clone --branch codex/macos-desktop-callback --depth 1 https://github.com/lz59970062/harness-reins.git
+Set-Location harness-reins
 py -3 -m venv .venv
 & .\.venv\Scripts\python.exe -m pip install .
-& .\.venv\Scripts\atc.exe setup --service windows-task --force --enable --now
+& .\.venv\Scripts\reins.exe setup --service windows-task --force --enable --now
 ```
 
 Keep the installed runtime at its fixed path. Setup pins the Agent profiles,
 executables, PATH and queue in a private configuration file. One Agent profile
 has one coordinator queue. For another queue, use a separate profile, or drain
-the current tasks and callbacks, run `atc uninstall-windows-task`, then reinstall
+the current tasks and callbacks, run `reins uninstall-windows-task`, then reinstall
 for the new queue. Do not copy another machine's session binding.
 
 Use native argument lists. Recognized npm/forwarding `.cmd` launchers are resolved
@@ -266,8 +266,8 @@ ACK, change the bound session or rerun the business work. Native workload and
 fake-Agent delivery tests do not establish live original-session receipt.
 
 For the experimental bridge, follow the repository's `docs/windows-desktop-bridge.md`.
-It requires Desktop and ATC to use one App Server and the explicit
-`ATC_DESKTOP_BRIDGE_FILE` metadata path. Never guess a port or
+It requires Desktop and Reins to use one App Server and the explicit
+`REINS_DESKTOP_BRIDGE_FILE` metadata path. Never guess a port or
 expose an unauthenticated App Server. The supplied launcher refuses a running
 Desktop; switching its connection requires closing active Desktop work first.
 After explicit bridge selection, connection failure must not fall back to CLI.
@@ -280,20 +280,20 @@ POSIX directory-fsync guarantee: namespace changes may be lost after sudden
 power failure. Login is required; sleep pauses work and logout/reboot can
 interrupt it. Missing owners and unknown launches never authorize auto-replay.
 
-Use `atc install-windows-task --print` for the public registration preview,
-`atc doctor --backend windows-task` with the original session and queue for
-diagnosis, and `atc setup --service windows-task --keep-skill --force --enable --now`
+Use `reins install-windows-task --print` for the public registration preview,
+`reins doctor --backend windows-task` with the original session and queue for
+diagnosis, and `reins setup --service windows-task --keep-skill --force --enable --now`
 after upgrading. A verified coordinator waits for deliveries to drain before
-its supervisor replaces it. `atc uninstall-windows-task` removes the login
+its supervisor replaces it. `reins uninstall-windows-task` removes the login
 registration and drains the coordinator; it does not stop business tasks or
 erase results/ACKs. Do not delete lock files while inherited delivery handles
 may still own them. See the repository's `docs/windows.md` and validation record.
 
 ## macOS
 
-`atc setup --force --enable --now` selects a user LaunchAgent in the logged-in GUI
+`reins setup --force --enable --now` selects a user LaunchAgent in the logged-in GUI
 session and independent one-shot launchd jobs for new tasks. Screen is optional.
-Use `atc install-launchd --print` to preview the plist, `--backend launchd` to
+Use `reins install-launchd --print` to preview the plist, `--backend launchd` to
 require the native task owner, or `--backend screen --service standalone` for
 headless sessions without a GUI domain. Apple's bundled screen is supported.
 
@@ -308,41 +308,41 @@ before repeating submission. Desktop socket delivery uses local peer credentials
 CLI delivery is the fallback when the optional socket is unavailable.
 
 ```bash
-launchctl print "gui/$(id -u)/agent-atc"
-tail -f "${ATC_HOME:-$HOME/.atc}/daemon.log"
+launchctl print "gui/$(id -u)/harness-reins"
+tail -f "${REINS_HOME:-$HOME/.reins}/daemon.log"
 ```
 
 ## Containers (Docker / AutoDL)
 
 Use `--backend screen` where no systemd user manager is available. Install screen
-in the container. Run ATC, the Agent CLI and workload as the same user inside the
+in the container. Run Reins, the Agent CLI and workload as the same user inside the
 same container with durable local state/workspace mounts. Agent CLI and credentials
 must be available inside that container; the host's desktop socket is not assumed.
 
-`atc setup --backend screen --service standalone --now` starts a coordinator in an
+`reins setup --backend screen --service standalone --now` starts a coordinator in an
 existing AutoDL/container session without systemd. `--service auto` selects systemd
 when reachable, otherwise standalone. Use `--service supervisor` only when explicitly
 managing that configuration. Standalone `--enable` cannot register container startup.
-For Docker images, run `atc daemon` in foreground under `docker --init`, or use an
+For Docker images, run `reins daemon` in foreground under `docker --init`, or use an
 external supervisor. A container CMD must not merely spawn a background daemon and exit.
 
 When setting up unattended container use, guide the user through the startup route
 appropriate to their platform: a verified AutoDL boot hook invoking standalone
 setup with `--keep-skill --now`, an existing administered Supervisor running
-`atc daemon` with `autostart`/`autorestart`, or a foreground Docker daemon with
+`reins daemon` with `autostart`/`autorestart`, or a foreground Docker daemon with
 `--restart unless-stopped`. Inspect the actual startup mechanism; creating
 `/root/autodl.sh` alone does not establish that an image executes it. AutoDL elastic
 deployment main commands must stay in the foreground. Preserve existing boot-hook
 commands, Agent profiles, queue paths and service customizations. Pin executable
 paths and runtime environment instead of relying on interactive Conda/NVM setup.
 For custom Supervisor layouts, use its verified configuration with `supervisorctl
--c`; ATC's built-in installer uses bare control commands and an unscoped update.
+-c`; Reins's built-in installer uses bare control commands and an unscoped update.
 Choose one startup owner per queue and distinguish boot startup from crash recovery.
 Prepare changes within the user's authorized scope; guidance alone does not authorize
 restarting a busy container or replacing platform services. Detailed examples and
 removal steps are in the repository's `docs/containers.md`.
 
-After configuration, check the service and `atc doctor` under the same profile, then
+After configuration, check the service and `reins doctor` under the same profile, then
 verify startup at a planned idle container restart and a real original-session
 callback/ACK. Report any untested restart behavior explicitly. Coordinator autostart
 does not preserve or authorize replay of an interrupted business process.
@@ -357,7 +357,7 @@ work; inspect persisted results/checkpoints and session identity before resubmit
 Use this when the agent is launching the long command:
 
 ```bash
-atc run \
+reins run \
   --cwd "$PWD" \
   --task "train model" \
   -- python train.py --config configs/exp.yaml
@@ -368,59 +368,59 @@ inspection commands are:
 
 ```bash
 screen -ls
-screen -r atc-<task-id>
-tail -f ~/.atc/tasks/<task-id>/attempt-1.log
+screen -r reins-<task-id>
+tail -f ~/.reins/tasks/<task-id>/attempt-1.log
 ```
 
 Detaching with `Ctrl-a d` leaves the task running.
 
 ## Agent: submit a durable fresh child agent
 
-Use `atc agent` when a fresh Codex, Claude Code or Pi process should perform an independent task and
+Use `reins agent` when a fresh Codex, Claude Code or Pi process should perform an independent task and
 the work needs independent ownership, durable artifacts, or a completion callback. For short work that
-fits an in-turn native subagent, ATC is unnecessary.
+fits an in-turn native subagent, Reins is unnecessary.
 
 ```bash
-atc agent claude --cwd "$PWD" --name parser-review \
+reins agent claude --cwd "$PWD" --name parser-review \
   -- "Inspect parser.py and its tests. Report concrete defects and suggested fixes."
 
-atc agent codex --cwd "$PWD" --name parser-fix \
+reins agent codex --cwd "$PWD" --name parser-fix \
   -- "Fix the confirmed parser defects and run the relevant tests."
 
-atc agent pi --cwd "$PWD" --name parser-review \
+reins agent pi --cwd "$PWD" --name parser-review \
   -- "Inspect parser.py and its tests. Report concrete defects and suggested fixes."
 ```
 
 ### Name, continue and fork child agents
 
 Every child agent task is a node with a required short name (`--name`, or an explicit `--task`;
-no `/` or spaces). ATC keeps the child's session, so the same agent can keep working with what it
+no `/` or spaces). Reins keeps the child's session, so the same agent can keep working with what it
 already learned. Address a node by its task ID (`1a2b3c4d`), the callback ID you acknowledged
 (`1a2b3c4d-c1`), or its full name (`research/review`); never by a harness session ID. Prefer IDs
 in commands you run: they are short and exact. Names are for showing people what an agent did.
 
 ```bash
-atc agent codex --name research -- "Survey approaches to X."
-#   atc: node research (1a2b3c4d) in context 1a2b3c4d
-atc agent continue 1a2b3c4d --name review -- "Using your survey, review design.md."   # research/review
-atc agent fork 1a2b3c4d --name plan -- "Using your survey, draft a plan."             # research/plan
-atc context list                 # ID, name, state and report status of every node
-atc context show 1a2b3c4d-c1     # the chain: each step's task, result and report summary
+reins agent codex --name research -- "Survey approaches to X."
+#   reins: node research (1a2b3c4d) in context 1a2b3c4d
+reins agent continue 1a2b3c4d --name review -- "Using your survey, review design.md."   # research/review
+reins agent fork 1a2b3c4d --name plan -- "Using your survey, draft a plan."             # research/plan
+reins context list                 # ID, name, state and report status of every node
+reins context show 1a2b3c4d-c1     # the chain: each step's task, result and report summary
 ```
 
 - `continue` appends to the end of a chain and reuses its harness, model and directory. To build
   on an earlier node, `fork` it with a new name; that branch sees exactly what the node knew when it
   finished, not later steps.
 - Wait for a node's callback before continuing or forking it.
-- Read results and report summaries (`atc context show`, the callback, `result.json`). Do not read a
+- Read results and report summaries (`reins context show`, the callback, `result.json`). Do not read a
   child's raw session file into your own context; it can be very large.
 
 Configured expert agents fix the harness, model, effort and instructions for a kind of task:
 
 ```bash
-atc expert list                                          # experts in ~/.atc/experts.yaml
-atc agent expert writer --name draft -- "Draft the 0.8 release notes."
-atc expert export > experts.yaml                         # self-contained; atc expert import on another machine
+reins expert list                                          # experts in ~/.reins/experts.yaml
+reins agent expert writer --name draft -- "Draft the 0.8 release notes."
+reins expert export > experts.yaml                         # self-contained; reins expert import on another machine
 ```
 
 The `codex|claude|pi` subcommand selects the child process. The existing `--agent` option still
@@ -428,8 +428,8 @@ selects the parent agent to wake when explicit callback binding is needed. The t
 the child's task, not a shell command. State the objective, relevant paths or context, expected
 deliverable, and real constraints; do not impose a fixed task template when they are unnecessary.
 
-ATC snapshots the launching environment and prepares a fresh child environment. For Claude Code,
-use `atc agent claude` instead of manually wrapping `claude -p` with `atc run`: agent mode keeps
+Reins snapshots the launching environment and prepares a fresh child environment. For Claude Code,
+use `reins agent claude` instead of manually wrapping `claude -p` with `reins run`: agent mode keeps
 the launching configuration, authentication, proxy, and custom environment while removing parent
 session markers that prevent a clean child launch. Do not put credentials in the task prompt, and
 do not add `--bare` by default.
@@ -439,8 +439,8 @@ Before the first Claude child, confirm `command -v claude` and `claude auth stat
 used, `ANTHROPIC_API_KEY`, `ANTHROPIC_BASE_URL`, `CLAUDE_CONFIG_DIR`, proxy/certificate settings,
 and other custom values must be available in the submission environment; never print their values.
 
-For Pi, use `atc doctor --operation agent --agent-worker pi` to check child readiness.
-`ATC_PI_BIN` overrides the executable. ATC runs
+For Pi, use `reins doctor --operation agent --agent-worker pi` to check child readiness.
+`REINS_PI_BIN` overrides the executable. Reins runs
 `pi --print --mode text --session-dir <task dir>/session` with prompt stdin and captures assistant
 text in the managed private result artifact; the session stays in the task directory so the node
 can be continued or forked. Keep the submission-time Pi profile,
@@ -450,12 +450,12 @@ credentials in prompts.
 `--model` accepts Pi's model notation, including `provider/model`; `--reasoning-effort`
 maps to `--thinking` and accepts `off`, `minimal`, `low`, `medium`, `high`, `xhigh`,
 and `max`, but rejects `ultra`. Tool permissions and project extension trust follow
-Pi's noninteractive configuration; do not add `--approve`. ATC's `--sandbox-mode`
+Pi's noninteractive configuration; do not add `--approve`. Reins's `--sandbox-mode`
 is Codex-only and `--permission-mode` is Claude-only. Pi 0.87.1's CLI contract was
 checked; native Windows/macOS Pi launch has not been verified in this session.
 
 A Pi session can also be a callback parent (`--agent pi`). Pi gets its own installed
-skill for that workflow; from Codex or Claude Code only the `atc agent pi` child applies.
+skill for that workflow; from Codex or Claude Code only the `reins agent pi` child applies.
 
 Pi accepts `--system-prompt-file ./prompts/pi-system.md` before `--`. Keep this
 separate from `--template`/`--template-file`, which build the stdin task prompt.
@@ -467,7 +467,7 @@ as `agent-system-prompt.md`; later edits/deletion must not change queued tasks.
 No interpolation or script evaluation occurs. `--dry-run` reports the resolved
 source without creating task files or starting the child. The flag is Pi-only.
 
-ATC owns the private prompt and result files in the managed task directory. The caller does not
+Reins owns the private prompt and result files in the managed task directory. The caller does not
 choose those paths. On callback, inspect the child result and relevant artifacts, acknowledge the
 callback, and continue the original goal when the next action is clear.
 
@@ -479,7 +479,7 @@ When editing an existing script, shell trap, Python `finally`, or scheduler epil
 set +e
 python train.py --config configs/exp.yaml
 status=$?
-atc done \
+reins done \
   --cwd "$PWD" \
   --task "train model" \
   --command "python train.py --config configs/exp.yaml" \
@@ -500,7 +500,7 @@ try:
     status = subprocess.call(["python", "train.py", "--config", "configs/exp.yaml"])
 finally:
     subprocess.call([
-        "atc", "done",
+        "reins", "done",
         "--cwd", "/path/to/project",
         "--task", "train model",
         "--command", "python train.py --config configs/exp.yaml",
@@ -510,7 +510,7 @@ finally:
 
 ## Session binding
 
-Run from the agent-owned environment and omit target flags by default. ATC detects
+Run from the agent-owned environment and omit target flags by default. Reins detects
 `CODEX_THREAD_ID`, `CLAUDE_CODE_SESSION_ID`, or Pi's absolute `PI_SESSION_FILE` (an ID alone is insufficient).
 
 Use `--agent codex|claude|pi --session <id>` when explicit binding is necessary. For Pi,
@@ -534,7 +534,7 @@ For the legacy screen backend, a launched worker must durably move its task from
 one-second handshake window. If screen disappears first, record the failed launch and retry no
 more than three total attempts with exponential backoff. After the final failure, set
 `launch_failed`, remove the launch credentials, queue exactly one recovery callback, and never
-automatically relaunch that task. Generate worker tokens with an `atc_` prefix and pass them only
+automatically relaunch that task. Generate worker tokens with a `reins_` prefix and pass them only
 as a single `--token=value` argument. Treat a legacy `launching` record without an attempt counter
 as an unknown prior launch failure and never automatically retry it during upgrade.
 
@@ -551,13 +551,13 @@ The restored agent must:
 
 1. inspect local logs, outputs, processes, manifests, and checkpoints;
 2. supplement the completed status if durable artifacts prove completion;
-3. otherwise recreate the task through the normal `atc run` workflow from a valid
+3. otherwise recreate the task through the normal `reins run` workflow from a valid
    checkpoint;
 4. or record the exact blocking condition.
 
 ### Cross-host recovery
 
-Do not attempt it. ATC does not transfer code, data, environments, checkpoints, credentials, or
+Do not attempt it. Reins does not transfer code, data, environments, checkpoints, credentials, or
 compute resources between hosts.
 
 ## Callback acknowledgement
@@ -565,7 +565,7 @@ compute resources between hosts.
 The callback prompt includes:
 
 ```bash
-atc ack [--queue-dir <queue-dir>] <callback-id>
+reins ack [--queue-dir <queue-dir>] <callback-id>
 ```
 
 After inspecting the result and choosing whether to continue, stop, or ask, run that command.
@@ -624,7 +624,7 @@ Workflow:
 1. Create it once:
 
    ```bash
-   atc goal start --id <goal-id> --session <session-id> --cwd "$PWD" \
+   reins goal start --id <goal-id> --session <session-id> --cwd "$PWD" \
      --task "..." --plan-file path/to/goal-plan.yaml
    ```
 
@@ -632,7 +632,7 @@ Workflow:
 3. Before saying or implying that the whole goal is complete, check the latest plan:
 
    ```bash
-   atc goal check --id <goal-id>
+   reins goal check --id <goal-id>
    ```
 
    Inspect the actual work and artifacts against every path item. This command reports the
@@ -640,20 +640,20 @@ Workflow:
 4. Only if every item, including the final item, is confirmed `completed`:
 
    ```bash
-   atc goal ack --id <goal-id> --state completed --plan-sha256 <checked-sha256>
+   reins goal ack --id <goal-id> --state completed --plan-sha256 <checked-sha256>
    ```
 
 5. If progress requires a specific missing condition:
 
    ```bash
-   atc goal ack --id <goal-id> --state blocked_conditions \
+   reins goal ack --id <goal-id> --state blocked_conditions \
      --condition "specific prerequisite"
    ```
 
 6. When that condition is met:
 
    ```bash
-   atc goal resume --id <goal-id>
+   reins goal resume --id <goal-id>
    ```
 
 The completion gate rejects an unchecked plan, a stale digest, an invalid/nonsequential path, or
@@ -665,14 +665,14 @@ For an active goal created before YAML plans were required, or to move a plan fi
 latest plan and then check it again:
 
 ```bash
-atc goal set-plan --id <goal-id> --plan-file path/to/goal-plan.yaml
-atc goal check --id <goal-id>
+reins goal set-plan --id <goal-id> --plan-file path/to/goal-plan.yaml
+reins goal check --id <goal-id>
 ```
 
 ### Plan file lifecycle and user agreement
 
 - Use one plan file for one independent goal. Prefer a stable project-local path such as
-  `.atc/goals/<goal-id>.yaml`. Never recycle a completed goal's file for another goal.
+  `.reins/goals/<goal-id>.yaml`. Never recycle a completed goal's file for another goal.
 - Before `goal start`, derive the overall goal, acceptance conditions, and ordered path from the
   user's request, then create the YAML. For a clear, conventional, low-risk path, create it and
   tell the user its location and main items without waiting for another approval. If the path
@@ -714,16 +714,16 @@ needed from the user.
 ## Daemon operations
 
 The systemd user service (Linux), LaunchAgent (macOS), or login scheduled task
-(Windows) keeps `atc daemon` available
+(Windows) keeps `reins daemon` available
 for submissions, recovery, and callbacks. On Linux:
 
 ```bash
-systemctl --user status agent-atc.service
-journalctl --user -u agent-atc.service -f
+systemctl --user status harness-reins.service
+journalctl --user -u harness-reins.service -f
 ```
 
-The daemon watches `${ATC_HOME:-~/.atc}/queue` by default. Use `--queue-dir`
-or `ATC_QUEUE_DIR` for an explicit queue.
+The daemon watches `${REINS_HOME:-~/.reins}/queue` by default. Use `--queue-dir`
+or `REINS_QUEUE_DIR` for an explicit queue.
 
 Before restarting a service or container, drain live callback deliveries where possible.
 Unacknowledged interrupted delivery is eligible for replay.
@@ -731,15 +731,15 @@ Unacknowledged interrupted delivery is eligible for replay.
 Cancel callbacks through the CLI rather than deleting state:
 
 ```bash
-atc cancel --id <callback-id>
-atc cancel --queue-dir <queue-dir> --all --message "no longer needed"
+reins cancel --id <callback-id>
+reins cancel --queue-dir <queue-dir> --all --message "no longer needed"
 ```
 
 `cancel` cancels callbacks only; it does not terminate a running workload.
 
 ## Independent test authoring preset
 
-Use `atc agent codex --template test --task "write independent tests" -- "Requirements and specification paths"`
+Use `reins agent codex --template test --task "write independent tests" -- "Requirements and specification paths"`
 when a separate agent should author tests for the parent to execute. The default Codex model is
 `gpt-5.6-luna` with `max` reasoning; override using `--model` and `--reasoning-effort`.
 These flags affect the child only; `--agent` continues to select the parent callback agent.
@@ -757,8 +757,8 @@ Use `--dry-run` to inspect the expanded prompt and resolved model before submiss
 
 ## User-defined child templates
 
-Load `--template NAME` from `${ATC_TEMPLATE_DIR}` when set, otherwise
-`${XDG_CONFIG_HOME:-~/.config}/atc/templates/NAME.yaml` (or `.yml`), or use
+Load `--template NAME` from `${REINS_TEMPLATE_DIR}` when set, otherwise
+`${XDG_CONFIG_HOME:-~/.config}/reins/templates/NAME.yaml` (or `.yml`), or use
 `--template-file PATH` for an explicit file. These options are mutually exclusive.
 A relative file path uses the submitting shell directory, not the child's `--cwd`.
 Template names/filename stems start with a letter or digit and otherwise use only

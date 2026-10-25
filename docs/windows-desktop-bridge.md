@@ -1,6 +1,6 @@
 # Experimental Windows Desktop callback bridge
 
-This opt-in adapter is intended to let Codex Desktop and ATC use **one App
+This opt-in adapter is intended to let Codex Desktop and Reins use **one App
 Server**, so callback delivery reaches the process that already owns the thread.
 The 0.7.1 preview generates its launcher during ordinary Windows setup;
 shared Core activation still requires explicitly launching Desktop through it.
@@ -57,7 +57,7 @@ and drained stop removed the bridge metadata and private token. The test uses a
 separate empty profile, not the current Desktop session. Reproduce with:
 
 ```powershell
-$env:ATC_TEST_CODEX_BRIDGE = '1'
+$env:REINS_TEST_CODEX_BRIDGE = '1'
 & .\.venv\Scripts\python.exe -m unittest discover -s tests -p test_desktop_bridge_integration.py -v
 ```
 
@@ -65,12 +65,12 @@ The test requires an installed Codex CLI exposing those protocol methods and
 ordinary user socket/process access. Its empty profile needs no credentials.
 It also passed with this Desktop's exact Core version, `0.155.0-alpha.9.2`, using
 the executable cache copy whose SHA-256 matches the installed package. Set
-`ATC_TEST_CODEX_BRIDGE_BIN` to select that executable for the integration test.
+`REINS_TEST_CODEX_BRIDGE_BIN` to select that executable for the integration test.
 With that native executable selected, a second test uses Desktop's stdio
-protocol through the adapter and ATC's separate WebSocket connection. It verifies
+protocol through the adapter and Reins's separate WebSocket connection. It verifies
 that both access one owned thread and that closing stdin ends both connections.
-Set `ATC_TEST_DESKTOP_CORE_WRAPPER` to the absolute installed
-`atc-desktop-core.exe` path to exercise the installed console launcher too.
+Set `REINS_TEST_DESKTOP_CORE_WRAPPER` to the absolute installed
+`reins-desktop-core.exe` path to exercise the installed console launcher too.
 
 ## Connection and trust model
 
@@ -78,14 +78,14 @@ Set `ATC_TEST_DESKTOP_CORE_WRAPPER` to the absolute installed
 flowchart LR
     Desktop[Codex Desktop] -->|stdio and original tool environment| Adapter[Desktop-owned adapter]
     Adapter --> Gate[Same-user Windows loopback gateway]
-    ATC[ATC delivery worker] --> Gate
+    Reins[Reins delivery worker] --> Gate
     Gate -->|Private Bearer token| Server[One shared Codex App Server]
     Server --> Thread[Original thread owner]
 ```
 
 The gateway authenticates the Windows process on every connected TCP socket by
 its reverse connection tuple, PID, SID and creation identity. Only literal IPv4
-loopback is accepted. Before sending its HTTP handshake, ATC also verifies that
+loopback is accepted. Before sending its HTTP handshake, Reins also verifies that
 the server matches the private bridge metadata's PID, identity and Codex profile.
 
 The gateway rejects browser Origin headers and invalid/ambiguous upgrades before
@@ -103,15 +103,15 @@ identity is checked on connection; an authenticated owner can delegate a socket.
 The stdio adapter preserves JSON-RPC IDs, responses, notifications and
 server-initiated tool/approval requests. It does not initialize on Desktop's
 behalf. Diagnostics go to stderr, never the protocol stream. Desktop's stdin EOF
-ends the adapter, gateway and owned Core even if ATC still has a connection.
-The real Desktop tool/approval routing for a turn initiated by the second ATC
+ends the adapter, gateway and owned Core even if Reins still has a connection.
+The real Desktop tool/approval routing for a turn initiated by the second Reins
 client remains part of the live acceptance test; byte forwarding alone does not
 prove that routing. Read-only inspection of the packaged App Tools client found
 the normal pipe environment path and no direct-parent PID requirement there.
 The native service-side process ancestry rules could not be established from
 that code, so only a normal App Tools call after restart can settle compatibility.
 
-ATC does not guess ports or silently switch to CLI delivery after an explicitly
+Reins does not guess ports or silently switch to CLI delivery after an explicitly
 configured bridge fails. Before `turn/start`, it persists submission intent.
 If the worker dies or a response is lost, the retained lease prevents another
 callback attempt until the outcome is resolved. ACK or a confirmed completion
@@ -175,35 +175,35 @@ shell as a presumed fix for the default route's error 5.
 With the preview installed, use the same standard setup entry point as Mac:
 
 ```powershell
-atc setup --force --enable --now
+reins setup --force --enable --now
 ```
 
-Setup generates `Start ATC Desktop.cmd`, `Start ATC Desktop.ps1` and private
-`desktop.json` in `<CODEX_HOME>\agent-atc` (the default profile is
+Setup generates `Start Reins Desktop.cmd`, `Start Reins Desktop.ps1` and private
+`desktop.json` in `<CODEX_HOME>\harness-reins` (the default profile is
 `%USERPROFILE%\.codex`). The generated files point to the current installed
 Python/runtime, profile and packaged resources. They contain local absolute
 paths by design; the distributed source contains no particular user's paths.
 No checkout, repository-local `.venv` or `examples` script is needed at runtime.
-Use the `atc` executable from the installed Python environment if it is not on
+Use the `reins` executable from the installed Python environment if it is not on
 PATH, and rerun setup after moving or replacing that environment.
 
 Setup/prepare do not launch Desktop, stop existing instances, or execute the
 suspended GUI-creation probe. An absent Desktop app does not prevent CLI setup
 or launcher generation. They save dynamic discovery settings rather than
 discovering the installed app. After installing Desktop, use
-`atc desktop launch --check-only` before launching it. Both `launch` and its
+`reins desktop launch --check-only` before launching it. Both `launch` and its
 `--check-only` mode discover the GUI through its Store package manifest and a
 runnable Core that matches the installed bundle; they do not default to an
 unrelated global npm CLI. Explicit selection is available:
 
 ```powershell
-atc setup --desktop-app 'C:\Apps\Codex\Codex.exe' --force --enable --now
-atc desktop prepare --app 'C:\Apps\Codex\Codex.exe' --force
+reins setup --desktop-app 'C:\Apps\Codex\Codex.exe' --force --enable --now
+reins desktop prepare --app 'C:\Apps\Codex\Codex.exe' --force
 # Custom native wrapper/Core installations can add --wrapper and --core.
 ```
 
-`atc setup --no-desktop-launcher` skips generation on Windows and Mac. The shared
-management interface is `atc desktop prepare|launch|status`. Existing choices
+`reins setup --no-desktop-launcher` skips generation on Windows and Mac. The shared
+management interface is `reins desktop prepare|launch|status`. Existing choices
 are retained by setup; `prepare --force` deliberately updates generated settings.
 Without `--force`, `prepare` refuses to replace an existing configuration.
 Do not copy another computer's generated launcher or authentication files.
@@ -212,9 +212,9 @@ Direct process creation is the default launch route. To explicitly select and
 save the experimental Store package route, use one of:
 
 ```powershell
-atc setup --desktop-launch-mode package-context --force --enable --now
+reins setup --desktop-launch-mode package-context --force --enable --now
 # Or change only the Desktop launcher/configuration:
-atc desktop prepare --launch-mode package-context --force
+reins desktop prepare --launch-mode package-context --force
 ```
 
 The saved mode is passed to the bundled launch implementation. Direct launch
@@ -231,21 +231,21 @@ Desktop and does not rewrite installed app files or global environment settings.
 The default route requires a Desktop executable that permits direct startup;
 the saved `package-context` mode selects the experimental route described above.
 Both pass overrides only in the new GUI process's environment. Desktop
-then starts `atc-desktop-core.exe`, which owns the gateway and real Core. The
+then starts `reins-desktop-core.exe`, which owns the gateway and real Core. The
 script does not change the caller's environment or prestart a separate server.
 
 After generation, check the selected route and then explicitly launch:
 
 ```powershell
 # This never resumes the probe's GUI thread; Desktop may remain open for this check:
-atc desktop launch --check-only
+reins desktop launch --check-only
 # native_creation_passed may be true while Desktop is still a launch_blocker.
 # Save work and close Desktop yourself, then repeat the complete preflight:
-atc desktop launch --check-only
+reins desktop launch --check-only
 # Start only when preflight_passed is true and launch_blockers is empty:
-atc desktop launch
-# Or double-click the generated Start ATC Desktop.cmd.
-atc desktop status
+reins desktop launch
+# Or double-click the generated Start Reins Desktop.cmd.
+reins desktop status
 ```
 
 On the tested Store package, the default direct route's native check reports
@@ -268,7 +268,7 @@ inheritance of the temporary CLI override remain part of explicit restart
 validation. A successful suspended probe is only a process-creation check, not
 bridge or callback acceptance.
 
-The metadata is `<CODEX_HOME>\agent-atc\desktop-bridge.json` by default.
+The metadata is `<CODEX_HOME>\harness-reins\desktop-bridge.json` by default.
 New preview Desktop tasks bind their explicit mode and metadata path at
 submission. An existing coordinator or legacy deployment that uses the bridge
 environment setting must preserve its original name, queue and metadata path
@@ -276,8 +276,8 @@ when updating setup:
 
 ```powershell
 $ltcProfile = if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $env:USERPROFILE '.codex' }
-$env:ATC_DESKTOP_BRIDGE_FILE = Join-Path $ltcProfile 'agent-atc\desktop-bridge.json'
-atc setup --service windows-task --keep-skill --force --now
+$env:REINS_DESKTOP_BRIDGE_FILE = Join-Path $ltcProfile 'harness-reins\desktop-bridge.json'
+reins setup --service windows-task --keep-skill --force --now
 ```
 
 For a custom deployment, include its existing `--name` and `--queue-dir`. The
@@ -295,12 +295,12 @@ rerun its already completed business command or manually manufacture an ACK.
 ## Inspect and stop
 
 ```powershell
-atc desktop status
+reins desktop status
 # Only if a standalone gateway remains after its clients close:
-python -m agent_atc.harness.codex.desktop.bridge --stop
+python -m harness_reins.harness.codex.desktop.bridge --stop
 ```
 
-For the module command, use the Python interpreter that owns the installed ATC
+For the module command, use the Python interpreter that owns the installed Reins
 package and the same `--codex-home` and `--metadata-file` if customized. Normally closing
 Desktop also ends its adapter and removes the metadata; `--stop` is for a
 remaining standalone gateway with no clients. Stop is bound to the recorded
@@ -308,11 +308,11 @@ live process and refuses active clients. The bridge does not install an automati
 login task or restart itself. Its Job owns the App Server process tree; exiting
 the bridge ends that tree. Normal shutdown verifies Job membership through native
 process handles and waits for its children to exit before releasing private state.
-The kill-on-close Job also contains abnormal exits. Independently scheduled ATC
+The kill-on-close Job also contains abnormal exits. Independently scheduled Reins
 business tasks keep their separate ownership.
 
 To return to ordinary Desktop startup, close Desktop and any remaining bridge, remove
-`ATC_DESKTOP_BRIDGE_FILE` from the shell used for ATC setup and
+`REINS_DESKTOP_BRIDGE_FILE` from the shell used for Reins setup and
 update the same coordinator. Start Desktop normally. CLI delivery again has the
 original active-writer limitation while Desktop owns the thread.
 

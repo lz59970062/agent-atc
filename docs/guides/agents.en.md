@@ -5,27 +5,27 @@ Give a child Agent a task you can describe independently, such as reviewing a mo
 ## Submit a code review
 
 ```bash
-atc agent codex --cwd "$PWD" --task "Review argument parsing" -- "Read parser.py and its tests. Check empty input, invalid arguments, and boundary cases. Report file locations, reproduction steps, and suggested fixes."
+reins agent codex --cwd "$PWD" --task "Review argument parsing" -- "Read parser.py and its tests. Check empty input, invalid arguments, and boundary cases. Report file locations, reproduction steps, and suggested fixes."
 ```
 
 `codex` selects the child Agent. The text after `--` describes its work. Name the files to read, the expected output, and the criteria for checking the result.
 
-ATC prints the log path and answer-file path. When the child finishes, the callback returns to the submitting conversation. The original Agent reads the answer, checks the relevant files, and continues.
+Reins prints the log path and answer-file path. When the child finishes, the callback returns to the submitting conversation. The original Agent reads the answer, checks the relevant files, and continues.
 
 ## Choose a child Agent
 
 | Command | Worker | Version |
 | --- | --- | --- |
-| `atc agent codex` | Codex CLI | 0.7.0 |
-| `atc agent claude` | Claude Code CLI | 0.7.0 |
-| `atc agent pi` | Pi | 0.7.1 preview |
+| `reins agent codex` | Codex CLI | 0.7.0 |
+| `reins agent claude` | Claude Code CLI | 0.7.0 |
+| `reins agent pi` | Pi | 0.7.1 preview |
 
 Install and sign into the selected CLI in the submission environment. The child inherits that environment's configuration, proxy settings, and project paths.
 
 For example, ask Claude to review code from a Codex conversation:
 
 ```bash
-atc agent claude --cwd "$PWD" --task "Review data loading" -- "Check file reading, batch assembly, and error handling in data_loader.py. Report reproducible problems."
+reins agent claude --cwd "$PWD" --task "Review data loading" -- "Check file reading, batch assembly, and error handling in data_loader.py. Report reproducible problems."
 ```
 
 The result returns to the submitting Codex conversation. The submitting session determines the callback target; the name after `agent` selects the worker.

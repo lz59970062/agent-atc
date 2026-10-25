@@ -33,49 +33,49 @@ ALLOWED = {
 
 # Top-level modules that belong to a layer without living in its package.
 LAYER_OF_MODULE = {
-    "agent_atc.runtime": "system",
-    "agent_atc.cli": "cli",
-    "agent_atc.__main__": "cli",
-    "agent_atc._entry": "cli",
-    "agent_atc._desktop_entry": "cli",
+    "harness_reins.runtime": "system",
+    "harness_reins.cli": "cli",
+    "harness_reins.__main__": "cli",
+    "harness_reins._entry": "cli",
+    "harness_reins._desktop_entry": "cli",
     # Expert agent templates; they move into engine with the expert work.
-    "agent_atc.templates": "engine",
-    "agent_atc.template_registration": "engine",
+    "harness_reins.templates": "engine",
+    "harness_reins.template_registration": "engine",
 }
 
 # module -> imported module. Step numbers refer to docs/design/architecture.md.
 KNOWN_VIOLATIONS = {
     # Step 5/6: transports stop reading and writing the queue themselves;
     # the engine hands them a callback and records the outcome.
-    "agent_atc.harness.claude.channel -> agent_atc.store.layout",
-    "agent_atc.harness.claude.channel -> agent_atc.store.records",
-    "agent_atc.harness.claude.session -> agent_atc.engine.delivery",
-    "agent_atc.harness.claude.session -> agent_atc.engine.dispatch",
-    "agent_atc.harness.claude.session -> agent_atc.engine.reminders",
-    "agent_atc.harness.claude.session -> agent_atc.store.layout",
-    "agent_atc.harness.claude.session -> agent_atc.store.records",
-    "agent_atc.harness.codex.app_server -> agent_atc.store.layout",
-    "agent_atc.harness.codex.desktop.macos -> agent_atc.engine.routes",
-    "agent_atc.harness.codex.desktop.macos -> agent_atc.store.layout",
-    "agent_atc.harness.codex.desktop.windows -> agent_atc.engine.routes",
-    "agent_atc.harness.codex.desktop.windows -> agent_atc.store.layout",
-    "agent_atc.harness.pi.channel -> agent_atc.cli",
-    "agent_atc.harness.pi.channel -> agent_atc.engine.delivery",
-    "agent_atc.harness.pi.channel -> agent_atc.engine.dispatch",
-    "agent_atc.harness.pi.channel -> agent_atc.install.services",
-    "agent_atc.harness.pi.channel -> agent_atc.install.skills",
-    "agent_atc.harness.pi.channel -> agent_atc.store.layout",
-    "agent_atc.harness.pi.channel -> agent_atc.store.records",
-    "agent_atc.harness.pi.channel -> agent_atc.tower.main",
+    "harness_reins.harness.claude.channel -> harness_reins.store.layout",
+    "harness_reins.harness.claude.channel -> harness_reins.store.records",
+    "harness_reins.harness.claude.session -> harness_reins.engine.delivery",
+    "harness_reins.harness.claude.session -> harness_reins.engine.dispatch",
+    "harness_reins.harness.claude.session -> harness_reins.engine.reminders",
+    "harness_reins.harness.claude.session -> harness_reins.store.layout",
+    "harness_reins.harness.claude.session -> harness_reins.store.records",
+    "harness_reins.harness.codex.app_server -> harness_reins.store.layout",
+    "harness_reins.harness.codex.desktop.macos -> harness_reins.engine.routes",
+    "harness_reins.harness.codex.desktop.macos -> harness_reins.store.layout",
+    "harness_reins.harness.codex.desktop.windows -> harness_reins.engine.routes",
+    "harness_reins.harness.codex.desktop.windows -> harness_reins.store.layout",
+    "harness_reins.harness.pi.channel -> harness_reins.cli",
+    "harness_reins.harness.pi.channel -> harness_reins.engine.delivery",
+    "harness_reins.harness.pi.channel -> harness_reins.engine.dispatch",
+    "harness_reins.harness.pi.channel -> harness_reins.install.services",
+    "harness_reins.harness.pi.channel -> harness_reins.install.skills",
+    "harness_reins.harness.pi.channel -> harness_reins.store.layout",
+    "harness_reins.harness.pi.channel -> harness_reins.store.records",
+    "harness_reins.harness.pi.channel -> harness_reins.tower.main",
     # Process identity and peer checks are OS primitives that still live in
-    # the owner backends; they move to agent_atc.system.
-    "agent_atc.harness.codex.app_server -> agent_atc.owners.macos",
-    "agent_atc.harness.codex.desktop.bridge -> agent_atc.owners.windows",
-    "agent_atc.harness.codex.desktop.connection -> agent_atc.owners.macos",
-    "agent_atc.harness.codex.desktop.connection -> agent_atc.owners.windows",
-    "agent_atc.harness.codex.desktop.unix -> agent_atc.owners.macos",
-    "agent_atc.harness.pi.channel -> agent_atc.owners.windows",
-    "agent_atc.system.windows_tcp -> agent_atc.owners.windows",
+    # the owner backends; they move to harness_reins.system.
+    "harness_reins.harness.codex.app_server -> harness_reins.owners.macos",
+    "harness_reins.harness.codex.desktop.bridge -> harness_reins.owners.windows",
+    "harness_reins.harness.codex.desktop.connection -> harness_reins.owners.macos",
+    "harness_reins.harness.codex.desktop.connection -> harness_reins.owners.windows",
+    "harness_reins.harness.codex.desktop.unix -> harness_reins.owners.macos",
+    "harness_reins.harness.pi.channel -> harness_reins.owners.windows",
+    "harness_reins.system.windows_tcp -> harness_reins.owners.windows",
 }
 
 
@@ -84,13 +84,13 @@ def layer(module: str) -> str | None:
         return LAYER_OF_MODULE[module]
     parts = module.split(".")
     if len(parts) < 2:
-        return None  # the agent_atc package itself (its version)
+        return None  # the harness_reins package itself (its version)
     return parts[1] if parts[1] in ALLOWED else None
 
 
 def modules() -> dict[str, Path]:
     found = {}
-    for path in (SRC / "agent_atc").rglob("*.py"):
+    for path in (SRC / "harness_reins").rglob("*.py"):
         if "__pycache__" in path.parts or "-" in path.stem:
             continue
         parts = [p for p in path.relative_to(SRC).with_suffix("").parts if p != "__init__"]
@@ -113,7 +113,7 @@ def imports(module: str, path: Path, known: set[str]) -> set[str]:
                 targets.add(child if child in known else source)
         elif isinstance(node, ast.Import):
             targets.update(alias.name for alias in node.names)
-    return {t for t in targets if t.startswith("agent_atc.")}
+    return {t for t in targets if t.startswith("harness_reins.")}
 
 
 def violations() -> set[str]:
@@ -134,7 +134,7 @@ def violations() -> set[str]:
 
 class ArchitectureTests(unittest.TestCase):
     def test_every_package_has_a_layer(self):
-        unassigned = sorted(m for m in modules() if layer(m) is None and m != "agent_atc")
+        unassigned = sorted(m for m in modules() if layer(m) is None and m != "harness_reins")
         self.assertEqual(unassigned, [], "assign new top-level packages a layer in ALLOWED")
 
     def test_imports_point_down_the_layers(self):

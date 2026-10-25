@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.9.0 — unreleased (Harness Reins)
+
+- Rename Agent Traffic Control (ATC) to Harness Reins: a harness for your
+  harnesses. Codex, Claude Code and Pi are harnesses; Reins dispatches work to
+  any of them and brings the result back to the session that asked.
+
+  | | ATC 0.8 | Reins 0.9 |
+  |---|---|---|
+  | command | `atc` | `reins` |
+  | npm | `agent-atc`, `@agent-atc/linux-x64` | `harness-reins`, `@harness-reins/linux-x64` |
+  | Python | `agent-atc`, `import agent_atc` | `harness-reins`, `import harness_reins` |
+  | state | `~/.atc`, `ATC_*` | `~/.reins`, `REINS_*` |
+  | service, skill | `agent-atc` | `harness-reins` |
+  | records | `atc.callback/1` … | `reins.callback/1` … |
+  | envelope | `[atc]`, `atc-compact/1`, `[atc-status]` | `[reins]`, `reins-compact/1`, `[reins-status]` |
+
+  Record structures are unchanged; only the names move.
+- `reins migrate` retires ATC as well as Long Task Callback. Each generation
+  moves on its own: one that still has callbacks to deliver or tasks running is
+  reported and left alone, so a busy LTC no longer blocks an idle ATC.
+  `--only atc|ltc` moves one. ATC's systemd drop-ins (such as a
+  `NoNewPrivileges=no` override) are copied to `harness-reins.service.d`, and
+  its `experts.yaml` moves to `~/.reins` with the `reins.experts/1` schema.
+  State directories are archived, never deleted.
+
 ## 0.8.2 — 2026-10-16
 
 - `atc doctor` and `atc setup` honor systemd drop-ins (`<unit>.d/*.conf`,

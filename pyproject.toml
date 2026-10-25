@@ -3,15 +3,15 @@ requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "agent-atc"
-version = "0.8.2"
-description = "Agent Traffic Control: explicit callback CLI for waking a Codex or Claude Code session after a long-running task finishes"
+name = "harness-reins"
+version = "0.9.0"
+description = "Harness Reins: a harness for your harnesses. Dispatch work to Codex, Claude Code or Pi and route the result back to the session that asked."
 requires-python = ">=3.9"
 license = { text = "MIT" }
 authors = [
   { name = "Local" }
 ]
-keywords = ["codex", "claude-code", "callback", "long-running-tasks"]
+keywords = ["agents", "harness", "codex", "claude-code", "pi", "callback", "long-running-tasks"]
 classifiers = [
   "Operating System :: Microsoft :: Windows",
   "Operating System :: MacOS :: MacOS X",
@@ -21,11 +21,11 @@ classifiers = [
 dependencies = ["PyYAML>=6.0"]
 
 [project.scripts]
-atc = "agent_atc.cli:main"
-atc-desktop-core = "agent_atc.harness.codex.desktop.core:main"
+reins = "harness_reins.cli:main"
+reins-desktop-core = "harness_reins.harness.codex.desktop.core:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
-agent_atc = ["_build.txt", "assets/skills/reference/SKILL.md", "assets/skills/claude/SKILL.md", "assets/skills/codex/SKILL.md", "assets/skills/pi/SKILL.md", "assets/skills/reference/agents/openai.yaml", "templates/*.md", "owners/*.ps1", "harness/codex/desktop/windows_assets/*.ps1", "harness/codex/desktop/windows_assets/*.py", "harness/pi/extension/*.js"]
+harness_reins = ["_build.txt", "assets/skills/reference/SKILL.md", "assets/skills/claude/SKILL.md", "assets/skills/codex/SKILL.md", "assets/skills/pi/SKILL.md", "assets/skills/reference/agents/openai.yaml", "templates/*.md", "owners/*.ps1", "harness/codex/desktop/windows_assets/*.ps1", "harness/codex/desktop/windows_assets/*.py", "harness/pi/extension/*.js"]

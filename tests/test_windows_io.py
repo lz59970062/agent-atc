@@ -11,14 +11,14 @@ import tempfile
 import unittest
 from unittest import mock
 
-from agent_atc.system import files as private_files
-from agent_atc.system import windows_io
+from harness_reins.system import files as private_files
+from harness_reins.system import windows_io
 
 
 @unittest.skipUnless(os.name == "nt", "native Windows file primitives")
 class WindowsIOTests(unittest.TestCase):
     def setUp(self) -> None:
-        temporary = tempfile.TemporaryDirectory(prefix="atc 中文 空格 ")
+        temporary = tempfile.TemporaryDirectory(prefix="reins 中文 空格 ")
         self.addCleanup(temporary.cleanup)
         self.directory = Path(temporary.name)
 
@@ -160,7 +160,7 @@ class WindowsIOTests(unittest.TestCase):
         code = """
 import sys
 from pathlib import Path
-from agent_atc.system.windows_io import acquire_path_lock
+from harness_reins.system.windows_io import acquire_path_lock
 lock = acquire_path_lock(Path(sys.argv[1]), blocking=False)
 assert lock is not None
 print('held', flush=True)

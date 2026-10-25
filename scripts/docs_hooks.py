@@ -9,7 +9,7 @@ from mkdocs.plugins import event_priority
 def on_config(config):
     # Run before i18n adds the language prefix. Each locale build starts here.
     for name in (
-        "ATC_DOCS_SITE_URL",
+        "REINS_DOCS_SITE_URL",
         "READTHEDOCS_CANONICAL_URL",
         "CF_PAGES_URL",
         "CI_PAGES_URL",

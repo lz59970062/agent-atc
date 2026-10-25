@@ -1,16 +1,16 @@
-# ATC 架构设计（草案）
+# Reins 架构设计（草案）
 
-状态：已评审，2026-10-13。协议细节见 [protocol-v1.md](protocol-v1.md)。
+状态：已评审，2026-10-13。协议细节见 [protocol-v1.md](protocol-v1.md)。0.9 版由 ATC 改名为 Harness Reins，结构不变。
 
 ## 1. 故事决定架构
 
-ATC 的故事是一句话：**显式指定谁来做事、回调给谁；任务交给操作系统独立运行；结果可靠地回到指定的会话。**
+Reins 的故事是一句话：**显式指定谁来做事、回调给谁；任务交给操作系统独立运行；结果可靠地回到指定的会话。**
 
 一件工作的生命周期因此固定为六步，架构的每一层都对应其中一段：
 
 ```text
 派发 Dispatch → 托管 Own → 观察 Observe → 报告 Report → 投递 Deliver → 确认 Acknowledge
- 谁来做、回给谁   OS 托管进程    ATC 记下事实    子代理声称结果   送回指定会话     会话确认收到
+ 谁来做、回给谁   OS 托管进程    Reins 记下事实    子代理声称结果   送回指定会话     会话确认收到
 ```
 
 核心名词也由故事决定，代码和文档统一使用：
@@ -44,16 +44,16 @@ ATC 的故事是一句话：**显式指定谁来做事、回调给谁；任务�
 ## 3. 目标结构
 
 ```text
-agent_atc/
+harness_reins/
   core/            纯逻辑，不做任何 I/O
     ids.py           根 ID 与后缀（1a2b3c4d-c1）
     records.py       四类记录的数据类、严格校验、未知字段保留
-    envelope.py      atc-compact/1 信封渲染
+    envelope.py      reins-compact/1 信封渲染
     states.py        observed.state、report.status 等取值和状态机
     capabilities.py  能力名常量（deliver.resume.claude 等）
 
   store/           持久化，只关心"怎么可靠地存"
-    layout.py        ~/.atc 目录布局，唯一的路径来源
+    layout.py        ~/.reins 目录布局，唯一的路径来源
     files.py         原子写入（原 storage.py）
     locks.py         文件锁、租约
     inbox.py         CLI 提交请求的收件箱（见第 5 节）
@@ -93,10 +93,10 @@ agent_atc/
     commands/        run、agent、done、ack、status、cancel、retry、goal、expert、doctor、setup、migrate、wait
 
   install/         安装与环境
-    canonical.py     ~/.atc/bin 与 versions（第 5 步）
+    canonical.py     ~/.reins/bin 与 versions（第 5 步）
     services.py      systemd unit、launchd plist、Windows 计划任务、supervisor
     skills.py        各 Harness 的 skill 安装
-    migrate.py       从旧 LTC 一次性迁移
+    migrate.py       从 ATC 或更早的 LTC 一次性迁移
     diagnostics.py   诊断
 
   assets/          随包分发的非 Python 文件：skill、JS 扩展、PowerShell 脚本
@@ -135,7 +135,7 @@ install ──→ owners、harness、store
 
 - 任务进程只往自己那次启动的目录里写，写完就退出，不依赖塔台在线。
 - 塔台读取启动目录，校验子代理报告，合并成 `result.json`，再生成回调。
-- `atc ack`、`atc cancel` 这类命令往 `inbox/` 放一个请求文件，由塔台处理。塔台暂时不在线时，请求也不会丢。
+- `reins ack`、`reins cancel` 这类命令往 `inbox/` 放一个请求文件，由塔台处理。塔台暂时不在线时，请求也不会丢。
 - 第 5 步的 socket 接口只是让 CLI 能立刻拿到处理结果；收件箱始终是兜底。
 
 这样，多个环境里装了不同版本的 CLI，最多只能往收件箱投请求；真正改状态的永远是同一个塔台，而塔台会拒绝它不认识的 schema。
@@ -170,11 +170,11 @@ class Injector(Protocol):      # 热投递：注入运行中的会话
 
 | 命令 | 谁来做 | 回给谁 |
 |---|---|---|
-| `atc run -- <命令>` | 这条命令 | 默认是发起的会话 |
-| `atc agent claude --model …` | Claude Code + 指定模型 | 默认是发起的会话 |
-| `atc agent --expert writer` | 写作专家 Agent（Harness 和模型由专家定义决定） | 默认是发起的会话 |
+| `reins run -- <命令>` | 这条命令 | 默认是发起的会话 |
+| `reins agent claude --model …` | Claude Code + 指定模型 | 默认是发起的会话 |
+| `reins agent --expert writer` | 写作专家 Agent（Harness 和模型由专家定义决定） | 默认是发起的会话 |
 | `--notify <会话>`（预留） | 不变 | 指定的其他会话 |
-| `atc done` | 外部调度器 | 发起的会话 |
+| `reins done` | 外部调度器 | 发起的会话 |
 
 "默认是发起的会话"是显式规则，而不是猜测：发起会话的 ID 来自 Harness 注入的环境变量，识别不到就拒绝提交，不会退回"最近的会话"。
 
@@ -189,7 +189,7 @@ class Injector(Protocol):      # 热投递：注入运行中的会话
 | 3 | 拆 `cli.py`：投递、Codex app-server、托管任务与恢复、目标、安装、命令，逐块搬出 | 纯移动，每块一个提交，测试全绿 |
 | 4 | 加依赖方向测试 | 防退化 |
 | 5 | 在 `core/` 实现 protocol v1，替换旧记录格式 | 行为改变，有新测试 |
-| 6 | 收件箱与文件级单一写入者，`atc migrate` | 行为改变 |
+| 6 | 收件箱与文件级单一写入者，`reins migrate` | 行为改变 |
 | 7 | 固定安装位置、socket 握手、npm 打通，发布 v0.8 | 行为改变 |
 | 最后 | 跨 Harness 演示场景和对照实验 | 证据 |
 
@@ -199,14 +199,14 @@ class Injector(Protocol):      # 热投递：注入运行中的会话
 
 ## 8.1 顺序调整（2026-10-15）
 
-第 6 步原计划是"收件箱 + 文件级单一写入者"。实际评估下来，它要重写恢复逻辑里最微妙的部分（重启不重跑、结果优先于失联所有者），还要改 Pi 扩展和 Claude `atc wait` 的 ACK 写法，回归风险集中在并发和崩溃路径上。而它要解决的问题——多个环境里不同版本各写各的——可以由第 7 步从源头解决：所有入口转发到 `~/.atc/bin/atc` 这一份程序，版本不一致的命令行被握手拒绝。
+第 6 步原计划是"收件箱 + 文件级单一写入者"。实际评估下来，它要重写恢复逻辑里最微妙的部分（重启不重跑、结果优先于失联所有者），还要改 Pi 扩展和 Claude `reins wait` 的 ACK 写法，回归风险集中在并发和崩溃路径上。而它要解决的问题——多个环境里不同版本各写各的——可以由第 7 步从源头解决：所有入口转发到 `~/.reins/bin/reins` 这一份程序，版本不一致的命令行被握手拒绝。
 
-因此先做第 7 步。第 6 步缩小为：`atc migrate`（已完成）、塔台拒绝不认识的 schema（第 5 步已完成）、中断任务的 `result.json` 由塔台补写。完整收件箱留作以后的加固项，出现实际问题时再做。
+因此先做第 7 步。第 6 步缩小为：`reins migrate`（已完成）、塔台拒绝不认识的 schema（第 5 步已完成）、中断任务的 `result.json` 由塔台补写。完整收件箱留作以后的加固项，出现实际问题时再做。
 
 ## 9. 已拍板
 
 | 问题 | 决定 |
 |---|---|
 | 实施顺序 | 按第 8 节，拆分提前到协议改动之前 |
-| 模板改名 | 故事里叫**专家 Agent**；命令为 `atc expert register writer`，派发用 `atc agent --expert writer`；代码为 `engine/experts.py` |
+| 模板改名 | 故事里叫**专家 Agent**；命令为 `reins expert register writer`，派发用 `reins agent --expert writer`；代码为 `engine/experts.py` |
 | 代码命名 | 包名用平实英文，比喻只放在文档里；唯一例外是 daemon 叫 `tower` |

@@ -12,5 +12,5 @@ site/
 # Local review discussions and reports
 .committee-reviews/
 packaging/out/
-src/agent_atc/_build.txt
+src/harness_reins/_build.txt
 .experiments/

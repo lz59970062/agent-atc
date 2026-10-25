@@ -19,20 +19,20 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from agent_atc import cli
-from agent_atc.commands import work as work_commands
-from agent_atc.install import services
-from agent_atc.tower import main as tower
-from agent_atc.engine import dispatch
-from agent_atc.engine import tasks as managed_tasks
-from agent_atc.store import records as queue_store
-from agent_atc.store import layout
-from agent_atc.install import diagnostics
-from agent_atc.owners import SystemdUserBackend
-from agent_atc.core import ids
+from harness_reins import cli
+from harness_reins.commands import work as work_commands
+from harness_reins.install import services
+from harness_reins.tower import main as tower
+from harness_reins.engine import dispatch
+from harness_reins.engine import tasks as managed_tasks
+from harness_reins.store import records as queue_store
+from harness_reins.store import layout
+from harness_reins.install import diagnostics
+from harness_reins.owners import SystemdUserBackend
+from harness_reins.core import ids
 
 
-@unittest.skipUnless(os.environ.get("ATC_TEST_SCREEN") == "1", "set ATC_TEST_SCREEN=1 for real screen/container test")
+@unittest.skipUnless(os.environ.get("REINS_TEST_SCREEN") == "1", "set REINS_TEST_SCREEN=1 for real screen/container test")
 class RealStandaloneScreenTests(unittest.TestCase):
     def wait_until(self, predicate, explanation: str, timeout: float = 15.0) -> None:
         deadline = time.monotonic() + timeout
@@ -45,13 +45,13 @@ class RealStandaloneScreenTests(unittest.TestCase):
     def test_real_standalone_start_ignores_pid_reused_by_unrelated_live_process(self) -> None:
         if sys.platform not in ("linux", "darwin"):
             self.skipTest("Linux or macOS process identity is required")
-        with tempfile.TemporaryDirectory(prefix="atc-stale-pid-") as temporary:
+        with tempfile.TemporaryDirectory(prefix="reins-stale-pid-") as temporary:
             directory = Path(temporary)
             home = directory / "codex-home"
             root = directory / "queue"
-            environment = dict(os.environ, CODEX_HOME=str(home), ATC_HOME=str(home / "atc-home"),
-                               ATC_TARGET_LOCK_DIR=str(directory / "target-locks"),
-                               ATC_DESKTOP_APP_SERVER="0")
+            environment = dict(os.environ, CODEX_HOME=str(home), REINS_HOME=str(home / "reins-home"),
+                               REINS_TARGET_LOCK_DIR=str(directory / "target-locks"),
+                               REINS_DESKTOP_APP_SERVER="0")
             sleeper = subprocess.Popen(
                 [sys.executable, "-c", "import time; time.sleep(60)"],
                 stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
@@ -120,7 +120,7 @@ class RealStandaloneScreenTests(unittest.TestCase):
         screen = shutil.which("screen")
         if sys.platform not in ("linux", "darwin") or screen is None:
             self.skipTest("Linux/macOS and GNU screen are required")
-        with tempfile.TemporaryDirectory(prefix="atc-real-screen-") as temporary:
+        with tempfile.TemporaryDirectory(prefix="reins-real-screen-") as temporary:
             directory = Path(temporary)
             sockets = directory / "screen-sockets"
             runtime = directory / "runtime"
@@ -173,14 +173,14 @@ class RealStandaloneScreenTests(unittest.TestCase):
                 import time
                 from pathlib import Path
                 sys.path.insert(0, {source!r})
-                from agent_atc import cli
-                from agent_atc.commands import work as work_commands
-                from agent_atc.install import services
-                from agent_atc.tower import main as tower
-                from agent_atc.engine import dispatch
-                from agent_atc.engine import tasks as managed_tasks
-                from agent_atc.store import records as queue_store
-                from agent_atc.store import layout
+                from harness_reins import cli
+                from harness_reins.commands import work as work_commands
+                from harness_reins.install import services
+                from harness_reins.tower import main as tower
+                from harness_reins.engine import dispatch
+                from harness_reins.engine import tasks as managed_tasks
+                from harness_reins.store import records as queue_store
+                from harness_reins.store import layout
                 managed_tasks.recover_managed_tasks(Path(sys.argv[1]))
                 Path(sys.argv[2]).write_text("launched")
                 time.sleep(60)

@@ -11,11 +11,11 @@ import sys
 import unittest
 from unittest import mock
 
-from agent_atc import cli
-from agent_atc.engine import dispatch
-from agent_atc.engine import delivery as delivery_engine
-from agent_atc.engine import reminders as reminder_policy
-from agent_atc.store import layout
+from harness_reins import cli
+from harness_reins.engine import dispatch
+from harness_reins.engine import delivery as delivery_engine
+from harness_reins.engine import reminders as reminder_policy
+from harness_reins.store import layout
 from test_cli import patch_inprocess_delivery_worker
 
 
