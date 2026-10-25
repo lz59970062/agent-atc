@@ -531,7 +531,17 @@ def main() -> int:
     shell_hook_parser.add_argument("--rc-file", help="Bash rc file (default: ~/.bashrc)")
     shell_hook_parser.add_argument("--command", help="Executable path embedded in the hook")
 
-    args = parser.parse_args()
+    argv = sys.argv[1:]
+    prompt = None
+    # Before Python 3.12, argparse cannot interleave a positional (the node or expert
+    # name), options and a nargs="*" prompt. The prompt always follows "--", so split
+    # it off first; options before "--" then parse the same on every version.
+    if argv[:1] == ["agent"] and argv[1:2] and argv[1] in ("continue", "fork", "expert") and "--" in argv:
+        cut = argv.index("--")
+        argv, prompt = argv[:cut], argv[cut + 1:]
+    args = parser.parse_args(argv)
+    if prompt is not None:
+        args.agent_prompt = prompt
     if args.mode not in LOCAL_MODES and not args.mode.startswith("_"):
         from .install import canonical
         forwarded = canonical.forward(sys.argv[1:])

@@ -3,6 +3,8 @@
 All private workers use this entry point. A future frozen distribution can use
 its executable directly without pretending it is a Python interpreter.
 """
+from __future__ import annotations
+
 import functools
 import hashlib
 from pathlib import Path
