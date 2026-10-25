@@ -3,28 +3,28 @@
 查看完整参数：
 
 ```bash
-atc --help
-atc run --help
-atc agent --help
+reins --help
+reins run --help
+reins agent --help
 ```
 
 ## 安装和检查
 
 | 命令 | 用途 |
 | --- | --- |
-| `atc --version` | 查看当前版本 |
-| `atc setup --enable --now` | 安装技能并启动协调器 |
-| `atc setup --keep-skill --force --enable --now` | 更新协调器，保留技能内容 |
-| `atc doctor --agent codex --session <id>` | 检查指定会话的运行配置 |
+| `reins --version` | 查看当前版本 |
+| `reins setup --enable --now` | 安装技能并启动协调器 |
+| `reins setup --keep-skill --force --enable --now` | 更新协调器，保留技能内容 |
+| `reins doctor --agent codex --session <id>` | 检查指定会话的运行配置 |
 
 ## 提交工作
 
 | 命令 | 用途 |
 | --- | --- |
-| `atc run --task <名称> -- <命令>` | 提交一个命令 |
-| `atc agent codex -- <任务>` | 启动 Codex 子 Agent |
-| `atc agent claude -- <任务>` | 启动 Claude 子 Agent |
-| `atc done --task <名称> --exit-code <退出码>` | 报告外部任务结果 |
+| `reins run --task <名称> -- <命令>` | 提交一个命令 |
+| `reins agent codex -- <任务>` | 启动 Codex 子 Agent |
+| `reins agent claude -- <任务>` | 启动 Claude 子 Agent |
+| `reins done --task <名称> --exit-code <退出码>` | 报告外部任务结果 |
 
 提交参数写在 `--` 前面：
 
@@ -43,11 +43,11 @@ atc agent --help
 
 | 命令 | 用途 |
 | --- | --- |
-| `atc status` | 查看待处理回调 |
-| `atc status --state failed` | 查看投递失败的回调 |
-| `atc ack <回调ID>` | 确认已经读取结果 |
-| `atc cancel --id <回调ID>` | 撤销这条回调的投递 |
-| `atc prompt-policy` | 查看提醒间隔 |
+| `reins status` | 查看待处理回调 |
+| `reins status --state failed` | 查看投递失败的回调 |
+| `reins ack <回调ID>` | 确认已经读取结果 |
+| `reins cancel --id <回调ID>` | 撤销这条回调的投递 |
+| `reins prompt-policy` | 查看提醒间隔 |
 
 ## 预览版命令
 
@@ -55,12 +55,12 @@ atc agent --help
 
 | 命令 | 用途 |
 | --- | --- |
-| `atc wait --task <任务ID>` | 在 Claude Code 中等待并输出回调 |
-| `atc retry --id <回调ID>` | 重新投递保存的回调 |
-| `atc agent pi -- <任务>` | 启动 Pi 子 Agent |
-| `atc pi` | 打开 ATC 托管的 Pi 会话 |
-| `atc template list` | 查看已注册模板 |
-| `atc desktop status` | 查看 Desktop 连接配置 |
-| `atc desktop launch` | 通过共享 Core 启动 Desktop |
+| `reins wait --task <任务ID>` | 在 Claude Code 中等待并输出回调 |
+| `reins retry --id <回调ID>` | 重新投递保存的回调 |
+| `reins agent pi -- <任务>` | 启动 Pi 子 Agent |
+| `reins pi` | 打开 Reins 托管的 Pi 会话 |
+| `reins template list` | 查看已注册模板 |
+| `reins desktop status` | 查看 Desktop 连接配置 |
+| `reins desktop launch` | 通过共享 Core 启动 Desktop |
 
 多阶段目标的命令顺序见[目标指南](../guides/goals.md)。

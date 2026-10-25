@@ -34,4 +34,4 @@
 - [开发资料](reference/engineering.md)
 - [参与文档维护](reference/contributing.md)
 - [文档发布与同步](reference/publishing.md)
-- [版本记录](https://github.com/lz59970062/agent-atc/blob/main/CHANGELOG.md)
+- [版本记录](https://github.com/lz59970062/harness-reins/blob/main/CHANGELOG.md)
