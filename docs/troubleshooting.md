@@ -62,6 +62,25 @@ systemd-run --user --wait --pipe -p NoNewPrivileges=yes ~/.local/bin/claude --ve
 
 修复后对失败的回调执行 `reins retry --id <回调ID>`，不需要重新运行业务任务。
 
+`NoNewPrivileges` 是服务进程启动时就定下的内核标志，热重载（re-exec）改不掉。`reins setup` 发现运行中的守护进程和单元不一致（`NoNewPrivileges`，或 `Environment=` 里的 Agent CLI 路径、PATH）时会改为重启服务；正好有回调在投递时会暂缓并提示命令。`reins doctor` 对这种情况报告 `coordinator_restart_required`，处理方式是等 `reins status` 没有进行中的回调后执行 `systemctl --user restart harness-reins.service`。
+
+## Codex 被恢复后执行不了命令，ACK 失败
+
+无头恢复时，Reins 用提交任务时记录的权限启动 `codex exec resume`：默认 `sandbox_mode=workspace-write`、`approval_policy=on-request`、`approvals_reviewer=auto_review`。如果最初的会话是在不支持 Codex 沙箱的地方用 `--dangerously-bypass-approvals-and-sandbox` 运行的（例如没有 bubblewrap 的容器），恢复后的 turn 会遇到：
+
+```text
+bubblewrap is unavailable: no system bwrap was found on PATH
+Automatic approval review failed: ... Unsupported model: 'codex-auto-review'
+```
+
+命令都跑不了，ACK 也写不进去，回调会一直重试。让恢复后的 turn 和最初一样运行：在会话运行 `reins run` 的环境里设置
+
+```bash
+export REINS_SANDBOX_MODE=danger-full-access REINS_APPROVAL_POLICY=never
+```
+
+或者在 `reins run` 上传 `--sandbox-mode danger-full-access --approval-policy never`。这只适用于本来就不用沙箱运行 Codex 的环境。
+
 ## 同一条回调重复出现
 
 读取结果后，执行回调中的完整 ACK 命令。核对回调 ID 和 `--queue-dir`，确认写入的是同一个队列。

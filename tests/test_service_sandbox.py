@@ -145,6 +145,56 @@ class ServiceSandboxProbeTests(unittest.TestCase):
         probe.assert_not_called()
         self.assertIn("sets NoNewPrivileges=no", errors.getvalue())
 
+    def running_daemon(self, *, no_new_privs: bool, environment: dict[str, str]) -> Path:
+        proc = self.root / "proc"
+        (proc / "4242").mkdir(parents=True)
+        (proc / "4242" / "status").write_text(f"Name:\treins\nNoNewPrivs:\t{int(no_new_privs)}\n", encoding="utf-8")
+        (proc / "4242" / "environ").write_bytes(b"\0".join(f"{k}={v}".encode() for k, v in environment.items()) + b"\0")
+        return proc
+
+    def test_a_reload_cannot_apply_new_hardening_or_environment(self):
+        unit = self.root / "harness-reins.service"
+        unit.write_text(services.systemd_service_text(self.service_args(allow_privilege_escalation=True)), encoding="utf-8")
+        recorded = service_sandbox.read_unit(unit)["environment"]
+        main_pid = mock.Mock(stdout=f"MainPID=4242\nFragmentPath={unit}\n")
+        with mock.patch.object(services.sys, "platform", "linux"), \
+                mock.patch.object(services.subprocess, "run", return_value=main_pid):
+            # Started under the old, hardened unit: the flag survives every reload.
+            proc = self.running_daemon(no_new_privs=True, environment=recorded)
+            self.assertEqual(services.reload_cannot_apply("harness-reins.service", unit, proc=proc), ["NoNewPrivileges"])
+            old_bin = dict(recorded, REINS_CODEX_BIN="/old/codex")
+            (proc / "4242" / "environ").write_bytes(b"\0".join(f"{k}={v}".encode() for k, v in old_bin.items()))
+            (proc / "4242" / "status").write_text("NoNewPrivs:\t0\n", encoding="utf-8")
+            self.assertEqual(services.reload_cannot_apply("harness-reins.service", unit, proc=proc),
+                             ["environment (REINS_CODEX_BIN)"])
+            (proc / "4242" / "environ").write_bytes(b"\0".join(f"{k}={v}".encode() for k, v in recorded.items()))
+            self.assertEqual(services.reload_cannot_apply("harness-reins.service", unit, proc=proc), [])
+            (proc / "4242" / "status").write_text("NoNewPrivs:\t1\n", encoding="utf-8")
+            other = mock.Mock(stdout="MainPID=4242\nFragmentPath=/elsewhere/harness-reins.service\n")
+            with mock.patch.object(services.subprocess, "run", return_value=other):
+                self.assertEqual(services.reload_cannot_apply("harness-reins.service", unit, proc=proc), [],
+                                 "a service loaded from another unit file is not compared")
+
+    def test_setup_restarts_when_a_reload_cannot_apply_the_unit_and_defers_during_delivery(self):
+        args = self.service_args(now=True, enable=False)
+        for running, expected in ((False, ["restart", "harness-reins.service"]), (True, None)):
+            with self.subTest(delivering=running), \
+                    mock.patch.object(services, "reload_cannot_apply", return_value=["NoNewPrivileges"]), \
+                    mock.patch.object(services, "has_running_callbacks", return_value=running), \
+                    mock.patch.object(services, "check_agent_clis_under_hardening"), \
+                    mock.patch.object(services.tower_environment, "configure_proxy_environment"), \
+                    mock.patch.object(services.shutil, "which", return_value="/usr/bin/systemctl"), \
+                    mock.patch.object(services, "run_systemctl", return_value=0) as systemctl, \
+                    contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()) as errors:
+                self.assertEqual(services.install_systemd(args), 0)
+            calls = [call.args[0] for call in systemctl.call_args_list]
+            self.assertNotIn(["reload", "harness-reins.service"], calls)
+            if expected:
+                self.assertIn(expected, calls)
+            else:
+                self.assertNotIn(["restart", "harness-reins.service"], calls)
+                self.assertIn("systemctl --user restart harness-reins.service", errors.getvalue())
+
     def test_setup_and_install_systemd_parse_the_opt_out(self):
         for argv, handler in ((["setup", "--allow-privilege-escalation"], "setup"),
                               (["install-systemd", "--allow-privilege-escalation"], "install_systemd"),

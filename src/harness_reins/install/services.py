@@ -216,6 +216,47 @@ def systemd_service_is_active(name: str) -> bool:
     return result.returncode == 0
 
 
+def reload_cannot_apply(name: str, unit: Path, *, proc: Path = Path("/proc")) -> list[str]:
+    """Unit settings the running daemon lacks that only a restart applies.
+
+    A hot reload re-executes the daemon inside the same process, so the kernel's
+    no_new_privs flag and the process environment survive it: a changed
+    NoNewPrivileges (setup --allow-privilege-escalation, a drop-in) or Environment=
+    line (an agent binary path, PATH) would otherwise never reach the daemon.
+    """
+    parsed = service_sandbox.read_unit(unit)
+    if parsed is None or not sys.platform.startswith("linux"):
+        return []
+    try:
+        shown = subprocess.run(["systemctl", "--user", "show", "-p", "MainPID", "-p", "FragmentPath", name],
+                               capture_output=True, text=True, check=False,
+                               env=linux_platform.user_manager_environment()).stdout
+    except OSError:
+        return []
+    properties = dict(line.split("=", 1) for line in shown.splitlines() if "=" in line)
+    pid = properties.get("MainPID", "").strip()
+    if not pid.isdigit() or pid == "0":
+        return []
+    fragment = properties.get("FragmentPath", "").strip()
+    if not fragment or Path(fragment).resolve() != unit.resolve():
+        return []  # the running service does not come from this unit file
+    try:
+        status = (proc / pid / "status").read_text(encoding="utf-8")
+        environ = (proc / pid / "environ").read_bytes().decode("utf-8", "replace").split("\0")
+    except OSError:
+        return []
+    stale = []
+    wants = "NoNewPrivileges=yes" in parsed["hardening"]
+    has = any(line.split(":", 1)[1].strip() == "1" for line in status.splitlines() if line.startswith("NoNewPrivs:"))
+    if wants != has:
+        stale.append("NoNewPrivileges")
+    running = dict(item.split("=", 1) for item in environ if "=" in item)
+    changed = sorted(key for key, value in parsed["environment"].items() if running.get(key) != value)
+    if changed:
+        stale.append("environment (" + ", ".join(changed) + ")")
+    return stale
+
+
 def run_supervisorctl(args: list[str]) -> int:
     command = ["supervisorctl", *args]
     result = subprocess.run(command, check=False)
@@ -406,7 +447,19 @@ def install_systemd(args: argparse.Namespace) -> int:
         if args.enable:
             status = run_systemctl(["enable", name]) or status
         if args.now:
-            if has_running_callbacks(args):
+            stale = reload_cannot_apply(name, target)
+            if stale and has_running_callbacks(args):
+                print(
+                    f"reins: the unit changed in ways a reload cannot apply ({', '.join(stale)}); callback delivery "
+                    "is running, so the daemon was left as it is. Once `reins status` shows nothing running, "
+                    f"restart it: systemctl --user restart {name}",
+                    file=sys.stderr,
+                )
+                return status
+            if stale:
+                print(f"Restarting the wakeup daemon: a reload cannot apply the unit's {', '.join(stale)}.")
+                status = run_systemctl(["restart", name]) or status
+            elif has_running_callbacks(args):
                 if tower.daemon_supports_hot_reload():
                     print("Requesting safe wakeup daemon reload after live delivery workers drain.")
                     status = run_systemctl(["reload", name]) or status

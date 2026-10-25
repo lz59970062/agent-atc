@@ -372,6 +372,16 @@ def inspect(args: argparse.Namespace) -> dict[str, object]:
         issues.extend(service_sandbox.probe(service_sandbox.recorded_binaries(unit_environment),
                                             unit_environment.get("PATH", ""), properties=service_unit["hardening"]))
 
+    if service_unit is not None:
+        from . import services
+        unit_name = services.service_name("harness-reins")
+        stale = services.reload_cannot_apply(unit_name, services.systemd_user_dir() / unit_name)
+        if stale:
+            issues.append({"code": "coordinator_restart_required", "kind": "configuration", "component": "coordinator_service",
+                           "stale": stale, "action": (
+                               f"The running coordinator predates its unit ({', '.join(stale)}); a reload cannot apply "
+                               f"that. When `reins status` shows nothing running, run: systemctl --user restart {unit_name}")})
+
     callback_agent = dispatch.resolve_agent(args)
     adapter = get_agent(callback_agent)
     executables: dict[str, str] = {}

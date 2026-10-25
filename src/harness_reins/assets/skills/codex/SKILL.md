@@ -15,6 +15,12 @@ The full reference (all flags, platforms, Desktop modes, recovery and goals) is 
 [REFERENCE.md](REFERENCE.md). Read it only when you need details beyond this page; where it
 differs from this page about callback delivery, this page applies to Codex.
 
+Reins resumes this thread with the permissions recorded when you submit (`workspace-write`,
+`on-request` by default). If this session runs without a sandbox (for example
+`--dangerously-bypass-approvals-and-sandbox` in a container), submit with
+`--sandbox-mode danger-full-access --approval-policy never` (or have `REINS_SANDBOX_MODE` and
+`REINS_APPROVAL_POLICY` set) so the resumed turn can still run commands and ACK.
+
 ## When to use it
 
 - Reliably done within 60 seconds → run it in the foreground once. No Reins.

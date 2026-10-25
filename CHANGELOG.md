@@ -23,7 +23,22 @@
   `--only atc|ltc` moves one. ATC's systemd drop-ins (such as a
   `NoNewPrivileges=no` override) are copied to `harness-reins.service.d`, and
   its `experts.yaml` moves to `~/.reins` with the `reins.experts/1` schema.
-  State directories are archived, never deleted.
+  State directories are archived, never deleted. A callback that is already
+  acknowledged but still filed under running does not count as live work.
+- `reins setup` restarts the coordinator instead of hot-reloading it when the
+  running process lacks something only a restart applies: a changed
+  `NoNewPrivileges` (so `--allow-privilege-escalation` takes effect at once) or
+  `Environment=` lines such as agent binary paths and PATH. While callbacks are
+  being delivered it leaves the daemon alone and says what to restart; `reins
+  doctor` reports `coordinator_restart_required`.
+- `reins doctor` looks for the callback agent CLI where the coordinator unit
+  records it (`--codex-bin`, its PATH), not on the shell's PATH.
+- Runs on Python 3.9 as declared: a module evaluated `str | None` at import,
+  and before 3.12 argparse could not parse `reins agent continue|fork|expert
+  <name> --name … -- <prompt>`.
+- The Codex skill and troubleshooting cover resumed Codex turns that need the
+  same permissions as the first one (`--sandbox-mode`, `--approval-policy`,
+  `REINS_SANDBOX_MODE`, `REINS_APPROVAL_POLICY`).
 
 ## 0.8.2 — 2026-10-16
 
