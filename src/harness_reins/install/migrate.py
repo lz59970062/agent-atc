@@ -110,6 +110,8 @@ def live_work(state: Path) -> list[str]:
     queue = state / "queue"
     for name in LIVE_QUEUE_STATES:
         for path in sorted((queue / name).glob("*.json")):
+            if (queue / "acks" / path.name).exists():
+                continue  # acknowledged; the daemon only has to file it under done
             found.append(f"callback {path.stem} ({name})")
     for path in sorted((state / "tasks").glob("*/task.json")):
         try:
@@ -331,16 +333,16 @@ def command(args: argparse.Namespace) -> int:
             print(f"note: {note}")
         if plan.live:
             print(f"reins migrate: {plan.generation.key.upper()} still owns this work, so it is left as it is; "
-                  "let its daemon finish, or rerun with --wait:", file=sys.stderr)
+                  "let its daemon finish, or rerun with --wait:")
             for item in plan.live:
-                print(f"  - {item}", file=sys.stderr)
+                print(f"  - {item}")
             status = 1
             continue
         if not applying:
             continue
         problems = apply(plan)
         for problem in problems:
-            print(f"reins migrate: warning: {problem}", file=sys.stderr)
+            print(f"reins migrate: warning: {problem}")
         print(f"Migrated {plan.generation.title}.")
         status = status or (1 if problems else 0)
     if not applying:

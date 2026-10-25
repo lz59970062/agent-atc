@@ -289,6 +289,28 @@ class HealthReportTests(unittest.TestCase):
             report = diagnostics.inspect(args)
         self.assertNotIn("callback_agent_unavailable", self.issue_codes(report), "manual callbacks resume no Agent CLI")
 
+    def test_callback_cli_is_looked_up_where_the_coordinator_unit_records_it(self):
+        # setup --codex-bin points the service at a CLI that is not on this shell's PATH.
+        with tempfile.TemporaryDirectory() as directory:
+            fake = Path(directory) / "codex-elsewhere"
+            fake.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+            fake.chmod(0o755)
+            unit = {"environment": {"REINS_CODEX_BIN": str(fake), "PATH": directory}, "hardening": (),
+                    "allows_privilege_escalation": False, "dropin_disables_hardening": False}
+            args = self.arguments(agent="codex")
+            which = mock.patch.object(diagnostics.shutil, "which",
+                                      side_effect=lambda name, path=None: name if os.access(name, os.X_OK) else None)
+            which.start()
+            self.addCleanup(which.stop)
+            with mock.patch.dict(os.environ, {"PATH": "/nonexistent", "REINS_CODEX_BIN": "codex"}), \
+                    mock.patch.object(diagnostics, "installed_service_unit", return_value=unit):
+                report = diagnostics.inspect(args)
+            self.assertNotIn("callback_agent_unavailable", self.issue_codes(report))
+            with mock.patch.dict(os.environ, {"PATH": "/nonexistent", "REINS_CODEX_BIN": "codex"}), \
+                    mock.patch.object(diagnostics, "installed_service_unit", return_value=None):
+                report = diagnostics.inspect(args)
+            self.assertIn("callback_agent_unavailable", self.issue_codes(report))
+
     def test_unbound_session_reports_capture_requirement_without_inventing_last_target(self):
         report = diagnostics.inspect(self.arguments(session=None))
         self.assertIn("session_unbound", self.issue_codes(report))

@@ -146,6 +146,15 @@ class MigrateTests(unittest.TestCase):
         self.assertNotIn(migrate.ATC.hook_begin, rc)
         self.assertIn(migrate.LTC.hook_begin, rc, "LTC's hook stays until LTC moves")
 
+    def test_an_acknowledged_callback_still_filed_as_running_is_not_live_work(self):
+        atc = self.add_atc()
+        (atc / "queue" / "acks").mkdir()
+        (atc / "queue" / "running" / "done-c1.json").write_text("{}", encoding="utf-8")
+        (atc / "queue" / "acks" / "done-c1.json").write_text("{}", encoding="utf-8")
+        self.assertEqual(migrate.live_work(atc), [])
+        (atc / "queue" / "running" / "open-c1.json").write_text("{}", encoding="utf-8")
+        self.assertEqual(migrate.live_work(atc), ["callback open-c1 (running)"])
+
     def test_only_limits_migration_to_one_generation(self):
         atc = self.add_atc()
         status, output = self.run_command(apply=True, only="ltc")

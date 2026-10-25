@@ -375,7 +375,16 @@ def inspect(args: argparse.Namespace) -> dict[str, object]:
     callback_agent = dispatch.resolve_agent(args)
     adapter = get_agent(callback_agent)
     executables: dict[str, str] = {}
-    callback_executable = shutil.which(adapter.executable(delivery_engine.agent_environment(callback_agent)))
+    callback_environment = delivery_engine.agent_environment(callback_agent)
+    unit = service_unit if service_unit is not None else installed_service_unit()
+    if unit is not None:
+        # The coordinator resumes sessions with the agent binaries and PATH its unit records,
+        # which can differ from this shell's (setup --codex-bin, a PATH captured at setup).
+        recorded = set(service_sandbox.AGENT_BIN_ENVS.values()) | {"PATH"}
+        callback_environment = {**callback_environment,
+                                **{name: value for name, value in unit["environment"].items() if name in recorded}}
+    lookup = {"path": callback_environment["PATH"]} if unit is not None and unit["environment"].get("PATH") else {}
+    callback_executable = shutil.which(adapter.executable(callback_environment), **lookup)
     # Manual callbacks are read and ACKed from the bound session; no Agent CLI resumes it.
     if callback_executable is None and getattr(args, "callback_mode", None) != "manual":
         issues.append({"code": "callback_agent_unavailable", "action": "Make the selected callback Agent CLI available in the coordinator's environment."})
