@@ -34,4 +34,4 @@
 - [Engineering notes](reference/engineering.md)
 - [Contributing to the docs](reference/contributing.md)
 - [Publishing and synchronization](reference/publishing.md)
-- [Changelog](https://github.com/lz59970062/agent-atc/blob/main/CHANGELOG.md)
+- [Changelog](https://github.com/lz59970062/harness-reins/blob/main/CHANGELOG.md)

@@ -7,7 +7,7 @@ Pi integration uses the `0.7.1` preview. Pi can receive results for its own task
 Follow [preview installation](../installation.md#install-the-preview), then run:
 
 ```bash
-atc setup --with-pi-extension --enable --now
+reins setup --with-pi-extension --enable --now
 ```
 
 Run `/reload` in an existing ordinary Pi session, or restart Pi. The extension and skill are installed in the Pi configuration directory, which defaults to `~/.pi/agent`.
@@ -17,25 +17,25 @@ Run `/reload` in an existing ordinary Pi session, or restart Pi. The extension a
 Ask Pi to run:
 
 ```bash
-atc run --cwd "$PWD" --task "Prepare the data" -- python prepare_data.py
+reins run --cwd "$PWD" --task "Prepare the data" -- python prepare_data.py
 ```
 
-ATC binds the task to the session named by `PI_SESSION_FILE`. When the result arrives, the extension delivers the callback into that Pi process. An idle Pi starts handling it immediately; a busy Pi receives it after the current tool work finishes.
+Reins binds the task to the session named by `PI_SESSION_FILE`. When the result arrives, the extension delivers the callback into that Pi process. An idle Pi starts handling it immediately; a busy Pi receives it after the current tool work finishes.
 
 After reading the artifacts, ask Pi to execute the callback's ACK command.
 
-## Launch Pi through ATC
+## Launch Pi through Reins
 
 To allow session recovery after Pi closes, start a managed session:
 
 ```bash
-atc pi --cwd "$PWD"
+reins pi --cwd "$PWD"
 ```
 
 To continue an existing session, provide its absolute path:
 
 ```bash
-atc pi --session /absolute/path/to/session.jsonl
+reins pi --session /absolute/path/to/session.jsonl
 ```
 
 ## Give work to Pi
@@ -43,7 +43,7 @@ atc pi --session /absolute/path/to/session.jsonl
 Submit from the original Agent conversation:
 
 ```bash
-atc agent pi --cwd "$PWD" --task "Review data preparation" -- "Read prepare_data.py. Check missing values, duplicate records, and output formats. Report specific issues."
+reins agent pi --cwd "$PWD" --task "Review data preparation" -- "Read prepare_data.py. Check missing values, duplicate records, and output formats. Report specific issues."
 ```
 
-The answer is saved in the ATC task directory. Its path appears in both the submission output and callback. See the [Pi implementation notes](https://github.com/lz59970062/agent-atc/blob/main/docs/pi.md) for model options, system prompts, and session recovery.
+The answer is saved in the Reins task directory. Its path appears in both the submission output and callback. See the [Pi implementation notes](https://github.com/lz59970062/harness-reins/blob/main/docs/pi.md) for model options, system prompts, and session recovery.

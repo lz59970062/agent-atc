@@ -6,7 +6,7 @@ All tutorials are maintained in `docs/` in the GitHub repository. Chinese files 
 
 | Platform | Repository configuration | Updates after connection |
 | --- | --- | --- |
-| [GitHub Pages](https://lz59970062.github.io/agent-atc/en/) | `.github/workflows/docs.yml` | Enabled; updates automatically after a push to `main` |
+| [GitHub Pages](https://lz59970062.github.io/harness-reins/en/) | `.github/workflows/docs.yml` | Enabled; updates automatically after a push to `main` |
 | Read the Docs | `.readthedocs.yaml` | A webhook triggers builds after importing the repository |
 | Cloudflare Pages | `wrangler.toml` and the settings below | Builds automatically after connecting the GitHub repository |
 | GitLab Pages | `.gitlab-ci.yml` and optional GitHub sync job | GitHub pushes source to GitLab, then GitLab CI publishes it |
@@ -16,13 +16,13 @@ GitHub Pages is live. Configuration and content exports are ready for the other 
 
 ## GitHub Pages
 
-After pushing documentation to `main`, open the repository's [Documentation workflow](https://github.com/lz59970062/agent-atc/actions/workflows/docs.yml). It builds the site, updates `gh-pages`, and requests a Pages build.
+After pushing documentation to `main`, open the repository's [Documentation workflow](https://github.com/lz59970062/harness-reins/actions/workflows/docs.yml). It builds the site, updates `gh-pages`, and requests a Pages build.
 
 Chinese uses the site root; English uses `en/`. The language menu opens the other-language version of the current page.
 
 ## Read the Docs
 
-1. Sign into [Read the Docs](https://readthedocs.org/) and import `lz59970062/agent-atc`.
+1. Sign into [Read the Docs](https://readthedocs.org/) and import `lz59970062/harness-reins`.
 2. Select `main`, use the root `.readthedocs.yaml`, and choose Simplified Chinese as the project language.
 3. Trigger the first build, open the assigned public URL, and check the language menu.
 4. Confirm the GitHub webhook is connected in the project's integration settings so future pushes rebuild it.
@@ -41,7 +41,7 @@ Create a Pages project under Workers & Pages, connect the same GitHub repository
 | Build output directory | `site` |
 | Environment variable | `PYTHON_VERSION=3.12` |
 
-`wrangler.toml` also sets `site` as the output directory. The site URL comes from `CF_PAGES_URL`. For a custom domain, set `ATC_DOCS_SITE_URL` to the full public URL. See [Cloudflare's MkDocs deployment guide](https://developers.cloudflare.com/pages/framework-guides/deploy-an-mkdocs-site/).
+`wrangler.toml` also sets `site` as the output directory. The site URL comes from `CF_PAGES_URL`. For a custom domain, set `REINS_DOCS_SITE_URL` to the full public URL. See [Cloudflare's MkDocs deployment guide](https://developers.cloudflare.com/pages/framework-guides/deploy-an-mkdocs-site/).
 
 ## GitLab Pages
 
@@ -79,4 +79,4 @@ The files are written to `build/gitbook/zh/` and `build/gitbook/en/`.
 
 Confirm that GitHub's `Documentation` build passed, then open a newly updated page on the destination platform. Switch languages and check code blocks, internal links, and search. Compare the source commit in GitBook's `sync-manifest.json` with the GitHub commit you published.
 
-Use `ATC_DOCS_SITE_URL` to override automatic URL detection for a custom domain. Set it to the complete site-root URL, including the trailing `/`.
+Use `REINS_DOCS_SITE_URL` to override automatic URL detection for a custom domain. Set it to the complete site-root URL, including the trailing `/`.

@@ -1,30 +1,30 @@
 # Claude Code
 
-Live callback delivery uses the `0.7.1` preview. Follow [preview installation](../installation.md#install-the-preview), then run `atc setup` to install the ATC skill for Claude Code.
+Live callback delivery uses the `0.7.1` preview. Follow [preview installation](../installation.md#install-the-preview), then run `reins setup` to install the Reins skill for Claude Code.
 
 ## Submit a task and receive the result
 
 Ask Claude to submit this in the current conversation:
 
 ```bash
-atc run --cwd "$PWD" --task "Run the tests" -- python -m pytest tests/
+reins run --cwd "$PWD" --task "Run the tests" -- python -m pytest tests/
 ```
 
-The submission output provides an `atc wait` command, for example:
+The submission output provides a `reins wait` command, for example:
 
 ```bash
-atc wait --queue-dir ~/.atc/queue --task <task-id>
+reins wait --queue-dir ~/.reins/queue --task <task-id>
 ```
 
-Ask Claude to execute the complete printed command through its Bash tool with `run_in_background: true`. When the result enters the queue, `atc wait` prints the callback and exits. Claude Code then handles the background command's completion message.
+Ask Claude to execute the complete printed command through its Bash tool with `run_in_background: true`. When the result enters the queue, `reins wait` prints the callback and exits. Claude Code then handles the background command's completion message.
 
-After reading the logs and artifacts, Claude runs the callback's `atc ack` command. This workflow works in the terminal CLI and local Code sessions in the Claude desktop app.
+After reading the logs and artifacts, Claude runs the callback's `reins ack` command. This workflow works in the terminal CLI and local Code sessions in the Claude desktop app.
 
 ## Describe the work in plain language
 
 After installing the skill, you can say:
 
-> Run the full test suite through ATC. When the results arrive, read the failed-test logs, identify the causes, and suggest fixes.
+> Run the full test suite through Reins. When the results arrive, read the failed-test logs, identify the causes, and suggest fixes.
 
 The skill guides Claude through submission, the background waiter, reading results, and acknowledgement.
 
@@ -37,10 +37,10 @@ claude auth login
 claude auth status
 ```
 
-Check ATC from the current session's tool environment:
+Check Reins from the current session's tool environment:
 
 ```bash
-atc doctor --agent claude --session "$CLAUDE_CODE_SESSION_ID"
+reins doctor --agent claude --session "$CLAUDE_CODE_SESSION_ID"
 ```
 
-For SSH work, install ATC and its skill on the remote host where the task runs. See the [Claude Code implementation notes](https://github.com/lz59970062/agent-atc/blob/main/docs/claude-code.md) for executable discovery, session directories, and the channel integration.
+For SSH work, install Reins and its skill on the remote host where the task runs. See the [Claude Code implementation notes](https://github.com/lz59970062/harness-reins/blob/main/docs/claude-code.md) for executable discovery, session directories, and the channel integration.

@@ -2,20 +2,20 @@
 
 Run a ten-second task, receive the result in the original Agent conversation, then ask the Agent to read the log and acknowledge the callback.
 
-These steps use ATC 0.7.0, Linux, and Codex CLI. Prepare Python 3.9 or later, Git, and a signed-in Codex CLI. Linux tasks run under systemd user services or GNU screen. See [Installation](installation.md) for other environments.
+These steps use Reins 0.7.0, Linux, and Codex CLI. Prepare Python 3.9 or later, Git, and a signed-in Codex CLI. Linux tasks run under systemd user services or GNU screen. See [Installation](installation.md) for other environments.
 
-## Install ATC
+## Install Reins
 
 Run in your terminal:
 
 ```bash
-git clone --branch v0.7.0 --depth 1 https://github.com/lz59970062/agent-atc.git
-cd agent-atc
+git clone --branch v0.7.0 --depth 1 https://github.com/lz59970062/harness-reins.git
+cd harness-reins
 python3 -m venv .venv
 source .venv/bin/activate
 python3 -m pip install .
-atc setup --enable --now
-atc --version
+reins setup --enable --now
+reins --version
 ```
 
 `setup` installs the Agent skills and starts the background coordinator. The last command should print `0.7.0`.
@@ -24,27 +24,27 @@ Keep the virtual environment at this location, since the coordinator uses its Py
 
 ## Submit your first task
 
-In your Codex CLI conversation, ask Codex to execute this command. ATC reads the callback target from the session environment.
+In your Codex CLI conversation, ask Codex to execute this command. Reins reads the callback target from the session environment.
 
 ```bash
-atc run --cwd "$PWD" --task "My first ATC task" \
-  -- python3 -c "import time; time.sleep(10); print('ATC demo finished')"
+reins run --cwd "$PWD" --task "My first Reins task" \
+  -- python3 -c "import time; time.sleep(10); print('Reins demo finished')"
 ```
 
-`--task` names the task, `--cwd` sets its working directory, and the command follows `--`. ATC prints the task ID, execution backend, and log path, then returns. The Python program waits ten seconds in the background, prints one line, and exits.
+`--task` names the task, `--cwd` sets its working directory, and the command follows `--`. Reins prints the task ID, execution backend, and log path, then returns. The Python program waits ten seconds in the background, prints one line, and exits.
 
 ## Read the result and acknowledge it
 
-ATC sends the callback to the same conversation. It includes the task status, log path, and ACK command. Ask Codex to open the log. You should see:
+Reins sends the callback to the same conversation. It includes the task status, log path, and ACK command. Ask Codex to open the log. You should see:
 
 ```text
-ATC demo finished
+Reins demo finished
 ```
 
 After reading the result, ask Codex to execute the complete ACK command from the callback. For the default queue, it looks like this:
 
 ```bash
-atc ack <callback-id>
+reins ack <callback-id>
 ```
 
 Replace `<callback-id>` with the ID in that callback. ACK records receipt and ends reminders for this callback.
@@ -52,7 +52,7 @@ Replace `<callback-id>` with the ID in that callback. ACK records receipt and en
 To inspect pending callbacks, run:
 
 ```bash
-atc status
+reins status
 ```
 
 ## Run your own task
@@ -60,7 +60,7 @@ atc status
 Replace the sample Python command with your training command. Ask the Agent to run it in the project directory:
 
 ```bash
-atc run --cwd "$PWD" --task "Train the model" \
+reins run --cwd "$PWD" --task "Train the model" \
   -- python3 train.py --config configs/exp.yaml
 ```
 
@@ -69,10 +69,10 @@ Choose a recognizable name, such as “Train the ResNet baseline” or “Build 
 To give a code review to a child Agent, use:
 
 ```bash
-atc agent codex --cwd "$PWD" --task "Review the current changes" \
+reins agent codex --cwd "$PWD" --task "Review the current changes" \
   -- "Read the current git diff. Check for issues that could cause runtime failures, and report the file locations and causes."
 ```
 
-ATC prints the answer-file path and calls back to the original conversation when the child finishes. See [Task templates](guides/templates.md) to reuse these instructions.
+Reins prints the answer-file path and calls back to the original conversation when the child finishes. See [Task templates](guides/templates.md) to reuse these instructions.
 
-Next, read [Architecture](overview.md) to see how tasks and callbacks move through ATC.
+Next, read [Architecture](overview.md) to see how tasks and callbacks move through Reins.

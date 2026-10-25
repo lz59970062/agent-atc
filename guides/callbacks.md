@@ -19,7 +19,7 @@ Callbacks use a compact format by default. Add `--callback-format full` when sub
 Run the complete command provided in the callback. Its default form is:
 
 ```bash
-atc ack <callback-id>
+reins ack <callback-id>
 ```
 
 For a custom queue, the printed command also includes `--queue-dir`. Keep it so the acknowledgement is written to that queue.
@@ -27,21 +27,21 @@ For a custom queue, the printed command also includes `--queue-dir`. Keep it so 
 ## Inspect pending callbacks
 
 ```bash
-atc status
-atc status --state pending --state failed
+reins status
+reins status --state pending --state failed
 ```
 
 `pending` means a callback is waiting for delivery. For entries in `failed`, read the associated error record. In the `0.7.1` preview, you can retry delivery after fixing the connection:
 
 ```bash
-atc retry --id <callback-id>
+reins retry --id <callback-id>
 ```
 
-This sends the saved result again. To execute another business command, submit a new task with `atc run`.
+This sends the saved result again. To execute another business command, submit a new task with `reins run`.
 
 ## Customize the handoff
 
-Edit `~/.atc/callback-hook.md`, for example:
+Edit `~/.reins/callback-hook.md`, for example:
 
 ```text
 After reading the result, tell me the artifact paths and main findings before continuing.
@@ -51,7 +51,7 @@ For experiments, include the configuration file and key metrics.
 Include this text with every callback:
 
 ```bash
-atc prompt-policy --user-every 1
+reins prompt-policy --user-every 1
 ```
 
-Run `atc prompt-policy` to inspect the current intervals. See [Configuration](../reference/configuration.md) for file paths and environment variables.
+Run `reins prompt-policy` to inspect the current intervals. See [Configuration](../reference/configuration.md) for file paths and environment variables.

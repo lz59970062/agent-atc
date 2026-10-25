@@ -1,39 +1,39 @@
 # Codex CLI
 
-Follow [Installation](../installation.md), then activate ATC's virtual environment in the terminal where you start Codex.
+Follow [Installation](../installation.md), then activate Reins's virtual environment in the terminal where you start Codex.
 
 ## Submit from a conversation
 
 Ask Codex to run:
 
 ```bash
-atc run --cwd "$PWD" --task "Build the project" -- bash scripts/build.sh
+reins run --cwd "$PWD" --task "Build the project" -- bash scripts/build.sh
 ```
 
-ATC reads `CODEX_THREAD_ID` from the tool environment and binds the task to the current session. When it finishes, the coordinator resumes that session and delivers the result.
+Reins reads `CODEX_THREAD_ID` from the tool environment and binds the task to the current session. When it finishes, the coordinator resumes that session and delivers the result.
 
 For everyday use, you can tell Codex:
 
-> Run this build through ATC. When it finishes, read the log, check the output package, and tell me the result.
+> Run this build through Reins. When it finishes, read the log, check the output package, and tell me the result.
 
-The skill installed by `atc setup` covers submission, callback handling, and ACK.
+The skill installed by `reins setup` covers submission, callback handling, and ACK.
 
 ## Specify the receiving session
 
 When submitting from another script, pass the session ID explicitly:
 
 ```bash
-atc run --agent codex --session "YOUR_SESSION_ID" --cwd "$PWD" --task "Build the project" -- bash scripts/build.sh
+reins run --agent codex --session "YOUR_SESSION_ID" --cwd "$PWD" --task "Build the project" -- bash scripts/build.sh
 ```
 
-Use the original session's `CODEX_HOME` so ATC can find the same session records and configuration. The default configuration directory is `~/.codex`.
+Use the original session's `CODEX_HOME` so Reins can find the same session records and configuration. The default configuration directory is `~/.codex`.
 
 ## Check the configuration
 
 Run this in the Codex tool environment:
 
 ```bash
-atc doctor --agent codex --session "$CODEX_THREAD_ID"
+reins doctor --agent codex --session "$CODEX_THREAD_ID"
 ```
 
 Follow the suggested fixes for the installation, coordinator, or session configuration. Then run the [ten-second example](../quickstart.md#submit-your-first-task) to check callback delivery.
