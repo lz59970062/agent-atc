@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./assets/readme/hero.svg" width="100%" alt="Harness Reins (reins): run a task under an independent Linux, macOS or Windows owner and wake the same Codex or Claude Code session when it finishes">
+  <img src="https://raw.githubusercontent.com/lz59970062/harness-reins/main/assets/readme/hero.svg" width="100%" alt="Harness Reins (reins): run a task under an independent Linux, macOS or Windows owner and wake the same Codex or Claude Code session when it finishes">
 </p>
 
 <h3 align="center">Harness Reins: a harness for your harnesses.<br>Dispatch work to any agent and route the result back to the session that asked.</h3>
@@ -166,7 +166,7 @@ systemd drop-ins and its `experts.yaml` carry over to Reins.
 ## 🧭 How it works
 
 <p align="center">
-  <img src="./assets/readme/workflow.svg" width="100%" alt="The agent submits a task, the daemon requests an independent task service, the task runs independently, completion is queued, and the same agent conversation resumes and acknowledges it">
+  <img src="https://raw.githubusercontent.com/lz59970062/harness-reins/main/assets/readme/workflow.svg" width="100%" alt="The agent submits a task, the daemon requests an independent task service, the task runs independently, completion is queued, and the same agent conversation resumes and acknowledges it">
 </p>
 
 ```text

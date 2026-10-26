@@ -7,6 +7,7 @@ name = "harness-reins"
 version = "0.9.0"
 description = "Harness Reins: a harness for your harnesses. Dispatch work to Codex, Claude Code or Pi and route the result back to the session that asked."
 requires-python = ">=3.9"
+readme = "README.md"
 license = { text = "MIT" }
 authors = [
   { name = "Local" }
@@ -19,6 +20,12 @@ classifiers = [
   "Programming Language :: Python :: 3",
 ]
 dependencies = ["PyYAML>=6.0"]
+
+[project.urls]
+Homepage = "https://github.com/lz59970062/harness-reins"
+Repository = "https://github.com/lz59970062/harness-reins"
+Changelog = "https://github.com/lz59970062/harness-reins/blob/main/CHANGELOG.md"
+Issues = "https://github.com/lz59970062/harness-reins/issues"
 
 [project.scripts]
 reins = "harness_reins.cli:main"
