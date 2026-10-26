@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.9.0 — unreleased (Harness Reins)
+## 0.9.0 — 2026-10-26 (Harness Reins)
 
 - Rename Agent Traffic Control (ATC) to Harness Reins: a harness for your
   harnesses. Codex, Claude Code and Pi are harnesses; Reins dispatches work to
