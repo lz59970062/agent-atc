@@ -1,42 +1,21 @@
-<svg xmlns="http://www.w3.org/2000/svg"
-     width="1200" height="360" viewBox="0 0 1200 360"
-     role="img" aria-labelledby="title desc">
-  <title id="title">Harness Reins (reins)</title>
-  <desc id="desc">Project title with a terminal card showing a long task exiting, queueing a callback, and resuming the same agent session with an acknowledgement.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="360" viewBox="0 0 1200 360" role="img" aria-labelledby="t d" font-family="system-ui, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
+<title id="t">Harness Reins (reins)</title>
+<desc id="d">Project title beside a terminal card: a long task is submitted, the agent stops, and six hours later the same session receives the result and acknowledges it.</desc>
+<rect x="0.5" y="0.5" width="1199" height="359" rx="14" fill="#ffffff" stroke="#d8dee4"/>
 
-  <rect width="1200" height="360" rx="26" fill="#0d1117"/>
-
-  <g id="title-block" transform="translate(64 62)">
-    <text x="0" y="0" font-family="ui-monospace, SFMono-Regular, Menlo, monospace"
-          font-size="19" letter-spacing="3" fill="#8b949e">EXPLICIT CALLBACKS FOR LONG AGENT TASKS</text>
-    <text x="0" y="66" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif"
-          font-size="62" font-weight="700" fill="#e6edf3">Harness Reins</text>
-    <text x="4" y="112" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif"
-          font-size="25" fill="#8b949e">Wake Codex or Claude Code back into the same session</text>
-    <text x="4" y="146" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif"
-          font-size="25" fill="#8b949e">when an hours-long task finishes.</text>
-    <g transform="translate(4 190)" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="21">
-      <text x="0" y="0" fill="#3fb950">$</text>
-      <text x="24" y="0" fill="#e6edf3">reins run -- python train.py</text>
-      <rect x="520" y="-16" width="13" height="24" fill="#3fb950"/>
-    </g>
-    <text x="4" y="248" font-family="ui-monospace, SFMono-Regular, Menlo, monospace"
-          font-size="18" fill="#8b949e">one Python package · no polling · at-least-once delivery</text>
-  </g>
-
-  <g id="lifecycle-card" transform="translate(776 56)">
-    <rect width="368" height="248" rx="16" fill="#161b22" stroke="#30363d" stroke-width="2"/>
-    <circle cx="26" cy="26" r="6" fill="#ff5f57"/>
-    <circle cx="48" cy="26" r="6" fill="#febc2e"/>
-    <circle cx="70" cy="26" r="6" fill="#28c840"/>
-    <text x="96" y="32" font-family="ui-monospace, SFMono-Regular, Menlo, monospace"
-          font-size="17" fill="#8b949e">callback lifecycle</text>
-    <g font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="19">
-      <text x="24" y="76" fill="#e6edf3">train.py <tspan fill="#8b949e">··· 6h 12m</tspan></text>
-      <text x="24" y="112" fill="#d29922">exit 0 → callback queued</text>
-      <text x="24" y="148" fill="#58a6ff">daemon → resume session</text>
-      <text x="24" y="184" fill="#3fb950">inspect → ack ✓</text>
-      <text x="24" y="220" fill="#8b949e">goal continues ↩</text>
-    </g>
-  </g>
+<text x="56" y="88" font-size="13" font-weight="600" letter-spacing="1.6" fill="#2a78d6">A HARNESS FOR YOUR HARNESSES</text>
+<text x="54" y="146" font-size="56" font-weight="700" fill="#1f2328">Harness Reins</text>
+<text x="56" y="190" font-size="19" fill="#59636e">Hand long work and child agents to an independent</text>
+<text x="56" y="216" font-size="19" fill="#59636e">owner, then resume the exact session that asked.</text>
+<text x="56" y="272" font-size="14" fill="#818b98">Codex · Claude Code · Pi   —   Linux · macOS · Windows</text>
+<rect x="604" y="58" width="556" height="244" rx="10" fill="#f6f8fa" stroke="#d8dee4"/>
+<text x="628" y="88" font-size="12" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#818b98">same session, six hours later</text>
+<line x1="604" x2="1160" y1="102" y2="102" stroke="#d8dee4"/>
+<text x="632" y="132" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#1f2328">$ reins run -- python train.py</text>
+<text x="632" y="162" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#818b98">reins: submitted managed task 7f3a91c2</text>
+<text x="632" y="192" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#818b98">… the agent ends its turn; nothing polls …</text>
+<rect x="618" y="205" width="3" height="22" rx="1.5" fill="#2a78d6"/>
+<text x="632" y="222" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-weight="600" fill="#1f2328">[reins] 7f3a91c2-c1</text>
+<text x="632" y="252" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#1f2328">Result: exited 0 · 6h 12m 08s</text>
+<text x="632" y="282" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#1f2328">ACK after inspection: reins ack 7f3a91c2-c1</text>
 </svg>

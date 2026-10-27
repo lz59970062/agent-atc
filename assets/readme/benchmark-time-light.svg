@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="330" viewBox="0 0 960 330" role="img" aria-labelledby="t d" font-family="system-ui, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
+<title id="t">Harness Reins time breakdown</title>
+<desc id="d">Share of wall time spent on model and tools, waiting with the agent alive, and waiting with no agent process.</desc>
+<rect x="0.5" y="0.5" width="959" height="329" rx="12" fill="#ffffff" stroke="#d8dee4"/>
+<text x="32" y="40" font-size="18" font-weight="650" fill="#1f2328">Where the wall time went</text>
+<text x="32" y="62" font-size="13" fill="#59636e">Share of each run. Without Reins the agent stays alive to wait; with Reins it is not running at all.</text>
+<rect x="32" y="81" width="14" height="4" rx="2" fill="#1baf7a"/>
+<text x="52" y="87" font-size="12" fill="#59636e">Model and tools</text>
+<rect x="159.0" y="81" width="14" height="4" rx="2" fill="#eb6834"/>
+<text x="179.0" y="87" font-size="12" fill="#59636e">Waiting, agent process alive</text>
+<rect x="371.79999999999995" y="81" width="14" height="4" rx="2" fill="#2a78d6"/>
+<text x="391.79999999999995" y="87" font-size="12" fill="#59636e">Waiting, no agent process</text>
+<text x="32" y="124" font-size="13" font-weight="600" fill="#1f2328">Regular task · 4.8 h (ctr-optimization)</text>
+<text x="48" y="155" font-size="12" fill="#59636e">Without Reins</text>
+<rect x="170.0" y="140" width="85.7" height="22" rx="3" fill="#1baf7a"/>
+<text x="213.8" y="155.5" font-size="11.5" font-weight="600" fill="#ffffff" text-anchor="middle">16%</text>
+<rect x="257.7" y="140" width="472.3" height="22" rx="3" fill="#eb6834"/>
+<text x="493.8" y="155.5" font-size="11.5" font-weight="600" fill="#ffffff" text-anchor="middle">84%</text>
+<text x="744" y="155" font-size="12" fill="#59636e" style="font-variant-numeric: tabular-nums">164 requests · ¥31</text>
+<text x="48" y="189" font-size="12" fill="#59636e">With Reins</text>
+<rect x="170.0" y="174" width="88.3" height="22" rx="3" fill="#1baf7a"/>
+<text x="215.2" y="189.5" font-size="11.5" font-weight="600" fill="#ffffff" text-anchor="middle">16%</text>
+<rect x="264.1" y="174" width="465.9" height="22" rx="3" fill="#2a78d6"/>
+<text x="497.0" y="189.5" font-size="11.5" font-weight="600" fill="#ffffff" text-anchor="middle">83%</text>
+<text x="744" y="189" font-size="12" fill="#59636e" style="font-variant-numeric: tabular-nums">134 requests · ¥30</text>
+<text x="32" y="226" font-size="13" font-weight="600" fill="#1f2328">3-day task · first 60 h (ctr-3day)</text>
+<text x="48" y="257" font-size="12" fill="#59636e">Without Reins</text>
+<rect x="170.0" y="242" width="24.6" height="22" rx="3" fill="#1baf7a"/>
+<rect x="196.6" y="242" width="533.4" height="22" rx="3" fill="#eb6834"/>
+<text x="463.3" y="257.5" font-size="11.5" font-weight="600" fill="#ffffff" text-anchor="middle">95%</text>
+<text x="744" y="257" font-size="12" fill="#59636e" style="font-variant-numeric: tabular-nums">911 requests · ¥287 · then killed</text>
+<text x="48" y="291" font-size="12" fill="#59636e">With Reins</text>
+<rect x="170.0" y="276" width="4.7" height="22" rx="3" fill="#1baf7a"/>
+<rect x="177.1" y="276" width="552.9" height="22" rx="3" fill="#2a78d6"/>
+<text x="453.5" y="291.5" font-size="11.5" font-weight="600" fill="#ffffff" text-anchor="middle">99%</text>
+<text x="744" y="291" font-size="12" fill="#59636e" style="font-variant-numeric: tabular-nums">90 requests · ¥35 · unaffected</text>
+</svg>

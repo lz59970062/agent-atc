@@ -70,6 +70,7 @@ plugins:
             第一个任务: Your first task
             架构概览: Architecture
             典型使用场景: Use cases
+            基准测试: Benchmark
             使用指南: User guides
             运行命令: Running commands
             启动子 Agent: Running child agents
@@ -127,6 +128,7 @@ nav:
       - 第一个任务: quickstart.md
       - 架构概览: overview.md
       - 典型使用场景: guides/use-cases.md
+      - 基准测试: benchmark.md
   - 使用指南:
       - 运行命令: guides/run.md
       - 启动子 Agent: guides/agents.md

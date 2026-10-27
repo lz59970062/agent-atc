@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="360" viewBox="0 0 1200 360" role="img" aria-labelledby="t d" font-family="system-ui, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
+<title id="t">Harness Reins (reins)</title>
+<desc id="d">Project title beside a terminal card: a long task is submitted, the agent stops, and six hours later the same session receives the result and acknowledges it.</desc>
+<rect x="0.5" y="0.5" width="1199" height="359" rx="14" fill="#ffffff" stroke="#d8dee4"/>
+
+<text x="56" y="88" font-size="13" font-weight="600" letter-spacing="1.6" fill="#2a78d6">A HARNESS FOR YOUR HARNESSES</text>
+<text x="54" y="146" font-size="56" font-weight="700" fill="#1f2328">Harness Reins</text>
+<text x="56" y="190" font-size="19" fill="#59636e">Hand long work and child agents to an independent</text>
+<text x="56" y="216" font-size="19" fill="#59636e">owner, then resume the exact session that asked.</text>
+<text x="56" y="272" font-size="14" fill="#818b98">Codex · Claude Code · Pi   —   Linux · macOS · Windows</text>
+<rect x="604" y="58" width="556" height="244" rx="10" fill="#f6f8fa" stroke="#d8dee4"/>
+<text x="628" y="88" font-size="12" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#818b98">same session, six hours later</text>
+<line x1="604" x2="1160" y1="102" y2="102" stroke="#d8dee4"/>
+<text x="632" y="132" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#1f2328">$ reins run -- python train.py</text>
+<text x="632" y="162" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#818b98">reins: submitted managed task 7f3a91c2</text>
+<text x="632" y="192" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#818b98">… the agent ends its turn; nothing polls …</text>
+<rect x="618" y="205" width="3" height="22" rx="1.5" fill="#2a78d6"/>
+<text x="632" y="222" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-weight="600" fill="#1f2328">[reins] 7f3a91c2-c1</text>
+<text x="632" y="252" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#1f2328">Result: exited 0 · 6h 12m 08s</text>
+<text x="632" y="282" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#1f2328">ACK after inspection: reins ack 7f3a91c2-c1</text>
+</svg>

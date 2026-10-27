@@ -1,85 +1,58 @@
-<svg xmlns="http://www.w3.org/2000/svg"
-     width="1200" height="440" viewBox="0 0 1200 440"
-     role="img" aria-labelledby="title desc">
-  <title id="title">How Harness Reins works</title>
-  <desc id="desc">Five stage sequence: the agent submits a task to the daemon, the daemon requests an independent task owner, the task runs for hours, completion is queued, and the same agent session resumes to inspect, acknowledge, and continue.</desc>
-
-  <rect width="1200" height="440" rx="26" fill="#0d1117"/>
-
-  <defs>
-    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5"
-            markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-      <path d="M 0 0 L 10 5 L 0 10 z" fill="#8b949e"/>
-    </marker>
-  </defs>
-
-  <text x="64" y="58" font-family="ui-monospace, SFMono-Regular, Menlo, monospace"
-        font-size="19" letter-spacing="3" fill="#8b949e">ONE CALLBACK, FIVE STEPS</text>
-
-  <!-- stage cards -->
-  <g font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif">
-
-    <g transform="translate(40 88)">
-      <rect width="200" height="180" rx="14" fill="#161b22" stroke="#30363d" stroke-width="2"/>
-      <text x="20" y="40" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="20" fill="#58a6ff">01 LAUNCH</text>
-      <text x="20" y="78" font-size="19" fill="#e6edf3">Codex or Claude</text>
-      <text x="20" y="104" font-size="19" fill="#e6edf3">submits one task</text>
-      <text x="20" y="130" font-size="19" fill="#e6edf3">to the daemon</text>
-      <text x="20" y="162" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="17" fill="#8b949e">durable record</text>
-    </g>
-
-    <g transform="translate(272 88)">
-      <rect width="200" height="180" rx="14" fill="#161b22" stroke="#30363d" stroke-width="2"/>
-      <text x="20" y="40" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="20" fill="#8b949e">02 RUN</text>
-      <text x="20" y="78" font-size="19" fill="#e6edf3">Daemon requests</text>
-      <text x="20" y="104" font-size="19" fill="#e6edf3">a task owner; work</text>
-      <text x="20" y="130" font-size="19" fill="#e6edf3">runs unattended</text>
-      <text x="20" y="162" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="17" fill="#8b949e">independent worker</text>
-    </g>
-
-    <g transform="translate(504 88)">
-      <rect width="200" height="180" rx="14" fill="#161b22" stroke="#30363d" stroke-width="2"/>
-      <text x="20" y="40" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="20" fill="#d29922">03 CALLBACK</text>
-      <text x="20" y="78" font-size="19" fill="#e6edf3">The exit path fires</text>
-      <text x="20" y="104" font-size="19" fill="#e6edf3">one explicit reins</text>
-      <text x="20" y="130" font-size="19" fill="#e6edf3">callback command</text>
-      <text x="20" y="162" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="17" fill="#8b949e">exit code preserved</text>
-    </g>
-
-    <g transform="translate(736 88)">
-      <rect width="200" height="180" rx="14" fill="#161b22" stroke="#30363d" stroke-width="2"/>
-      <text x="20" y="40" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="20" fill="#d29922">04 QUEUE</text>
-      <text x="20" y="78" font-size="19" fill="#e6edf3">A user-level daemon</text>
-      <text x="20" y="104" font-size="19" fill="#e6edf3">delivers it outside</text>
-      <text x="20" y="130" font-size="19" fill="#e6edf3">tool sandboxes</text>
-      <text x="20" y="162" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="17" fill="#8b949e">at-least-once</text>
-    </g>
-
-    <g transform="translate(968 88)">
-      <rect width="200" height="180" rx="14" fill="#161b22" stroke="#3fb950" stroke-width="2"/>
-      <text x="20" y="40" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="20" fill="#3fb950">05 WAKE</text>
-      <text x="20" y="78" font-size="19" fill="#e6edf3">The same session</text>
-      <text x="20" y="104" font-size="19" fill="#e6edf3">resumes, inspects,</text>
-      <text x="20" y="130" font-size="19" fill="#e6edf3">acks, continues</text>
-      <text x="20" y="162" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="17" fill="#3fb950">ack ✓ monotonic</text>
-    </g>
-  </g>
-
-  <!-- arrows between cards -->
-  <g stroke="#8b949e" stroke-width="2.5">
-    <line x1="242" y1="178" x2="266" y2="178" marker-end="url(#arrow)"/>
-    <line x1="474" y1="178" x2="498" y2="178" marker-end="url(#arrow)"/>
-    <line x1="706" y1="178" x2="730" y2="178" marker-end="url(#arrow)"/>
-    <line x1="938" y1="178" x2="962" y2="178" marker-end="url(#arrow)"/>
-  </g>
-
-  <!-- feedback loop: wake -> launch the next stage -->
-  <path d="M 1068 268 L 1068 330 L 140 330 L 140 276"
-        fill="none" stroke="#3fb950" stroke-width="2.5" stroke-dasharray="8 7"
-        marker-end="url(#arrow)" opacity="0.85"/>
-  <text x="470" y="356" font-family="ui-monospace, SFMono-Regular, Menlo, monospace"
-        font-size="19" fill="#3fb950">goal not done? queue the next stage — the loop repeats until ack</text>
-
-  <text x="64" y="412" font-family="ui-monospace, SFMono-Regular, Menlo, monospace"
-        font-size="17" fill="#8b949e">resume: codex exec resume · claude -p --resume   |   ack: reins ack --id &lt;callback-id&gt;</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="350" viewBox="0 0 1200 350" role="img" aria-labelledby="t d" font-family="system-ui, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
+<title id="t">How a Harness Reins callback works</title>
+<desc id="d">Five steps: submit, own, run, queue, resume; a loop returns from resume to submit for the next stage.</desc>
+<rect x="0.5" y="0.5" width="1199" height="349" rx="14" fill="#ffffff" stroke="#d8dee4"/>
+<text x="40" y="56" font-size="13" font-weight="600" letter-spacing="1.6" fill="#2a78d6">HOW A CALLBACK WORKS</text>
+<text x="40" y="76" font-size="13" fill="#818b98">Codex resumes with codex exec resume · Claude Code with a background reins wait · Pi through its extension</text>
+<rect x="40" y="92" width="204" height="182" rx="10" fill="#f6f8fa" stroke="#d8dee4"/>
+<text x="58" y="124" font-size="12" font-weight="600" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#2a78d6">01</text>
+<text x="86" y="124" font-size="16" font-weight="650" fill="#1f2328">Submit</text>
+<text x="58" y="156" font-size="13.5" fill="#59636e">The agent calls reins run</text>
+<text x="58" y="177" font-size="13.5" fill="#59636e">or reins agent; the task</text>
+<text x="58" y="198" font-size="13.5" fill="#59636e">is durable before it</text>
+<text x="58" y="219" font-size="13.5" fill="#59636e">returns.</text>
+<text x="58" y="256" font-size="11.5" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#818b98">session bound</text>
+<path d="M248,183 L264,183" stroke="#818b98" stroke-width="1.5"/>
+<path d="M263,178 L269,183 L263,188 Z" fill="#818b98"/>
+<rect x="269" y="92" width="204" height="182" rx="10" fill="#f6f8fa" stroke="#d8dee4"/>
+<text x="287" y="124" font-size="12" font-weight="600" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#2a78d6">02</text>
+<text x="315" y="124" font-size="16" font-weight="650" fill="#1f2328">Own</text>
+<text x="287" y="156" font-size="13.5" fill="#59636e">The OS starts a separate</text>
+<text x="287" y="177" font-size="13.5" fill="#59636e">task service, not a child</text>
+<text x="287" y="198" font-size="13.5" fill="#59636e">of the agent or the</text>
+<text x="287" y="219" font-size="13.5" fill="#59636e">daemon.</text>
+<text x="287" y="256" font-size="11.5" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#818b98">systemd · launchd · schtasks</text>
+<path d="M477,183 L493,183" stroke="#818b98" stroke-width="1.5"/>
+<path d="M492,178 L498,183 L492,188 Z" fill="#818b98"/>
+<rect x="498" y="92" width="204" height="182" rx="10" fill="#f6f8fa" stroke="#d8dee4"/>
+<text x="516" y="124" font-size="12" font-weight="600" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#2a78d6">03</text>
+<text x="544" y="124" font-size="16" font-weight="650" fill="#1f2328">Run</text>
+<text x="516" y="156" font-size="13.5" fill="#59636e">The job runs for minutes</text>
+<text x="516" y="177" font-size="13.5" fill="#59636e">or days. The agent has</text>
+<text x="516" y="198" font-size="13.5" fill="#59636e">ended its turn; nothing</text>
+<text x="516" y="219" font-size="13.5" fill="#59636e">polls.</text>
+<text x="516" y="256" font-size="11.5" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#818b98">no model calls</text>
+<path d="M706,183 L722,183" stroke="#818b98" stroke-width="1.5"/>
+<path d="M721,178 L727,183 L721,188 Z" fill="#818b98"/>
+<rect x="727" y="92" width="204" height="182" rx="10" fill="#f6f8fa" stroke="#d8dee4"/>
+<text x="745" y="124" font-size="12" font-weight="600" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#2a78d6">04</text>
+<text x="773" y="124" font-size="16" font-weight="650" fill="#1f2328">Queue</text>
+<text x="745" y="156" font-size="13.5" fill="#59636e">On exit, Reins stores the</text>
+<text x="745" y="177" font-size="13.5" fill="#59636e">result and queues one</text>
+<text x="745" y="198" font-size="13.5" fill="#59636e">callback for that</text>
+<text x="745" y="219" font-size="13.5" fill="#59636e">session.</text>
+<text x="745" y="256" font-size="11.5" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#818b98">at-least-once</text>
+<path d="M935,183 L951,183" stroke="#818b98" stroke-width="1.5"/>
+<path d="M950,178 L956,183 L950,188 Z" fill="#818b98"/>
+<rect x="956" y="92" width="204" height="182" rx="10" fill="#ddf4ff" stroke="#2a78d6"/>
+<text x="974" y="124" font-size="12" font-weight="600" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#2a78d6">05</text>
+<text x="1002" y="124" font-size="16" font-weight="650" fill="#1f2328">Resume</text>
+<text x="974" y="156" font-size="13.5" fill="#59636e">The same session wakes,</text>
+<text x="974" y="177" font-size="13.5" fill="#59636e">inspects the result and</text>
+<text x="974" y="198" font-size="13.5" fill="#59636e">runs reins ack.</text>
+<text x="974" y="256" font-size="11.5" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#818b98">explicit ACK</text>
+<path d="M1058.0,274 L1058.0,314 L142.0,314 L142.0,282" fill="none" stroke="#818b98" stroke-width="1.5"/>
+<path d="M137.0,288 L142.0,281 L147.0,288 Z" fill="#818b98"/>
+<rect x="362.0" y="303" width="476" height="22" fill="#ffffff"/>
+<text x="600.0" y="319" font-size="13" fill="#59636e" text-anchor="middle">more to do? the agent submits the next stage and the loop repeats</text>
 </svg>

@@ -1,23 +1,27 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/lz59970062/harness-reins/main/assets/readme/hero.svg" width="100%" alt="Harness Reins (reins): run a task under an independent Linux, macOS or Windows owner and wake the same Codex or Claude Code session when it finishes">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/lz59970062/harness-reins/main/assets/readme/hero-dark.svg">
+  <img src="https://raw.githubusercontent.com/lz59970062/harness-reins/main/assets/readme/hero-light.svg" width="100%" alt="Harness Reins (reins): hand long work and child agents to an independent owner, then resume the exact session that asked">
+</picture>
 </p>
 
-<h3 align="center">Harness Reins: a harness for your harnesses.<br>Dispatch work to any agent and route the result back to the session that asked.</h3>
+<h3 align="center">Dispatch work to any agent and route the result back to the session that asked.</h3>
 
 <p align="center">
-  <a href="./CHANGELOG.md"><img src="https://img.shields.io/badge/release-0.9.0-a371f7" alt="Release 0.9.0"></a>
-  <a href="https://www.npmjs.com/package/harness-reins"><img src="https://img.shields.io/badge/npm-harness--reins-cb3837" alt="npm harness-reins"></a>
-  <img src="https://img.shields.io/badge/python-%E2%89%A53.9-3776ab" alt="Python ≥ 3.9">
-  <img src="https://img.shields.io/badge/platforms-Linux%20%C2%B7%20macOS%20%C2%B7%20Windows-58a6ff" alt="Linux, macOS, Windows">
-  <img src="https://img.shields.io/badge/agents-Codex%20%C2%B7%20Claude%20Code%20%C2%B7%20Pi-d29922" alt="Works with Codex, Claude Code and Pi">
-  <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-lightgrey" alt="MIT license"></a>
+  <a href="./CHANGELOG.md"><img src="https://img.shields.io/badge/release-0.9.0-2a78d6" alt="Release 0.9.0"></a>
+  <a href="https://www.npmjs.com/package/harness-reins"><img src="https://img.shields.io/badge/npm-harness--reins-2a78d6" alt="npm harness-reins"></a>
+  <img src="https://img.shields.io/badge/python-%E2%89%A53.9-2a78d6" alt="Python ≥ 3.9">
+  <img src="https://img.shields.io/badge/platforms-Linux%20%C2%B7%20macOS%20%C2%B7%20Windows-2a78d6" alt="Linux, macOS, Windows">
+  <img src="https://img.shields.io/badge/agents-Codex%20%C2%B7%20Claude%20Code%20%C2%B7%20Pi-2a78d6" alt="Works with Codex, Claude Code and Pi">
+  <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-2a78d6" alt="MIT license"></a>
 </p>
 
 <p align="center">
-  <a href="#-quick-start">Quick start</a> ·
-  <a href="#-how-it-works">How it works</a> ·
-  <a href="#-usage">Usage</a> ·
-  <a href="#-documentation">Docs</a> ·
+  <a href="#quick-start">Quick start</a> ·
+  <a href="#measured-what-waiting-costs">Benchmark</a> ·
+  <a href="#how-it-works">How it works</a> ·
+  <a href="#usage">Usage</a> ·
+  <a href="#documentation">Docs</a> ·
   <a href="./README.zh-CN.md">中文</a>
 </p>
 
@@ -59,6 +63,46 @@ Session: <session-id> (only)
 ACK after inspection: reins ack <task-id>-c1
 ```
 
+## Measured: what waiting costs
+
+Same agent (Codex with Kimi K3), same task, same limits, with and without Reins.
+Method, every run and the caveats are in [the benchmark write-up](docs/benchmark.en.md).
+
+<p align="center">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/lz59970062/harness-reins/main/assets/readme/benchmark-longrun-dark.svg">
+  <img src="https://raw.githubusercontent.com/lz59970062/harness-reins/main/assets/readme/benchmark-longrun-light.svg" width="100%" alt="Over 60 hours the agent without Reins made 911 model requests and spent 287 yuan, then its session was killed and the task failed; with Reins it made 90 requests and spent 35 yuan, and the kill found no agent process">
+</picture>
+</p>
+
+On a job that runs for days, an agent without Reins has to stay alive to wait. It polled for 60 hours,
+made 911 model requests and spent ¥287, and when its process was killed the task failed with it.
+With Reins the agent ended its turn after each step and was resumed when something happened:
+90 requests and ¥35 over the same 60 hours, and the kill found no agent process to stop.
+
+<p align="center">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/lz59970062/harness-reins/main/assets/readme/benchmark-time-dark.svg">
+  <img src="https://raw.githubusercontent.com/lz59970062/harness-reins/main/assets/readme/benchmark-time-light.svg" width="100%" alt="Share of wall time: without Reins 84 and 95 percent is spent waiting with the agent alive; with Reins 83 and 99 percent is spent with no agent process">
+</picture>
+</p>
+
+| Run | Arm | Model requests | Money (CNY) | Waiting with the agent alive | Callbacks |
+| --- | --- | ---: | ---: | ---: | --- |
+| Regular task, 4.8 h | without Reins | 164 | 30.59 | 84% | – |
+| Regular task, 4.8 h | with Reins | 134 | 30.11 | 1% | 18, median resume 3 s |
+| 3-day task, first 60 h | without Reins | 911 | 286.78 | 95% | – · killed at 60 h, task failed |
+| 3-day task, first 60 h | with Reins | 90 | 35.17 | <1% | 14, median resume 2 s · unaffected |
+
+What this does not show:
+
+- **Short waits.** On the 4.8-hour task both arms cost the same: every resume rereads the context,
+  which offsets the polls it saves. The gap opens as the wait grows.
+- **Better scores.** Across 18 Terminal-Bench 4 trials with Pi and Codex, Reins did not change the pass
+  rate (two passes, one in each arm); the model's own design choices decided the tasks.
+- **Statistics.** One run per cell, one model (Kimi K3), money at list price
+  (input ¥20, cache hit ¥2, output ¥100 per million tokens).
+
 ## Why more than one harness?
 
 Subscriptions are the cheapest way to use frontier models, and they come tied to a harness. A Claude
@@ -80,23 +124,23 @@ starts a fresh agent in any of the three as a durable job, and the result comes 
 asked for it. Codex, Claude Code and Pi are harnesses; Reins is what holds all of them, which is why
 Long Task Callback became Agent Traffic Control and then **Harness Reins**.
 
-## ✨ Highlights
+## Highlights
 
-| | |
+| Feature | What you get |
 | --- | --- |
-| 🛌 **No polling** | The worker and daemon wait for you. No model turns are spent while the task runs. |
-| 🔁 **Same conversation** | Callbacks are bound to the original Codex (`CODEX_THREAD_ID`) or Claude Code (`CLAUDE_CODE_SESSION_ID`) session — never a guess. |
-| 🧱 **Survives the agent** | Tasks run under systemd, launchd or Task Scheduler — not as a child of the agent turn or even the daemon. |
-| ⚡ **Claude Code native** | In Claude Code (CLI or desktop app), a background `reins wait` wakes the conversation you're looking at — no headless side session. → [Claude Code guide](docs/claude-code.md) |
-| 🥧 **Pi native** | Pi's extension steers the result into the running Pi session — even mid-run, before its next model call. → [Pi guide](docs/pi.md) |
-| 🤖 **Any agent, any harness** | `reins agent codex\|claude\|pi` starts a fresh agent as a durable job from any of the three. It writes a structured report, shown to you as a claim, never as proof. |
-| 📦 **One installation** | `reins setup` installs one canonical `~/.reins/bin/reins`; copies of `reins` in other environments forward to it, so versions never mix. |
-| 🎯 **Multi-stage goals** | Track an objective across many callbacks with a YAML plan that the agent must verify before declaring victory. |
-| 🛡️ **Never reruns blindly** | Ambiguous launches, reboots and failures are reported to the agent for inspection — Reins never silently replays work. |
-| 🩺 **Self-repairing setup** | When something is misconfigured, the agent gets a machine-readable repair plan and fixes it itself. |
-| 📬 **At-least-once delivery** | Durable queue, stable callback IDs, retries with backoff, and explicit ACKs. |
+| **No polling** | The worker and daemon wait for you. No model turns are spent while the task runs. |
+| **Same conversation** | Callbacks are bound to the original Codex (`CODEX_THREAD_ID`) or Claude Code (`CLAUDE_CODE_SESSION_ID`) session — never a guess. |
+| **Survives the agent** | Tasks run under systemd, launchd or Task Scheduler — not as a child of the agent turn or even the daemon. |
+| **Claude Code native** | In Claude Code (CLI or desktop app), a background `reins wait` wakes the conversation you're looking at — no headless side session. → [Claude Code guide](docs/claude-code.md) |
+| **Pi native** | Pi's extension steers the result into the running Pi session — even mid-run, before its next model call. → [Pi guide](docs/pi.md) |
+| **Any agent, any harness** | `reins agent codex\|claude\|pi` starts a fresh agent as a durable job from any of the three. It writes a structured report, shown to you as a claim, never as proof. |
+| **One installation** | `reins setup` installs one canonical `~/.reins/bin/reins`; copies of `reins` in other environments forward to it, so versions never mix. |
+| **Multi-stage goals** | Track an objective across many callbacks with a YAML plan that the agent must verify before declaring victory. |
+| **Never reruns blindly** | Ambiguous launches, reboots and failures are reported to the agent for inspection — Reins never silently replays work. |
+| **Self-repairing setup** | When something is misconfigured, the agent gets a machine-readable repair plan and fixes it itself. |
+| **At-least-once delivery** | Durable queue, stable callback IDs, retries with backoff, and explicit ACKs. |
 
-## 🚀 Quick start
+## Quick start
 
 ```bash
 # 1. Install (prebuilt for Linux x64; see below for other platforms)
@@ -163,10 +207,13 @@ alone and reported, so a busy LTC does not hold back an idle ATC. Add `--wait` t
 finish first, or `--only atc|ltc` to move one. State directories are renamed, never deleted. ATC's
 systemd drop-ins and its `experts.yaml` carry over to Reins.
 
-## 🧭 How it works
+## How it works
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/lz59970062/harness-reins/main/assets/readme/workflow.svg" width="100%" alt="The agent submits a task, the daemon requests an independent task service, the task runs independently, completion is queued, and the same agent conversation resumes and acknowledges it">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/lz59970062/harness-reins/main/assets/readme/workflow-dark.svg">
+  <img src="https://raw.githubusercontent.com/lz59970062/harness-reins/main/assets/readme/workflow-light.svg" width="100%" alt="Five steps: submit, own, run, queue, resume; the agent submits the next stage and the loop repeats">
+</picture>
 </p>
 
 ```text
@@ -188,7 +235,7 @@ Independent per-task service (screen for legacy tasks)
 > **Rule of thumb:** anything reliably done in under 60 seconds can run in the foreground.
 > Anything longer — or of uncertain duration — goes through `reins run`.
 
-## 📖 Usage
+## Usage
 
 Reins has three entry points:
 
@@ -292,7 +339,7 @@ reins done --agent claude --session <session-id> --cwd "$PWD" --task "external j
 
 If no target can be determined, Reins fails instead of guessing; there is no "most recent session" fallback.
 
-## 🔒 Guarantees and boundaries
+## Guarantees and boundaries
 
 - **At-least-once delivery.** Unacknowledged callbacks retry with backoff. After a host failure a callback
   may arrive twice, so resumed agents inspect existing processes and artifacts before acting.
@@ -334,7 +381,7 @@ Use `--service standalone --now` where user systemd is unavailable (e.g. AutoDL)
 
 </details>
 
-## 📚 Documentation
+## Documentation
 
 [中文文档站](https://lz59970062.github.io/harness-reins/) · [文档源码](docs/index.md)
 
@@ -352,11 +399,12 @@ Use `--service standalone --now` where user systemd is unavailable (e.g. AutoDL)
 | Platform ownership and extension points | [docs/architecture.md](docs/architecture.md) |
 | macOS · Windows · Containers | [macOS](docs/macos.md) · [Windows](docs/windows.md) · [Containers](docs/containers.md) |
 | Desktop bridges | [Mac](docs/macos-desktop-bridge.md) · [Windows](docs/windows-desktop-bridge.md) |
+| Benchmark: method, every run, cost and caveats | [docs/benchmark.en.md](docs/benchmark.en.md) |
 | Validation records | [0.8.0.dev0 Linux in Docker](docs/validation-0.8.0-docker.md) |
 | Validation records (Long Task Callback era) | [0.7.0](docs/validation-0.7.0.md) · [0.7.1 preview](docs/validation-0.7.1-preview.md) · [Linux preview](docs/validation-0.7.0a1.md) · [macOS](docs/validation-macos.md) · [Windows](docs/validation-windows.md) |
 | Release history | [CHANGELOG.md](CHANGELOG.md) |
 
-## 🗺️ Roadmap
+## Roadmap
 
 - [x] Native task owners on Linux, macOS and Windows
 - [x] Fresh child agents in Codex, Claude Code and Pi; live callbacks into Claude Code and Pi
@@ -367,7 +415,8 @@ Use `--service standalone --now` where user systemd is unavailable (e.g. AutoDL)
 - [ ] Expert agents, and forking an expert's context from a checkpoint
 - [ ] Fan-in: one callback when a group of tasks finishes
 - [ ] More harnesses: Gemini CLI, OpenCode, and agents that speak ACP
-- [ ] A cross-harness benchmark against working without Reins
+- [x] A first benchmark against working without Reins: Codex and Pi, Terminal-Bench 4 and a 3-day task ([results](docs/benchmark.en.md))
+- [ ] Benchmark with several runs per cell, more models, and injected faults on regular tasks
 
 ## License
 

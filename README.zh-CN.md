@@ -1,12 +1,15 @@
 <p align="center">
-  <img src="./assets/readme/hero.svg" width="100%" alt="Harness Reins">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/lz59970062/harness-reins/main/assets/readme/hero-dark.svg">
+  <img src="https://raw.githubusercontent.com/lz59970062/harness-reins/main/assets/readme/hero-light.svg" width="100%" alt="Harness Reins">
+</picture>
 </p>
 
 # Reins（Harness Reins）
 
 **给 harness 配的 harness：把工作派给任何一个 Agent，结果回到发起它的那个会话。**
 
-[English](README.md) · [文档站](docs/index.md) · [快速开始](docs/quickstart.md) · [更新记录](CHANGELOG.md)
+[English](README.md) · [文档站](docs/index.md) · [快速开始](docs/quickstart.md) · [基准测试](docs/benchmark.md) · [更新记录](CHANGELOG.md)
 
 ## 要解决的问题
 
@@ -35,6 +38,43 @@ ACK after inspection: reins ack <task-id>-c1
 ```
 
 等待期间不消耗任何模型调用。
+
+## 实测：等待要花多少
+
+同一个 Agent（Codex + Kimi K3）、同一个任务、同样的限制，分别不用和使用 Reins。
+方法、每次运行和局限见[基准测试说明](docs/benchmark.md)。
+
+<p align="center">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/lz59970062/harness-reins/main/assets/readme/benchmark-longrun-dark.svg">
+  <img src="https://raw.githubusercontent.com/lz59970062/harness-reins/main/assets/readme/benchmark-longrun-light.svg" width="100%" alt="60 小时内，不用 Reins 的 Agent 发出 911 次模型请求、花费 287 元，之后会话被杀、任务失败；用 Reins 的 Agent 只发出 90 次请求、花费 35 元，故障时没有 Agent 进程可杀">
+</picture>
+</p>
+
+任务要跑好几天时，不用 Reins 的 Agent 必须一直活着等。它轮询了 60 小时，发出 911 次模型请求、花了 ¥287，
+进程被杀时任务也跟着失败。用 Reins 时，Agent 每一步之后结束回合，有事发生时才被恢复：同样 60 小时只有 90 次请求、¥35，
+故障发生时根本没有 Agent 进程可杀。
+
+<p align="center">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/lz59970062/harness-reins/main/assets/readme/benchmark-time-dark.svg">
+  <img src="https://raw.githubusercontent.com/lz59970062/harness-reins/main/assets/readme/benchmark-time-light.svg" width="100%" alt="墙钟时间占比：不用 Reins 时 84% 和 95% 花在 Agent 存活并等待上；用 Reins 时 83% 和 99% 的时间没有任何 Agent 进程">
+</picture>
+</p>
+
+| 运行 | 组别 | 模型请求 | 花费（元） | Agent 存活并等待 | 回调 |
+| --- | --- | ---: | ---: | ---: | --- |
+| 常规任务，4.8 小时 | 不用 Reins | 164 | 30.59 | 84% | – |
+| 常规任务，4.8 小时 | 用 Reins | 134 | 30.11 | 1% | 18 次，中位恢复 3 秒 |
+| 3 天任务，前 60 小时 | 不用 Reins | 911 | 286.78 | 95% | – · 60 小时被杀，任务失败 |
+| 3 天任务，前 60 小时 | 用 Reins | 90 | 35.17 | <1% | 14 次，中位恢复 2 秒 · 不受影响 |
+
+这组数据不能说明的：
+
+- **短等待。** 4.8 小时的任务里两组花费相同：每次恢复都要重读上下文，抵消了省下的轮询。等待越长，差距越大。
+- **更高的得分。** 在 Pi 和 Codex 上的 18 次 Terminal-Bench 4 试验里，Reins 没有改变通过率（两次通过，两组各一次），
+  决定成败的是模型自己的设计选择。
+- **统计意义。** 每格一次运行、一个模型（Kimi K3），花费按标价（输入 ¥20、缓存命中 ¥2、输出 ¥100 / 百万 token）。
 
 ## 为什么要同时支持多个 Agent 框架
 
