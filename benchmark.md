@@ -41,11 +41,6 @@ ACKed, median resume 2 s, slowest 81 s), 99% of the wall time with no agent proc
 all**. It scored 0 as well: its final click-through rate was 1.96% against the 2.2% target, the closest
 of any run on this campaign.
 
-The Reins arm then ran the campaign to the end. Over all 72 hours it made 110 requests and spent ¥49.64;
-19 callbacks were delivered and ACKed, none failed, and the agent process was alive for under 1% of the
-run. Its final configuration reached a genuine CTR of 1.96% against the 2.2% the task requires, so it
-scored 0, though closer than any other run of this campaign (the other seven runs, with and without Reins, reached 0.10% to 1.26%).
-
 Without Reins, the agent waited the way agents wait: it kept one Codex session alive for 60 hours and
 checked the campaign by polling a running command or looping `sleep`. Every poll is a model request that
 rereads a context that keeps growing, so the money grows faster than the hours. With Reins, each wait
