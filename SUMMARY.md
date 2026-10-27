@@ -8,6 +8,7 @@
 - [第一个任务](quickstart.md)
 - [架构概览](overview.md)
 - [典型使用场景](guides/use-cases.md)
+- [基准测试](benchmark.md)
 
 ## 使用指南
 

@@ -1,5 +1,5 @@
 {
-  "source_commit": "fe8eb0450082c6a0805fa9180646f21a1ed0f35a",
+  "source_commit": "7488f475b2264bf40c50c13244bd4a4f3a63c569",
   "language": "zh",
   "pages": [
     "index.md",
@@ -7,6 +7,7 @@
     "quickstart.md",
     "overview.md",
     "guides/use-cases.md",
+    "benchmark.md",
     "guides/run.md",
     "guides/agents.md",
     "guides/external-jobs.md",
