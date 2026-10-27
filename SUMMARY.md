@@ -8,6 +8,7 @@
 - [Your first task](quickstart.md)
 - [Architecture](overview.md)
 - [Use cases](guides/use-cases.md)
+- [Benchmark](benchmark.md)
 
 ## User guides
 
