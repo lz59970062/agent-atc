@@ -12,26 +12,26 @@
 <text x="391.79999999999995" y="87" font-size="12" fill="#c3cbd4">Waiting, no agent process</text>
 <text x="32" y="124" font-size="13" font-weight="600" fill="#f0f6fc">Regular task · 4.8 h (ctr-optimization)</text>
 <text x="48" y="155" font-size="12" fill="#c3cbd4">Without Reins</text>
-<rect x="170.0" y="140" width="85.7" height="22" rx="3" fill="#199e70"/>
-<text x="213.8" y="155.5" font-size="11.5" font-weight="600" fill="#ffffff" text-anchor="middle">16%</text>
-<rect x="257.7" y="140" width="472.3" height="22" rx="3" fill="#d95926"/>
-<text x="493.8" y="155.5" font-size="11.5" font-weight="600" fill="#ffffff" text-anchor="middle">84%</text>
-<text x="744" y="155" font-size="12" fill="#c3cbd4" style="font-variant-numeric: tabular-nums">164 requests · ¥31</text>
+<rect x="170.0" y="140" width="79.4" height="22" rx="3" fill="#199e70"/>
+<text x="210.7" y="155.5" font-size="11.5" font-weight="600" fill="#ffffff" text-anchor="middle">16%</text>
+<rect x="251.4" y="140" width="438.6" height="22" rx="3" fill="#d95926"/>
+<text x="470.7" y="155.5" font-size="11.5" font-weight="600" fill="#ffffff" text-anchor="middle">84%</text>
+<text x="704" y="155" font-size="12" fill="#c3cbd4" style="font-variant-numeric: tabular-nums">164 requests · ¥31</text>
 <text x="48" y="189" font-size="12" fill="#c3cbd4">With Reins</text>
-<rect x="170.0" y="174" width="88.3" height="22" rx="3" fill="#199e70"/>
-<text x="215.2" y="189.5" font-size="11.5" font-weight="600" fill="#ffffff" text-anchor="middle">16%</text>
-<rect x="264.1" y="174" width="465.9" height="22" rx="3" fill="#3987e5"/>
-<text x="497.0" y="189.5" font-size="11.5" font-weight="600" fill="#ffffff" text-anchor="middle">83%</text>
-<text x="744" y="189" font-size="12" fill="#c3cbd4" style="font-variant-numeric: tabular-nums">134 requests · ¥30</text>
-<text x="32" y="226" font-size="13" font-weight="600" fill="#f0f6fc">3-day task · first 60 h (ctr-3day)</text>
+<rect x="170.0" y="174" width="81.9" height="22" rx="3" fill="#199e70"/>
+<text x="211.9" y="189.5" font-size="11.5" font-weight="600" fill="#ffffff" text-anchor="middle">16%</text>
+<rect x="257.4" y="174" width="432.6" height="22" rx="3" fill="#3987e5"/>
+<text x="473.7" y="189.5" font-size="11.5" font-weight="600" fill="#ffffff" text-anchor="middle">83%</text>
+<text x="704" y="189" font-size="12" fill="#c3cbd4" style="font-variant-numeric: tabular-nums">134 requests · ¥30</text>
+<text x="32" y="226" font-size="13" font-weight="600" fill="#f0f6fc">3-day task · each arm's whole run (ctr-3day)</text>
 <text x="48" y="257" font-size="12" fill="#c3cbd4">Without Reins</text>
-<rect x="170.0" y="242" width="24.6" height="22" rx="3" fill="#199e70"/>
-<rect x="196.6" y="242" width="533.4" height="22" rx="3" fill="#d95926"/>
-<text x="463.3" y="257.5" font-size="11.5" font-weight="600" fill="#ffffff" text-anchor="middle">95%</text>
-<text x="744" y="257" font-size="12" fill="#c3cbd4" style="font-variant-numeric: tabular-nums">911 requests · ¥287 · then killed</text>
+<rect x="170.0" y="242" width="22.7" height="22" rx="3" fill="#199e70"/>
+<rect x="194.7" y="242" width="495.3" height="22" rx="3" fill="#d95926"/>
+<text x="442.4" y="257.5" font-size="11.5" font-weight="600" fill="#ffffff" text-anchor="middle">95%</text>
+<text x="704" y="257" font-size="12" fill="#c3cbd4" style="font-variant-numeric: tabular-nums">60 h, killed · 911 requests · ¥287</text>
 <text x="48" y="291" font-size="12" fill="#c3cbd4">With Reins</text>
-<rect x="170.0" y="276" width="4.7" height="22" rx="3" fill="#199e70"/>
-<rect x="177.1" y="276" width="552.9" height="22" rx="3" fill="#3987e5"/>
-<text x="453.5" y="291.5" font-size="11.5" font-weight="600" fill="#ffffff" text-anchor="middle">99%</text>
-<text x="744" y="291" font-size="12" fill="#c3cbd4" style="font-variant-numeric: tabular-nums">90 requests · ¥35 · unaffected</text>
+<rect x="170.0" y="276" width="3.7" height="22" rx="3" fill="#199e70"/>
+<rect x="176.0" y="276" width="514.0" height="22" rx="3" fill="#3987e5"/>
+<text x="433.0" y="291.5" font-size="11.5" font-weight="600" fill="#ffffff" text-anchor="middle">99%</text>
+<text x="704" y="291" font-size="12" fill="#c3cbd4" style="font-variant-numeric: tabular-nums">72 h, finished · 110 requests · ¥50</text>
 </svg>

@@ -78,7 +78,9 @@ Method, every run and the caveats are in [the benchmark write-up](docs/benchmark
 On a job that runs for days, an agent without Reins has to stay alive to wait. It polled for 60 hours,
 made 911 model requests and spent ¥287, and when its process was killed the task failed with it.
 With Reins the agent ended its turn after each step and was resumed when something happened:
-90 requests and ¥35 over the same 60 hours, and the kill found no agent process to stop.
+90 requests and ¥35 over the same 60 hours, and the kill found no agent process to stop. It went on
+to finish the whole 72-hour campaign for ¥49.64 in all. It then ran
+the campaign to the end: ¥50 and 110 requests for all 72 hours, every one of 19 callbacks delivered and ACKed.
 
 <p align="center">
 <picture>
@@ -93,13 +95,16 @@ With Reins the agent ended its turn after each step and was resumed when somethi
 | Regular task, 4.8 h | with Reins | 134 | 30.11 | 1% | 18, median resume 3 s |
 | 3-day task, first 60 h | without Reins | 911 | 286.78 | 95% | – · killed at 60 h, task failed |
 | 3-day task, first 60 h | with Reins | 90 | 35.17 | <1% | 14, median resume 2 s · unaffected |
+| 3-day task, whole run | with Reins | 110 | 49.64 | <1% | 19, median resume 2 s · finished all 72 h |
+| 3-day task, all 72 h | with Reins | 110 | 49.64 | <1% | 19 delivered, 19 ACKed, 0 failed · finished |
 
 What this does not show:
 
 - **Short waits.** On the 4.8-hour task both arms cost the same: every resume rereads the context,
   which offsets the polls it saves. The gap opens as the wait grows.
 - **Better scores.** Across 18 Terminal-Bench 4 trials with Pi and Codex, Reins did not change the pass
-  rate (two passes, one in each arm); the model's own design choices decided the tasks.
+  rate (two passes, one in each arm); the model's own design choices decided the tasks. The 3-day Reins
+  run finished but scored 0 too: its final click-through rate was 1.96% against the 2.2% target.
 - **Statistics.** One run per cell, one model (Kimi K3), money at list price
   (input ¥20, cache hit ¥2, output ¥100 per million tokens).
 
