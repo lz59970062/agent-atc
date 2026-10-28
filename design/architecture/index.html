@@ -1,0 +1,1587 @@
+
+<!doctype html>
+<html lang="zh" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="长任务结束后，让 Agent 回到原会话继续工作。">
+      
+      
+      
+        <link rel="canonical" href="https://lz59970062.github.io/harness-reins/design/architecture/">
+      
+      
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.6.23">
+    
+    
+      
+        <title>Reins 架构设计（草案） - Harness Reins</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.84d31ad4.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.06af60db.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+    
+    
+      <link rel="stylesheet" href="../../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="teal" data-md-color-accent="teal">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#reins-架构设计草案" class="md-skip">
+          跳转至
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="页眉">
+    <a href="../.." title="Harness Reins" class="md-header__button md-logo" aria-label="Harness Reins" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 20a7 7 0 0 1-7-7 7 7 0 0 1 7-7 7 7 0 0 1 7 7 7 7 0 0 1-7 7m7.03-12.61 1.42-1.42c-.45-.51-.9-.97-1.41-1.41L17.62 6c-1.55-1.26-3.5-2-5.62-2a9 9 0 0 0-9 9 9 9 0 0 0 9 9c5 0 9-4.03 9-9 0-2.12-.74-4.07-1.97-5.61M11 14h2V8h-2m4-7H9v2h6z"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Harness Reins
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Reins 架构设计（草案）
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="teal" data-md-color-accent="teal"  aria-label="切换深色模式"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="切换深色模式" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="teal" data-md-color-accent="teal"  aria-label="切换浅色模式"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="切换浅色模式" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+      <div class="md-header__option">
+  <div class="md-select">
+    
+    <button class="md-header__button md-icon" aria-label="选择当前语言">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m12.87 15.07-2.54-2.51.03-.03A17.5 17.5 0 0 0 14.07 6H17V4h-7V2H8v2H1v2h11.17C11.5 7.92 10.44 9.75 9 11.35 8.07 10.32 7.3 9.19 6.69 8h-2c.73 1.63 1.73 3.17 2.98 4.56l-5.09 5.02L4 19l5-5 3.11 3.11zM18.5 10h-2L12 22h2l1.12-3h4.75L21 22h2zm-2.62 7 1.62-4.33L19.12 17z"/></svg>
+    </button>
+    <div class="md-select__inner">
+      <ul class="md-select__list">
+        
+          <li class="md-select__item">
+            <a href="./" hreflang="zh" class="md-select__link">
+              简体中文
+            </a>
+          </li>
+        
+          <li class="md-select__item">
+            <a href="../../en/design/architecture/" hreflang="en" class="md-select__link">
+              English
+            </a>
+          </li>
+        
+      </ul>
+    </div>
+  </div>
+</div>
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="搜索" placeholder="搜索" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="查找">
+        
+        <button type="reset" class="md-search__icon md-icon" title="清空当前内容" aria-label="清空当前内容" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            正在初始化搜索引擎
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/lz59970062/harness-reins" title="前往仓库" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    lz59970062/harness-reins
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="导航栏" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="Harness Reins" class="md-nav__button md-logo" aria-label="Harness Reins" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 20a7 7 0 0 1-7-7 7 7 0 0 1 7-7 7 7 0 0 1 7 7 7 7 0 0 1-7 7m7.03-12.61 1.42-1.42c-.45-.51-.9-.97-1.41-1.41L17.62 6c-1.55-1.26-3.5-2-5.62-2a9 9 0 0 0-9 9 9 9 0 0 0 9 9c5 0 9-4.03 9-9 0-2.12-.74-4.07-1.97-5.61M11 14h2V8h-2m4-7H9v2h6z"/></svg>
+
+    </a>
+    Harness Reins
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/lz59970062/harness-reins" title="前往仓库" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    lz59970062/harness-reins
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    首页
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    入门
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            入门
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    安装
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../quickstart/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    第一个任务
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    架构概览
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/use-cases/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    典型使用场景
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../benchmark/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    基准测试
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    使用指南
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            使用指南
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/run/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    运行命令
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/agents/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    启动子 Agent
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/external-jobs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    接入已有任务
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/callbacks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    接收与确认回调
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/templates/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    编写任务模板
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/goals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    跟踪多阶段目标
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    Agent 接入
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            Agent 接入
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../integrations/support/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Harness 支持情况
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../integrations/codex/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Codex CLI
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../integrations/claude/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Claude Code
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../integrations/pi/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Pi
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../integrations/desktop/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Codex Desktop
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    参考
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            参考
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    命令速查
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    配置与文件位置
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    常见问题
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/engineering/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    开发资料
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/contributing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    参与文档维护
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/publishing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    文档发布与同步
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="https://github.com/lz59970062/harness-reins/blob/main/CHANGELOG.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    版本记录
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="目录">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      目录
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-故事决定架构" class="md-nav__link">
+    <span class="md-ellipsis">
+      1. 故事决定架构
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-现状" class="md-nav__link">
+    <span class="md-ellipsis">
+      2. 现状
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-目标结构" class="md-nav__link">
+    <span class="md-ellipsis">
+      3. 目标结构
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-依赖方向" class="md-nav__link">
+    <span class="md-ellipsis">
+      4. 依赖方向
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-单一写入者落到文件级别" class="md-nav__link">
+    <span class="md-ellipsis">
+      5. 单一写入者，落到文件级别
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-关键接口" class="md-nav__link">
+    <span class="md-ellipsis">
+      6. 关键接口
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-命令层和故事对齐" class="md-nav__link">
+    <span class="md-ellipsis">
+      7. 命令层和故事对齐
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-实施顺序" class="md-nav__link">
+    <span class="md-ellipsis">
+      8. 实施顺序
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#81-顺序调整2026-10-15" class="md-nav__link">
+    <span class="md-ellipsis">
+      8.1 顺序调整（2026-10-15）
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9-已拍板" class="md-nav__link">
+    <span class="md-ellipsis">
+      9. 已拍板
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+    <a href="https://github.com/lz59970062/harness-reins/edit/main/docs/design/architecture.md" title="编辑此页" class="md-content__button md-icon" rel="edit">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"/></svg>
+    </a>
+  
+  
+
+
+<h1 id="reins-架构设计草案">Reins 架构设计（草案）<a class="headerlink" href="#reins-架构设计草案" title="Permanent link">&para;</a></h1>
+<p>状态：已评审，2026-10-13。协议细节见 <a href="../protocol-v1/">protocol-v1.md</a>。0.9 版由 ATC 改名为 Harness Reins，结构不变。</p>
+<h2 id="1-故事决定架构">1. 故事决定架构<a class="headerlink" href="#1-故事决定架构" title="Permanent link">&para;</a></h2>
+<p>Reins 的故事是一句话：<strong>显式指定谁来做事、回调给谁；任务交给操作系统独立运行；结果可靠地回到指定的会话。</strong></p>
+<p>一件工作的生命周期因此固定为六步，架构的每一层都对应其中一段：</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>派发 Dispatch → 托管 Own → 观察 Observe → 报告 Report → 投递 Deliver → 确认 Acknowledge
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a> 谁来做、回给谁   OS 托管进程    Reins 记下事实    子代理声称结果   送回指定会话     会话确认收到
+</code></pre></div>
+<p>核心名词也由故事决定，代码和文档统一使用：</p>
+<table>
+<thead>
+<tr>
+<th>名词</th>
+<th>含义</th>
+<th>空管比喻（只用于文档）</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Work（工作）</td>
+<td>一个根：任务、目标或汇合组</td>
+<td>航班</td>
+</tr>
+<tr>
+<td>Worker（执行者）</td>
+<td>谁来做：一条命令，或一个 Agent（Harness + 模型），或一个专家 Agent</td>
+<td>机组</td>
+</tr>
+<tr>
+<td>Expert Agent（专家 Agent）</td>
+<td>预先注册的"提示词 + Harness + 模型 + 推理强度"组合，例如写作专家、编码专家</td>
+<td>专业机组</td>
+</tr>
+<tr>
+<td>Target（目标）</td>
+<td>回调给谁：会话、专家、端点或不投递</td>
+<td>登机口</td>
+</tr>
+<tr>
+<td>Owner（托管者）</td>
+<td>谁托着进程：systemd、launchd、Task Scheduler、screen</td>
+<td>跑道和机库</td>
+</tr>
+<tr>
+<td>Callback（回调）</td>
+<td>一次投递</td>
+<td>进港通知</td>
+</tr>
+<tr>
+<td>Result（结果）</td>
+<td>观察到的事实 + 子代理的报告</td>
+<td>飞行记录</td>
+</tr>
+<tr>
+<td>Ack（确认）</td>
+<td>目标会话确认收到</td>
+<td>落地确认</td>
+</tr>
+<tr>
+<td>Tower（塔台）</td>
+<td>daemon：唯一能改共享状态的进程</td>
+<td>塔台</td>
+</tr>
+</tbody>
+</table>
+<p>代码里的包名用平实的英文名，比喻只出现在文档和 README 里。这样新贡献者不需要先学一套隐喻才能读代码。</p>
+<h2 id="2-现状">2. 现状<a class="headerlink" href="#2-现状" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>部分</th>
+<th>现状</th>
+<th>评价</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>agents/</code></td>
+<td><code>AgentAdapter</code> 协议 + 注册表，Codex、Claude、Pi 三个适配器</td>
+<td>好的抽象，保留；按能力拆细</td>
+</tr>
+<tr>
+<td><code>platforms/</code></td>
+<td><code>ExecutionBackend</code> 协议，systemd、launchd、Windows、screen</td>
+<td>好的抽象，保留；改名为 owners</td>
+</tr>
+<tr>
+<td><code>storage.py</code></td>
+<td>原子写入、私有权限</td>
+<td>保留</td>
+</tr>
+<tr>
+<td><code>callbacks.py</code></td>
+<td>信封渲染，无 I/O</td>
+<td>保留，按 protocol v1 重写</td>
+</tr>
+<tr>
+<td><code>cli.py</code> 5890 行</td>
+<td>命令解析、队列、投递引擎、Codex Desktop 的 app-server 客户端、托管任务与恢复、目标、服务安装、代理配置、daemon 主循环全在一起</td>
+<td><strong>主要问题</strong></td>
+</tr>
+<tr>
+<td><code>claude_code.py</code>、<code>claude_channel.py</code>、<code>pi_callback.py</code>、<code>desktop_*.py</code></td>
+<td>各 Harness 的投递通道，散落在顶层</td>
+<td>归到各自的 Harness 目录下</td>
+</tr>
+<tr>
+<td>测试 13649 行</td>
+<td>大量直接 mock <code>cli.&lt;函数&gt;</code></td>
+<td>拆分时要同步迁移，是重构的主要工作量</td>
+</tr>
+</tbody>
+</table>
+<h2 id="3-目标结构">3. 目标结构<a class="headerlink" href="#3-目标结构" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>harness_reins/
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>  core/            纯逻辑，不做任何 I/O
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>    ids.py           根 ID 与后缀（1a2b3c4d-c1）
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>    records.py       四类记录的数据类、严格校验、未知字段保留
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>    envelope.py      reins-compact/1 信封渲染
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>    states.py        observed.state、report.status 等取值和状态机
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>    capabilities.py  能力名常量（deliver.resume.claude 等）
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>  store/           持久化，只关心"怎么可靠地存"
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>    layout.py        ~/.reins 目录布局，唯一的路径来源
+<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>    files.py         原子写入（原 storage.py）
+<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>    locks.py         文件锁、租约
+<a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>    inbox.py         CLI 提交请求的收件箱（见第 5 节）
+<a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>    repo.py          按 schema 读写 Task、Callback、Result、Ack
+<a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a>
+<a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a>  harness/         谁来做事、怎么回到会话；每个 Harness 一个目录
+<a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a>    base.py          能力协议：Binder、Spawner、Resumer、Injector、SchemaOutput
+<a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a>    registry.py
+<a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a>    codex/           adapter.py、app_server.py（从 cli.py 拆出）、desktop/
+<a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a>    claude/          adapter.py、channel.py、wait.py
+<a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a>    pi/              adapter.py、channel.py、extension/（JS）
+<a id="__codelineno-1-22" name="__codelineno-1-22" href="#__codelineno-1-22"></a>    （预留）acp/     通用 ACP 客户端，只用于启动子代理
+<a id="__codelineno-1-23" name="__codelineno-1-23" href="#__codelineno-1-23"></a>    （预留）endpoint/ 给 SDK 框架用的命令或 HTTP 投递
+<a id="__codelineno-1-24" name="__codelineno-1-24" href="#__codelineno-1-24"></a>
+<a id="__codelineno-1-25" name="__codelineno-1-25" href="#__codelineno-1-25"></a>  owners/          谁托着进程（原 platforms/ 中的后端）
+<a id="__codelineno-1-26" name="__codelineno-1-26" href="#__codelineno-1-26"></a>    base.py          ExecutionBackend、OwnerState
+<a id="__codelineno-1-27" name="__codelineno-1-27" href="#__codelineno-1-27"></a>    linux.py（systemd）  macos.py（launchd）  windows.py（Task Scheduler）  screen.py
+<a id="__codelineno-1-28" name="__codelineno-1-28" href="#__codelineno-1-28"></a>
+<a id="__codelineno-1-29" name="__codelineno-1-29" href="#__codelineno-1-29"></a>  system/          操作系统原语，只依赖标准库
+<a id="__codelineno-1-30" name="__codelineno-1-30" href="#__codelineno-1-30"></a>    posix.py  windows_io.py  windows_process.py  windows_tcp.py
+<a id="__codelineno-1-31" name="__codelineno-1-31" href="#__codelineno-1-31"></a>
+<a id="__codelineno-1-32" name="__codelineno-1-32" href="#__codelineno-1-32"></a>  engine/          生命周期六步的业务逻辑
+<a id="__codelineno-1-33" name="__codelineno-1-33" href="#__codelineno-1-33"></a>    dispatch.py      派发：校验 Worker 与 Target，建任务记录
+<a id="__codelineno-1-34" name="__codelineno-1-34" href="#__codelineno-1-34"></a>    worker.py        任务进程：运行、观察、收集报告、写本次启动的结果
+<a id="__codelineno-1-35" name="__codelineno-1-35" href="#__codelineno-1-35"></a>    recovery.py      重启后核对所有者，绝不盲目重跑
+<a id="__codelineno-1-36" name="__codelineno-1-36" href="#__codelineno-1-36"></a>    delivery.py      按 requires 和能力选通道，重试、退避、租约
+<a id="__codelineno-1-37" name="__codelineno-1-37" href="#__codelineno-1-37"></a>    reminders.py     回调提醒节奏
+<a id="__codelineno-1-38" name="__codelineno-1-38" href="#__codelineno-1-38"></a>    goals.py         多阶段目标
+<a id="__codelineno-1-39" name="__codelineno-1-39" href="#__codelineno-1-39"></a>    experts.py       专家 Agent（现 templates）
+<a id="__codelineno-1-40" name="__codelineno-1-40" href="#__codelineno-1-40"></a>
+<a id="__codelineno-1-41" name="__codelineno-1-41" href="#__codelineno-1-41"></a>  tower/           daemon：唯一改共享状态的进程
+<a id="__codelineno-1-42" name="__codelineno-1-42" href="#__codelineno-1-42"></a>    main.py          主循环：处理收件箱、推进状态、调度投递、核对恢复
+<a id="__codelineno-1-43" name="__codelineno-1-43" href="#__codelineno-1-43"></a>    api.py           （第 5 步）本机 socket 接口与版本握手
+<a id="__codelineno-1-44" name="__codelineno-1-44" href="#__codelineno-1-44"></a>
+<a id="__codelineno-1-45" name="__codelineno-1-45" href="#__codelineno-1-45"></a>  cli/             薄命令层：解析参数，提交请求，打印结果
+<a id="__codelineno-1-46" name="__codelineno-1-46" href="#__codelineno-1-46"></a>    main.py
+<a id="__codelineno-1-47" name="__codelineno-1-47" href="#__codelineno-1-47"></a>    commands/        run、agent、done、ack、status、cancel、retry、goal、expert、doctor、setup、migrate、wait
+<a id="__codelineno-1-48" name="__codelineno-1-48" href="#__codelineno-1-48"></a>
+<a id="__codelineno-1-49" name="__codelineno-1-49" href="#__codelineno-1-49"></a>  install/         安装与环境
+<a id="__codelineno-1-50" name="__codelineno-1-50" href="#__codelineno-1-50"></a>    canonical.py     ~/.reins/bin 与 versions（第 5 步）
+<a id="__codelineno-1-51" name="__codelineno-1-51" href="#__codelineno-1-51"></a>    services.py      systemd unit、launchd plist、Windows 计划任务、supervisor
+<a id="__codelineno-1-52" name="__codelineno-1-52" href="#__codelineno-1-52"></a>    skills.py        各 Harness 的 skill 安装
+<a id="__codelineno-1-53" name="__codelineno-1-53" href="#__codelineno-1-53"></a>    migrate.py       从 ATC 或更早的 LTC 一次性迁移
+<a id="__codelineno-1-54" name="__codelineno-1-54" href="#__codelineno-1-54"></a>    diagnostics.py   诊断
+<a id="__codelineno-1-55" name="__codelineno-1-55" href="#__codelineno-1-55"></a>
+<a id="__codelineno-1-56" name="__codelineno-1-56" href="#__codelineno-1-56"></a>  assets/          随包分发的非 Python 文件：skill、JS 扩展、PowerShell 脚本
+</code></pre></div>
+<h2 id="4-依赖方向">4. 依赖方向<a class="headerlink" href="#4-依赖方向" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>cli ──→ tower ──→ engine ──→ harness ──→ core
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>                     │   └──→ owners  ──→ core
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>                     └──────→ store   ──→ core
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>install ──→ owners、harness、store
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>（system 是最底层，store、owners、harness 都可以依赖它）
+</code></pre></div>
+<p>规则：</p>
+<ol>
+<li><code>core</code> 不依赖任何包，也不做 I/O，所以协议逻辑可以单独测试。</li>
+<li><code>harness</code> 和 <code>owners</code> 只依赖 <code>core</code> 和 <code>system</code>，<strong>不碰 <code>store</code></strong>。适配器只负责"构造命令、建立连接、汇报能力"，不拥有任何状态。这条延续现在 <code>agents/base.py</code> 里写明的原则。</li>
+<li><code>engine</code> 是唯一把 Harness、托管者和存储组合起来的地方。</li>
+<li><code>cli</code> 不直接改共享状态，只往收件箱提交请求、读取记录。</li>
+<li>加一个测试扫描 import 语句，违反方向就失败，防止架构慢慢退化。</li>
+</ol>
+<h2 id="5-单一写入者落到文件级别">5. 单一写入者，落到文件级别<a class="headerlink" href="#5-单一写入者落到文件级别" title="Permanent link">&para;</a></h2>
+<p>原先的说法是"只有 daemon 写状态"，但任务进程必须能在 daemon 停止时照样写下结果。所以精确的规则是：<strong>每个文件只有一个写入者。</strong></p>
+<table>
+<thead>
+<tr>
+<th>文件</th>
+<th>唯一写入者</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>tasks/&lt;根&gt;/attempt-&lt;N&gt;/</code>（退出码、日志、子代理报告原件）</td>
+<td>那次启动的任务进程</td>
+</tr>
+<tr>
+<td><code>tasks/&lt;根&gt;/task.json</code>、<code>result.json</code></td>
+<td>塔台</td>
+</tr>
+<tr>
+<td><code>queue/**</code>、<code>goals/**</code></td>
+<td>塔台</td>
+</tr>
+<tr>
+<td><code>inbox/&lt;唯一文件名&gt;.json</code></td>
+<td>CLI，每个请求一个新文件，写完不再改</td>
+</tr>
+</tbody>
+</table>
+<p>流程：</p>
+<ul>
+<li>任务进程只往自己那次启动的目录里写，写完就退出，不依赖塔台在线。</li>
+<li>塔台读取启动目录，校验子代理报告，合并成 <code>result.json</code>，再生成回调。</li>
+<li><code>reins ack</code>、<code>reins cancel</code> 这类命令往 <code>inbox/</code> 放一个请求文件，由塔台处理。塔台暂时不在线时，请求也不会丢。</li>
+<li>第 5 步的 socket 接口只是让 CLI 能立刻拿到处理结果；收件箱始终是兜底。</li>
+</ul>
+<p>这样，多个环境里装了不同版本的 CLI，最多只能往收件箱投请求；真正改状态的永远是同一个塔台，而塔台会拒绝它不认识的 schema。</p>
+<h2 id="6-关键接口">6. 关键接口<a class="headerlink" href="#6-关键接口" title="Permanent link">&para;</a></h2>
+<p><strong>Harness 适配器按能力组合</strong>，不要求每个 Harness 实现全部能力：</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="k">class</span><span class="w"> </span><span class="nc">Binder</span><span class="p">(</span><span class="n">Protocol</span><span class="p">):</span>        <span class="c1"># 从 shell 环境识别当前会话</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">bind</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">env</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Origin</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span> <span class="o">...</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="k">class</span><span class="w"> </span><span class="nc">Spawner</span><span class="p">(</span><span class="n">Protocol</span><span class="p">):</span>       <span class="c1"># 启动子代理</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">spawn</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">spec</span><span class="p">:</span> <span class="n">WorkerSpec</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">SpawnPlan</span><span class="p">:</span> <span class="o">...</span>      <span class="c1"># 命令、预设会话 ID、报告方式</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="k">class</span><span class="w"> </span><span class="nc">Resumer</span><span class="p">(</span><span class="n">Protocol</span><span class="p">):</span>       <span class="c1"># 冷投递：按 ID 恢复会话</span>
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">resume</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">target</span><span class="p">:</span> <span class="n">Target</span><span class="p">,</span> <span class="n">text</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Command</span><span class="p">:</span> <span class="o">...</span>
+<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>
+<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="k">class</span><span class="w"> </span><span class="nc">Injector</span><span class="p">(</span><span class="n">Protocol</span><span class="p">):</span>      <span class="c1"># 热投递：注入运行中的会话</span>
+<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">inject</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">target</span><span class="p">:</span> <span class="n">Target</span><span class="p">,</span> <span class="n">callback</span><span class="p">:</span> <span class="n">Callback</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">DeliveryOutcome</span><span class="p">:</span> <span class="o">...</span>
+</code></pre></div>
+<p>每个适配器声明自己提供哪些能力（对应 protocol v1 第 3.2 节的六项）。投递引擎按回调记录的 <code>requires</code> 和目标 Harness 的能力挑选通道：能热投递就热投递，否则冷投递，都不行就标记为阻塞并说明原因。</p>
+<p><strong>托管者</strong>沿用现有的 <code>ExecutionBackend</code>：启动、查询状态、收尾。</p>
+<p><strong>记录</strong>统一用 <code>core/records.py</code> 的数据类：读取时严格校验 <code>schema</code> 和必需字段，未知字段放进 <code>extra</code> 原样写回。</p>
+<h2 id="7-命令层和故事对齐">7. 命令层和故事对齐<a class="headerlink" href="#7-命令层和故事对齐" title="Permanent link">&para;</a></h2>
+<p>每次派发都显式回答两个问题：谁来做，回给谁。</p>
+<table>
+<thead>
+<tr>
+<th>命令</th>
+<th>谁来做</th>
+<th>回给谁</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>reins run -- &lt;命令&gt;</code></td>
+<td>这条命令</td>
+<td>默认是发起的会话</td>
+</tr>
+<tr>
+<td><code>reins agent claude --model …</code></td>
+<td>Claude Code + 指定模型</td>
+<td>默认是发起的会话</td>
+</tr>
+<tr>
+<td><code>reins agent --expert writer</code></td>
+<td>写作专家 Agent（Harness 和模型由专家定义决定）</td>
+<td>默认是发起的会话</td>
+</tr>
+<tr>
+<td><code>--notify &lt;会话&gt;</code>（预留）</td>
+<td>不变</td>
+<td>指定的其他会话</td>
+</tr>
+<tr>
+<td><code>reins done</code></td>
+<td>外部调度器</td>
+<td>发起的会话</td>
+</tr>
+</tbody>
+</table>
+<p>"默认是发起的会话"是显式规则，而不是猜测：发起会话的 ID 来自 Harness 注入的环境变量，识别不到就拒绝提交，不会退回"最近的会话"。</p>
+<h2 id="8-实施顺序">8. 实施顺序<a class="headerlink" href="#8-实施顺序" title="Permanent link">&para;</a></h2>
+<p>架构拆分和协议改动有先后依赖。如果先在 5890 行的 <code>cli.py</code> 里实现 protocol v1，再拆文件，同一段代码要改两遍。所以建议把原计划的第 6 步"拆分 cli.py"提前：</p>
+<table>
+<thead>
+<tr>
+<th>顺序</th>
+<th>内容</th>
+<th>性质</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>机械改名：包名、命令名、文案</td>
+<td>纯改名，测试全绿</td>
+</tr>
+<tr>
+<td>2</td>
+<td>搬家：<code>agents/</code>→<code>harness/</code>，<code>platforms/</code>→<code>owners/</code>，<code>storage.py</code>→<code>store/files.py</code>，各投递通道归位</td>
+<td>纯移动，测试全绿</td>
+</tr>
+<tr>
+<td>3</td>
+<td>拆 <code>cli.py</code>：投递、Codex app-server、托管任务与恢复、目标、安装、命令，逐块搬出</td>
+<td>纯移动，每块一个提交，测试全绿</td>
+</tr>
+<tr>
+<td>4</td>
+<td>加依赖方向测试</td>
+<td>防退化</td>
+</tr>
+<tr>
+<td>5</td>
+<td>在 <code>core/</code> 实现 protocol v1，替换旧记录格式</td>
+<td>行为改变，有新测试</td>
+</tr>
+<tr>
+<td>6</td>
+<td>收件箱与文件级单一写入者，<code>reins migrate</code></td>
+<td>行为改变</td>
+</tr>
+<tr>
+<td>7</td>
+<td>固定安装位置、socket 握手、npm 打通，发布 v0.8</td>
+<td>行为改变</td>
+</tr>
+<tr>
+<td>最后</td>
+<td>跨 Harness 演示场景和对照实验</td>
+<td>证据</td>
+</tr>
+</tbody>
+</table>
+<p>前 4 步只移动代码、不改行为，审查时只需确认"测试没改断言"；后 3 步才改行为，每步都有新的测试。</p>
+<p>搬家时改了文件名的模块，会用旧名字作为别名导入（例如 <code>from .harness.pi import channel as pi_callback</code>），这样函数体一行不用改。这些别名在第 3 步拆分 <code>cli.py</code> 时逐步清理。</p>
+<h2 id="81-顺序调整2026-10-15">8.1 顺序调整（2026-10-15）<a class="headerlink" href="#81-顺序调整2026-10-15" title="Permanent link">&para;</a></h2>
+<p>第 6 步原计划是"收件箱 + 文件级单一写入者"。实际评估下来，它要重写恢复逻辑里最微妙的部分（重启不重跑、结果优先于失联所有者），还要改 Pi 扩展和 Claude <code>reins wait</code> 的 ACK 写法，回归风险集中在并发和崩溃路径上。而它要解决的问题——多个环境里不同版本各写各的——可以由第 7 步从源头解决：所有入口转发到 <code>~/.reins/bin/reins</code> 这一份程序，版本不一致的命令行被握手拒绝。</p>
+<p>因此先做第 7 步。第 6 步缩小为：<code>reins migrate</code>（已完成）、塔台拒绝不认识的 schema（第 5 步已完成）、中断任务的 <code>result.json</code> 由塔台补写。完整收件箱留作以后的加固项，出现实际问题时再做。</p>
+<h2 id="9-已拍板">9. 已拍板<a class="headerlink" href="#9-已拍板" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>问题</th>
+<th>决定</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>实施顺序</td>
+<td>按第 8 节，拆分提前到协议改动之前</td>
+</tr>
+<tr>
+<td>模板改名</td>
+<td>故事里叫<strong>专家 Agent</strong>；命令为 <code>reins expert register writer</code>，派发用 <code>reins agent --expert writer</code>；代码为 <code>engine/experts.py</code></td>
+</tr>
+<tr>
+<td>代码命名</td>
+<td>包名用平实英文，比喻只放在文档里；唯一例外是 daemon 叫 <code>tower</code></td>
+</tr>
+</tbody>
+</table>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  回到页面顶部
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      <script id="__config" type="application/json">{"base": "../..", "features": ["navigation.sections", "navigation.top", "navigation.footer", "search.suggest", "search.highlight", "content.code.copy", "content.action.edit"], "search": "../../assets/javascripts/workers/search.973d3a69.min.js", "tags": null, "translations": {"clipboard.copied": "\u5df2\u590d\u5236", "clipboard.copy": "\u590d\u5236", "search.result.more.one": "\u5728\u8be5\u9875\u4e0a\u8fd8\u6709 1 \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.more.other": "\u5728\u8be5\u9875\u4e0a\u8fd8\u6709 # \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.none": "\u6ca1\u6709\u627e\u5230\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.one": "\u627e\u5230 1 \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.other": "# \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.placeholder": "\u952e\u5165\u4ee5\u5f00\u59cb\u641c\u7d22", "search.result.term.missing": "\u7f3a\u5c11", "select.version": "\u9009\u62e9\u5f53\u524d\u7248\u672c"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.f55a23d4.min.js"></script>
+      
+    
+  </body>
+</html>

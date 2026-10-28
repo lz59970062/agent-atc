@@ -1,0 +1,2064 @@
+
+<!doctype html>
+<html lang="zh" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="长任务结束后，让 Agent 回到原会话继续工作。">
+      
+      
+      
+        <link rel="canonical" href="https://lz59970062.github.io/harness-reins/design/protocol-v1/">
+      
+      
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.6.23">
+    
+    
+      
+        <title>Reins 回调协议 v1（设计草案） - Harness Reins</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.84d31ad4.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.06af60db.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+    
+    
+      <link rel="stylesheet" href="../../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="teal" data-md-color-accent="teal">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#reins-回调协议-v1设计草案" class="md-skip">
+          跳转至
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="页眉">
+    <a href="../.." title="Harness Reins" class="md-header__button md-logo" aria-label="Harness Reins" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 20a7 7 0 0 1-7-7 7 7 0 0 1 7-7 7 7 0 0 1 7 7 7 7 0 0 1-7 7m7.03-12.61 1.42-1.42c-.45-.51-.9-.97-1.41-1.41L17.62 6c-1.55-1.26-3.5-2-5.62-2a9 9 0 0 0-9 9 9 9 0 0 0 9 9c5 0 9-4.03 9-9 0-2.12-.74-4.07-1.97-5.61M11 14h2V8h-2m4-7H9v2h6z"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Harness Reins
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Reins 回调协议 v1（设计草案）
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="teal" data-md-color-accent="teal"  aria-label="切换深色模式"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="切换深色模式" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="teal" data-md-color-accent="teal"  aria-label="切换浅色模式"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="切换浅色模式" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+      <div class="md-header__option">
+  <div class="md-select">
+    
+    <button class="md-header__button md-icon" aria-label="选择当前语言">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m12.87 15.07-2.54-2.51.03-.03A17.5 17.5 0 0 0 14.07 6H17V4h-7V2H8v2H1v2h11.17C11.5 7.92 10.44 9.75 9 11.35 8.07 10.32 7.3 9.19 6.69 8h-2c.73 1.63 1.73 3.17 2.98 4.56l-5.09 5.02L4 19l5-5 3.11 3.11zM18.5 10h-2L12 22h2l1.12-3h4.75L21 22h2zm-2.62 7 1.62-4.33L19.12 17z"/></svg>
+    </button>
+    <div class="md-select__inner">
+      <ul class="md-select__list">
+        
+          <li class="md-select__item">
+            <a href="./" hreflang="zh" class="md-select__link">
+              简体中文
+            </a>
+          </li>
+        
+          <li class="md-select__item">
+            <a href="../../en/design/protocol-v1/" hreflang="en" class="md-select__link">
+              English
+            </a>
+          </li>
+        
+      </ul>
+    </div>
+  </div>
+</div>
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="搜索" placeholder="搜索" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="查找">
+        
+        <button type="reset" class="md-search__icon md-icon" title="清空当前内容" aria-label="清空当前内容" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            正在初始化搜索引擎
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/lz59970062/harness-reins" title="前往仓库" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    lz59970062/harness-reins
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="导航栏" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="Harness Reins" class="md-nav__button md-logo" aria-label="Harness Reins" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 20a7 7 0 0 1-7-7 7 7 0 0 1 7-7 7 7 0 0 1 7 7 7 7 0 0 1-7 7m7.03-12.61 1.42-1.42c-.45-.51-.9-.97-1.41-1.41L17.62 6c-1.55-1.26-3.5-2-5.62-2a9 9 0 0 0-9 9 9 9 0 0 0 9 9c5 0 9-4.03 9-9 0-2.12-.74-4.07-1.97-5.61M11 14h2V8h-2m4-7H9v2h6z"/></svg>
+
+    </a>
+    Harness Reins
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/lz59970062/harness-reins" title="前往仓库" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    lz59970062/harness-reins
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    首页
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    入门
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            入门
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    安装
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../quickstart/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    第一个任务
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    架构概览
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/use-cases/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    典型使用场景
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../benchmark/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    基准测试
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    使用指南
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            使用指南
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/run/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    运行命令
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/agents/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    启动子 Agent
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/external-jobs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    接入已有任务
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/callbacks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    接收与确认回调
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/templates/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    编写任务模板
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/goals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    跟踪多阶段目标
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    Agent 接入
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            Agent 接入
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../integrations/support/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Harness 支持情况
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../integrations/codex/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Codex CLI
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../integrations/claude/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Claude Code
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../integrations/pi/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Pi
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../integrations/desktop/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Codex Desktop
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    参考
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            参考
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    命令速查
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    配置与文件位置
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    常见问题
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/engineering/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    开发资料
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/contributing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    参与文档维护
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/publishing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    文档发布与同步
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="https://github.com/lz59970062/harness-reins/blob/main/CHANGELOG.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    版本记录
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="目录">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      目录
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-为什么要在改名时定协议" class="md-nav__link">
+    <span class="md-ellipsis">
+      1. 为什么要在改名时定协议
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-现状和问题" class="md-nav__link">
+    <span class="md-ellipsis">
+      2. 现状和问题
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-主流-agent-架构调研" class="md-nav__link">
+    <span class="md-ellipsis">
+      3. 主流 Agent 架构调研
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3. 主流 Agent 架构调研">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#31-四类架构" class="md-nav__link">
+    <span class="md-ellipsis">
+      3.1 四类架构
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#32-终端-harness-的能力" class="md-nav__link">
+    <span class="md-ellipsis">
+      3.2 终端 Harness 的能力
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#33-对协议的影响" class="md-nav__link">
+    <span class="md-ellipsis">
+      3.3 对协议的影响
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-设计原则" class="md-nav__link">
+    <span class="md-ellipsis">
+      4. 设计原则
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-id一个根加后缀" class="md-nav__link">
+    <span class="md-ellipsis">
+      5. ID：一个根，加后缀
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-四类记录" class="md-nav__link">
+    <span class="md-ellipsis">
+      6. 四类记录
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="6. 四类记录">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#61-地址origin-和-target" class="md-nav__link">
+    <span class="md-ellipsis">
+      6.1 地址：origin 和 target
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#62-reinscallback1" class="md-nav__link">
+    <span class="md-ellipsis">
+      6.2 reins.callback/1
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#63-reinsresult1" class="md-nav__link">
+    <span class="md-ellipsis">
+      6.3 reins.result/1
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#64-reinsack1" class="md-nav__link">
+    <span class="md-ellipsis">
+      6.4 reins.ack/1
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-信封文本-reins-compact1" class="md-nav__link">
+    <span class="md-ellipsis">
+      7. 信封文本 reins-compact/1
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-和旧-ltc-的衔接" class="md-nav__link">
+    <span class="md-ellipsis">
+      8. 和旧 LTC 的衔接
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9-已拍板" class="md-nav__link">
+    <span class="md-ellipsis">
+      9. 已拍板
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#10-v1-不做的事" class="md-nav__link">
+    <span class="md-ellipsis">
+      10. v1 不做的事
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#11-上下文节点与专家v09-设计2026-10-15-拍板" class="md-nav__link">
+    <span class="md-ellipsis">
+      11. 上下文、节点与专家（v0.9 设计，2026-10-15 拍板）
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="11. 上下文、节点与专家（v0.9 设计，2026-10-15 拍板）">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#111-概念" class="md-nav__link">
+    <span class="md-ellipsis">
+      11.1 概念
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#112-统一入口" class="md-nav__link">
+    <span class="md-ellipsis">
+      11.2 统一入口
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#113-名字是必填字段" class="md-nav__link">
+    <span class="md-ellipsis">
+      11.3 名字是必填字段
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#114-读摘要不读原始会话" class="md-nav__link">
+    <span class="md-ellipsis">
+      11.4 读摘要，不读原始会话
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#115-记录" class="md-nav__link">
+    <span class="md-ellipsis">
+      11.5 记录
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#116-专家配置文件" class="md-nav__link">
+    <span class="md-ellipsis">
+      11.6 专家配置文件
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#117-管理命令" class="md-nav__link">
+    <span class="md-ellipsis">
+      11.7 管理命令
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#参考资料" class="md-nav__link">
+    <span class="md-ellipsis">
+      参考资料
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+    <a href="https://github.com/lz59970062/harness-reins/edit/main/docs/design/protocol-v1.md" title="编辑此页" class="md-content__button md-icon" rel="edit">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"/></svg>
+    </a>
+  
+  
+
+
+<h1 id="reins-回调协议-v1设计草案">Reins 回调协议 v1（设计草案）<a class="headerlink" href="#reins-回调协议-v1设计草案" title="Permanent link">&para;</a></h1>
+<p>状态：草案第 2 版，2026-10-13。已拍板的决定见第 9 节。评审通过后，改名提交（第 3 步）按本文落地。</p>
+<p>命名说明（2026-10-25）：本协议在 0.8 版以 ATC（Agent Traffic Control）的名字落地，记录前缀是 <code>atc.</code>。0.9 版改名为 Harness Reins（命令 <code>reins</code>），前缀随之改为 <code>reins.</code>，结构不变；旧前缀的记录由 <code>reins migrate</code> 存档，不再读取。下文按新名字书写。</p>
+<h2 id="1-为什么要在改名时定协议">1. 为什么要在改名时定协议<a class="headerlink" href="#1-为什么要在改名时定协议" title="Permanent link">&para;</a></h2>
+<p>Reins 对外的契约有四样东西：模型看到的回调信封、磁盘上的回调记录、任务结果、ACK 记录。
+改名一定会碰到它们。如果这次只换名字，以后加 <code>--notify</code>、专家档案、汇合时再改结构，就要破坏两次兼容。
+所以 v1 一次把格式定下来，后续功能需要的字段先预留，值可以为空，格式不再变。</p>
+<p>Reins 的核心原则是<strong>显式指定</strong>：指定谁来做事（哪个 Harness、哪个模型、哪个专家），指定回调给谁（哪个会话）。
+任何"猜一个目标"的行为都和这条原则冲突。</p>
+<h2 id="2-现状和问题">2. 现状和问题<a class="headerlink" href="#2-现状和问题" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>问题</th>
+<th>位置</th>
+<th>后果</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>version</code> 整数被拿来做功能开关：路由语义变了就从 1 升到 2、3、4</td>
+<td><code>cli.py</code> 的 <code>make_request</code></td>
+<td>版本号既表示格式又表示功能，两个独立功能无法同时表达，只能继续往上加数字</td>
+</tr>
+<tr>
+<td>结果只有退出码加一段自由文本</td>
+<td><code>agent_result_path</code>，Codex 用 <code>-o</code> 写文件，Claude 和 Pi 截取 stdout</td>
+<td>接收方必须读日志或长文本才能接着干，跨 Agent 交接没有结构</td>
+</tr>
+<tr>
+<td>"进程结束"和"任务成功"混在 <code>outcome: completed</code> 里</td>
+<td><code>managed_callback_request</code></td>
+<td>退出码非零也是 <code>completed</code>；子代理说"做完了"和 Reins 观察到的结果没有区分</td>
+</tr>
+<tr>
+<td>发起方和回调目标是同一个字段</td>
+<td><code>target</code></td>
+<td>以后 A 派任务、通知 B 时没有地方表达</td>
+</tr>
+<tr>
+<td>子代理自己的会话 ID 没有记录</td>
+<td>Pi 子代理用 <code>--no-session</code>；Codex、Claude 的子代理有会话，但 Reins 没记下 ID</td>
+<td>子代理做完后没法再"追问"它，只能重新起一个</td>
+</tr>
+<tr>
+<td>任务 ID 和回调 ID 互不相关；回调 ID 是 32 位十六进制</td>
+<td><code>submit_managed_run</code>、<code>make_request</code></td>
+<td>看回调 ID 不知道属于哪个任务；ACK 命令还带着完整的 <code>--queue-dir</code> 路径</td>
+</tr>
+<tr>
+<td>时间戳是浮点秒数</td>
+<td>各记录的 <code>created_at</code> 等</td>
+<td>Agent 读 JSON 时看不懂，排查要换算</td>
+</tr>
+<tr>
+<td><code>--last</code> 目标</td>
+<td><code>routing_text</code></td>
+<td>可能把回调投给无关会话，违反"显式指定"原则</td>
+</tr>
+</tbody>
+</table>
+<h2 id="3-主流-agent-架构调研">3. 主流 Agent 架构调研<a class="headerlink" href="#3-主流-agent-架构调研" title="Permanent link">&para;</a></h2>
+<p>协议要能覆盖主流架构，所以先看它们各自怎么启动、怎么恢复、怎么接收外部消息。</p>
+<h3 id="31-四类架构">3.1 四类架构<a class="headerlink" href="#31-四类架构" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>类别</th>
+<th>代表</th>
+<th>会话怎么标识</th>
+<th>Reins 怎么接入</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>终端 Harness</strong></td>
+<td>Codex、Claude Code、Pi、Gemini CLI、Qwen Code、OpenCode、Cursor CLI、Copilot CLI、Goose、Amp、Kimi CLI</td>
+<td>会话 ID（UUID、文件路径、<code>T-&lt;uuid&gt;</code>、名字等，各家不同）</td>
+<td>无头模式启动子代理；按 ID 恢复会话来投递回调；部分支持向运行中的会话注入消息</td>
+</tr>
+<tr>
+<td><strong>编辑器协议 ACP</strong></td>
+<td>Zed 发起的 Agent Client Protocol；Gemini CLI、Kimi CLI、Goose、OpenCode 原生支持，Claude Code、Codex、Pi 有适配器</td>
+<td><code>session/new</code> 返回的会话 ID</td>
+<td>stdin/stdout 上的 JSON-RPC：<code>session/new</code>、<code>session/prompt</code>、<code>session/load</code>。Reins 作为客户端时，一个适配器就能驱动所有支持 ACP 的 Agent 当子代理</td>
+</tr>
+<tr>
+<td><strong>SDK 框架</strong></td>
+<td>LangGraph、OpenAI Agents SDK、Claude Agent SDK、Google ADK</td>
+<td>应用自己的线程 ID，例如 LangGraph 的 <code>thread_id</code></td>
+<td>没有终端会话可恢复。LangGraph 的做法是 <code>interrupt()</code> 暂停，之后用同一个 <code>thread_id</code> 加 <code>Command(resume=…)</code> 继续。Reins 只能通过"执行一条命令"或"调用一个 HTTP 地址"把结果交给应用</td>
+</tr>
+<tr>
+<td><strong>远程 Agent 协议 A2A</strong></td>
+<td>Google 发起的 Agent2Agent</td>
+<td>任务 ID，状态为 submitted、working、input-required、completed、failed、canceled 等</td>
+<td>长任务用 webhook 推送状态变化，但<strong>规范不保证送达和重试</strong>，客户端要自己轮询兜底</td>
+</tr>
+</tbody>
+</table>
+<h3 id="32-终端-harness-的能力">3.2 终端 Harness 的能力<a class="headerlink" href="#32-终端-harness-的能力" title="Permanent link">&para;</a></h3>
+<p>Reins 需要的六项能力：</p>
+<ul>
+<li><strong>绑定</strong>：shell 工具里能读到当前会话 ID，用来记录"谁发起的"</li>
+<li><strong>启动</strong>：无头模式运行一个子代理</li>
+<li><strong>结构化输出</strong>：强制最终输出符合给定的 JSON Schema</li>
+<li><strong>冷投递</strong>：会话没在运行时，按 ID 恢复它，送入一条消息</li>
+<li><strong>热投递</strong>：会话正在运行时，把消息注入进去</li>
+<li><strong>预设 ID</strong>：启动子代理时指定它的会话 ID，以后好找回</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th>Harness</th>
+<th>绑定</th>
+<th>启动</th>
+<th>结构化输出</th>
+<th>冷投递</th>
+<th>热投递</th>
+<th>预设 ID</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Codex 0.162.1 ✅</td>
+<td><code>CODEX_THREAD_ID</code></td>
+<td><code>codex exec</code></td>
+<td><code>--output-schema</code></td>
+<td><code>codex exec resume &lt;id&gt;</code></td>
+<td>app-server <code>thread/resume</code> + <code>turn/start</code>（Reins 已用于 Desktop）</td>
+<td>无；从 <code>--json</code> 事件里读</td>
+</tr>
+<tr>
+<td>Claude Code 2.1.296 ✅</td>
+<td><code>CLAUDE_CODE_SESSION_ID</code></td>
+<td><code>claude -p</code></td>
+<td><code>--json-schema</code></td>
+<td><code>claude -p --resume &lt;id&gt;</code></td>
+<td>Channels（MCP 推送，Reins 已用）；后台 <code>ltc wait</code></td>
+<td><code>--session-id &lt;uuid&gt;</code></td>
+</tr>
+<tr>
+<td>Pi 0.87.1 ✅</td>
+<td><code>PI_SESSION_FILE</code> / <code>PI_SESSION_ID</code></td>
+<td><code>pi -p --mode text\|json\|rpc</code></td>
+<td>无</td>
+<td><code>pi -p --session &lt;文件\|id&gt;</code></td>
+<td>扩展 steer（Reins 已用）</td>
+<td><code>--session-id &lt;id&gt;</code></td>
+</tr>
+<tr>
+<td>Gemini CLI 📄</td>
+<td><code>GEMINI_SESSION_ID</code> 只确认在 hooks 环境里有，shell 工具里有没有待核实</td>
+<td><code>gemini -p</code></td>
+<td><code>--output-format json</code>，无 Schema</td>
+<td><code>--resume &lt;id&gt;</code>（第三方资料）</td>
+<td>未发现</td>
+<td>待核实</td>
+</tr>
+<tr>
+<td>Qwen Code 📄</td>
+<td>待核实</td>
+<td><code>qwen -p</code></td>
+<td>同 Gemini（它是 Gemini CLI 的分支）</td>
+<td><code>qwen --resume &lt;id&gt; -p</code></td>
+<td>未发现</td>
+<td><code>--session-id</code>（第三方资料）</td>
+</tr>
+<tr>
+<td>OpenCode 📄</td>
+<td>插件的 <code>shell.env</code> 钩子可以注入会话 ID（第三方资料）</td>
+<td><code>opencode run</code></td>
+<td><code>--format json</code></td>
+<td><code>opencode run -s &lt;id&gt;</code></td>
+<td><code>opencode serve</code> 提供 HTTP API</td>
+<td>待核实</td>
+</tr>
+<tr>
+<td>Cursor CLI 📄</td>
+<td>待核实</td>
+<td><code>agent -p</code></td>
+<td><code>--output-format json</code></td>
+<td><code>agent -p --resume=&lt;id&gt;</code></td>
+<td>未发现</td>
+<td><code>agent create-chat</code> 先拿到 ID</td>
+</tr>
+<tr>
+<td>Copilot CLI 📄</td>
+<td>待核实</td>
+<td><code>copilot -p</code></td>
+<td>待核实</td>
+<td>文档只确认非交互模式支持 <code>--continue</code></td>
+<td>SDK 走 JSON-RPC</td>
+<td>待核实</td>
+</tr>
+<tr>
+<td>Goose 📄</td>
+<td>待核实</td>
+<td><code>goose run -t</code></td>
+<td>待核实</td>
+<td><code>goose run --resume --session-id &lt;id&gt;</code></td>
+<td>未发现</td>
+<td><code>--session-id</code> / <code>--name</code></td>
+</tr>
+<tr>
+<td>Amp 📄</td>
+<td>待核实</td>
+<td><code>amp -x --stream-json</code></td>
+<td>待核实</td>
+<td><code>amp threads continue &lt;T-id&gt;</code></td>
+<td>未发现</td>
+<td>无；从首个事件读</td>
+</tr>
+<tr>
+<td>Kimi CLI 📄</td>
+<td>待核实</td>
+<td><code>kimi -p</code></td>
+<td><code>--output-format</code></td>
+<td><code>--session &lt;id&gt;</code>，能否与 <code>-p</code> 同用待核实</td>
+<td>ACP <code>session/load</code></td>
+<td>待核实</td>
+</tr>
+</tbody>
+</table>
+<p>✅ 本机 <code>--help</code> 核实过；📄 来自文档或第三方资料，接入前要逐项核实。</p>
+<h3 id="33-对协议的影响">3.3 对协议的影响<a class="headerlink" href="#33-对协议的影响" title="Permanent link">&para;</a></h3>
+<ol>
+<li><strong>会话 ID 必须是不透明字符串</strong>，外加可选的定位信息。各家的格式差别很大：UUID、文件路径、<code>T-&lt;uuid&gt;</code>、名字都有。Claude Code 和 Qwen Code 的会话还和工作目录绑定。所以 <code>target</code> 里除了 <code>session</code>，还要带 <code>cwd</code> 和可选的 <code>locator</code>（比如 Pi 的会话文件路径）。</li>
+<li><strong>适配器按能力声明，不按 Harness 写死。</strong>上表的六项能力就是适配器的接口。回调记录的 <code>requires</code> 引用的就是这些能力名。</li>
+<li><strong>SDK 框架需要一种不是"会话"的目标。</strong>预留 <code>target.kind = "endpoint"</code>：执行一条命令，或 POST 到一个本机地址，把回调 JSON 交给应用。应用拿到后自己去 <code>Command(resume=…)</code>。</li>
+<li><strong>ACP 是接入长尾 Harness 的捷径。</strong>写一个 ACP 客户端适配器，Gemini、Kimi、Goose、OpenCode 都能当子代理用。但 ACP 的会话归启动它的客户端所有，Reins 没法向用户在编辑器里开的 ACP 会话投递，所以 ACP 只用于"启动子代理"，不用于回调。</li>
+<li><strong>结构化报告优先用原生 Schema。</strong>Codex 的 <code>--output-schema</code> 和 Claude 的 <code>--json-schema</code> 能直接约束最终输出；不支持的再退回"写文件"的方式。</li>
+<li><strong>记录子代理自己的会话 ID。</strong>有预设 ID 能力的 Harness 由 Reins 指定，否则从输出事件里读。这样以后可以继续追问同一个子代理，而不是重新起一个。</li>
+<li><strong>A2A 不保证送达，Reins 保证。</strong>Reins 的至少一次投递、稳定的回调 ID 和显式 ACK，正是 A2A 留给实现方自己解决的部分。状态取值和 A2A 对齐，方便以后桥接。</li>
+</ol>
+<h2 id="4-设计原则">4. 设计原则<a class="headerlink" href="#4-设计原则" title="Permanent link">&para;</a></h2>
+<ol>
+<li><strong>文本给模型看，JSON 给程序读。</strong>信封文本可以按需调整措辞；任何程序（Pi 扩展、Claude 频道、<code>reins wait</code>）都只读 JSON 记录，不解析信封文本。</li>
+<li><strong>观察到的和声称的分开。</strong>Reins 亲眼看到的（进程状态、退出码、时长）放在 <code>observed</code>；子代理自己报告的（做完没有、产物在哪）放在 <code>report</code>，标记为未经验证。延续现有原则："进程结束不等于任务成功"。</li>
+<li><strong>用能力清单代替版本号升级。</strong>格式用 <code>schema</code> 标识，功能用 <code>requires</code> 列出。daemon 遇到不认识的能力就不投递，并报告原因，绝不投一半。</li>
+<li><strong>未知字段原样保留，必需字段缺失就拒绝。</strong>新版本加的可选字段，旧版本读到时不报错，写回时也不丢弃。</li>
+<li><strong>预留的字段 v1 只写空值，不实现语义。</strong></li>
+<li><strong>显式指定，绝不猜测目标。</strong></li>
+</ol>
+<h2 id="5-id一个根加后缀">5. ID：一个根，加后缀<a class="headerlink" href="#5-id一个根加后缀" title="Permanent link">&para;</a></h2>
+<p>每件工作有一个根 ID，下属的东西在根 ID 后面加后缀。从任何一个 ID 都能直接看出它属于哪件工作。</p>
+<table>
+<thead>
+<tr>
+<th>对象</th>
+<th>格式</th>
+<th>例子</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>任务（根）</td>
+<td>8 位十六进制</td>
+<td><code>1a2b3c4d</code></td>
+</tr>
+<tr>
+<td>任务的第 N 次启动</td>
+<td>根 + <code>-a&lt;N&gt;</code></td>
+<td><code>1a2b3c4d-a1</code></td>
+</tr>
+<tr>
+<td>任务的第 N 条回调</td>
+<td>根 + <code>-c&lt;N&gt;</code></td>
+<td><code>1a2b3c4d-c1</code></td>
+</tr>
+<tr>
+<td>目标（根）</td>
+<td><code>g-</code> + 8 位十六进制</td>
+<td><code>g-77c0e1aa</code></td>
+</tr>
+<tr>
+<td>目标的第 N 条提醒回调</td>
+<td>目标根 + <code>-c&lt;N&gt;</code></td>
+<td><code>g-77c0e1aa-c3</code></td>
+</tr>
+<tr>
+<td>汇合组（根，预留）</td>
+<td><code>grp-</code> + 8 位十六进制</td>
+<td><code>grp-5e6f7a8b</code></td>
+</tr>
+</tbody>
+</table>
+<p>规则：</p>
+<ul>
+<li><strong>后缀表示"它是什么、第几个"，不表示状态。</strong><code>-c1</code> 是"第 1 条回调"，它从待投递到已 ACK，ID 始终不变。状态写在记录字段里。像 <code>-pending</code>、<code>-done</code> 这样的后缀不允许，否则状态一变 ID 就要跟着变。</li>
+<li><strong>投递重试不产生新回调。</strong>同一条回调重试 10 次，ID 仍然是 <code>-c1</code>。只有出现新事件（比如恢复报告、再次通知）才会有 <code>-c2</code>。</li>
+<li><strong>每条回调都必须有根。</strong>目前没有任务的回调有两种：目标提醒，以及 <code>ltc done</code> 报告的外部任务。前者挂在目标根下；后者改为让 <code>reins done</code> 也建一条轻量的任务记录，<code>kind</code> 为 <code>external</code>。</li>
+<li>任务是最常见的根，所以不加前缀，最短；目标和汇合组是容器，比较少见，加前缀便于区分。</li>
+<li>结果和 ACK 与任务、回调一一对应，不需要单独的 ID。</li>
+<li>根 ID 创建时用原子方式占位，已存在就重新生成。8 位十六进制约 43 亿个，单机足够。</li>
+<li>所有 ID 都符合现有的文件名安全规则 <code>[A-Za-z0-9_-]+</code>，不用改校验。</li>
+<li>回调 ID 从 32 个字符缩短到 11 个，ACK 命令变成 <code>reins ack 1a2b3c4d-c1</code>。</li>
+</ul>
+<h2 id="6-四类记录">6. 四类记录<a class="headerlink" href="#6-四类记录" title="Permanent link">&para;</a></h2>
+<p>所有 JSON 记录都有 <code>schema</code> 字段，格式为 <code>reins.&lt;类型&gt;/&lt;主版本&gt;</code>。只有破坏兼容时才升主版本；新增可选字段不升。
+所有时间字段用 RFC 3339 UTC 字符串，精确到毫秒，例如 <code>"2026-10-13T11:39:22.184Z"</code>；时长用 <code>duration_seconds</code> 数字。</p>
+<table>
+<thead>
+<tr>
+<th>schema</th>
+<th>文件</th>
+<th>写入方</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>reins.task/1</code></td>
+<td><code>tasks/&lt;根ID&gt;/task.json</code></td>
+<td>daemon</td>
+</tr>
+<tr>
+<td><code>reins.result/1</code></td>
+<td><code>tasks/&lt;根ID&gt;/result.json</code></td>
+<td>daemon（<code>observed</code>）+ 子代理（<code>report</code>，经 daemon 校验后合并）</td>
+</tr>
+<tr>
+<td><code>reins.callback/1</code></td>
+<td><code>queue/&lt;状态&gt;/&lt;回调ID&gt;.json</code></td>
+<td>daemon</td>
+</tr>
+<tr>
+<td><code>reins.ack/1</code></td>
+<td><code>queue/acks/&lt;回调ID&gt;.json</code></td>
+<td><code>reins ack</code> 经 daemon 写入</td>
+</tr>
+</tbody>
+</table>
+<p>"daemon 写入"是第 5 步"只有 daemon 写状态"的前提。v1 的格式不依赖它，但字段是按这个原则设计的。</p>
+<h3 id="61-地址origin-和-target">6.1 地址：origin 和 target<a class="headerlink" href="#61-地址origin-和-target" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nt">"origin"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">"harness"</span><span class="p">:</span><span class="w"> </span><span class="s2">"codex"</span><span class="p">,</span><span class="w"> </span><span class="nt">"session"</span><span class="p">:</span><span class="w"> </span><span class="s2">"019a…"</span><span class="p">,</span><span class="w"> </span><span class="nt">"cwd"</span><span class="p">:</span><span class="w"> </span><span class="s2">"/work/repo"</span><span class="p">,</span><span class="w"> </span><span class="nt">"binding"</span><span class="p">:</span><span class="w"> </span><span class="s2">"CODEX_THREAD_ID"</span><span class="p">},</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nt">"target"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">"kind"</span><span class="p">:</span><span class="w"> </span><span class="s2">"session"</span><span class="p">,</span><span class="w"> </span><span class="nt">"session"</span><span class="p">:</span><span class="w"> </span><span class="s2">"019a…"</span><span class="p">}</span>
+</code></pre></div>
+<ul>
+<li><code>origin</code>：谁提交的任务。只记录，不参与投递。</li>
+<li><code>target</code>：回调投给谁。<code>session</code> 是不透明字符串（Pi 的会话直接用会话文件的绝对路径）。Harness 和工作目录就是记录里的 <code>agent</code> 和 <code>cwd</code>，所以 v1 的 target 不重复存放；以后 <code>--notify</code> 把回调发给另一个 Harness 时，再在 target 里加 <code>harness</code>、<code>cwd</code> 和 <code>locator</code>。</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th><code>target.kind</code></th>
+<th>v1</th>
+<th>含义</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>session</code></td>
+<td>实现，且必须等于 <code>origin</code></td>
+<td>投给某个具体会话</td>
+</tr>
+<tr>
+<td><code>session</code>（不同于 origin）</td>
+<td>预留</td>
+<td>以后的 <code>--notify &lt;会话&gt;</code></td>
+</tr>
+<tr>
+<td><code>profile</code></td>
+<td>预留</td>
+<td>以后的专家档案：把结果交给一个按档案新启动的 Agent，也就是任务链</td>
+</tr>
+<tr>
+<td><code>endpoint</code></td>
+<td>预留</td>
+<td>给 SDK 框架用：执行一条命令或 POST 到本机地址，把回调 JSON 交给应用</td>
+</tr>
+<tr>
+<td><code>none</code></td>
+<td>实现</td>
+<td>现在的 <code>manual</code> 模式：只保存，不投递，等人来看</td>
+</tr>
+</tbody>
+</table>
+<p><code>--last</code> 已删除。</p>
+<h3 id="62-reinscallback1">6.2 <code>reins.callback/1</code><a class="headerlink" href="#62-reinscallback1" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="p">{</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span><span class="nt">"schema"</span><span class="p">:</span><span class="w"> </span><span class="s2">"reins.callback/1"</span><span class="p">,</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">  </span><span class="nt">"id"</span><span class="p">:</span><span class="w"> </span><span class="s2">"1a2b3c4d-c1"</span><span class="p">,</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">  </span><span class="nt">"root"</span><span class="p">:</span><span class="w"> </span><span class="s2">"1a2b3c4d"</span><span class="p">,</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">  </span><span class="nt">"created_at"</span><span class="p">:</span><span class="w"> </span><span class="s2">"2026-10-13T11:39:22.184Z"</span><span class="p">,</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w">  </span><span class="nt">"origin"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="err">…</span><span class="p">},</span>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">  </span><span class="nt">"target"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="err">…</span><span class="p">},</span>
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="w">  </span><span class="nt">"requires"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"deliver.codex-desktop"</span><span class="p">],</span>
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="w">  </span><span class="nt">"route"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">"mode"</span><span class="p">:</span><span class="w"> </span><span class="s2">"desktop"</span><span class="p">,</span><span class="w"> </span><span class="nt">"bridge_file"</span><span class="p">:</span><span class="w"> </span><span class="s2">"…"</span><span class="p">},</span>
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="w">  </span><span class="nt">"group"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span>
+<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="w">  </span><span class="nt">"goal_id"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span>
+<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="w">  </span><span class="nt">"envelope"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">"format"</span><span class="p">:</span><span class="w"> </span><span class="s2">"reins-compact/1"</span><span class="p">,</span><span class="w"> </span><span class="nt">"text"</span><span class="p">:</span><span class="w"> </span><span class="s2">"…"</span><span class="p">,</span><span class="w"> </span><span class="nt">"details_path"</span><span class="p">:</span><span class="w"> </span><span class="s2">"…"</span><span class="p">},</span>
+<a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="w">  </span><span class="nt">"delivery"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">"attempts"</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="nt">"next_attempt_at"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span><span class="w"> </span><span class="nt">"reminders"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="err">…</span><span class="p">}}</span>
+<a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="p">}</span>
+</code></pre></div>
+<ul>
+<li><code>root</code>：所属的任务或目标。任务的细节（命令、退出码、日志）<strong>不复制</strong>进回调记录，统一从根找 <code>result.json</code>，避免两份数据不一致。</li>
+<li><code>requires</code>：投递需要的能力，由冻结的路由推出（<code>core/capabilities.py</code>）：<code>deliver.cli-resume</code>（通过 Harness 命令行恢复会话）、<code>deliver.codex-desktop</code>（向已加载的 Codex Desktop 线程提交）、<code>deliver.pi-steer</code> 和 <code>deliver.pi-follow-up</code>（Pi 扩展的两种投递方式）。<code>manual</code> 模式不需要任何能力。塔台维护一份已知能力表，遇到不认识的能力就不选取这条回调，原样留在队列里，升级后照常投递。这一项替代原来的 <code>version</code> 2、3、4。</li>
+<li><code>route</code>：各个投递方式自己的参数，替代现在平铺在顶层的 <code>callback_mode</code>、<code>pi_profile_dir</code> 等字段。</li>
+<li>会话环境不放进回调记录：提交时另存一份私有副本 <code>&lt;queue&gt;/environments/&lt;回调ID&gt;.json</code>（权限 600）。无头恢复以协调进程的环境为底，叠加这份副本，再去掉会话标记（<code>CLAUDECODE</code>、<code>CLAUDE_CODE_SESSION_ID</code>、<code>CODEX_THREAD_ID</code> 和 Pi 的会话变量等），<code>REINS_HOME</code> 与锁目录以协调进程为准。这样恢复会话和执行任务看到同一套环境，而不是 systemd/launchd 服务启动时定下的那套。回调 ACK、完成或取消后删除副本；失败的回调保留副本，以便 <code>reins retry</code>。没有副本的回调照旧用协调进程的环境。</li>
+<li><code>group</code>：预留给汇合，以后的形状是 <code>{"id": "grp-…", "expect": 3, "policy": "all"}</code>。v1 恒为 <code>null</code>。</li>
+</ul>
+<h3 id="63-reinsresult1">6.3 <code>reins.result/1</code><a class="headerlink" href="#63-reinsresult1" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="p">{</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span><span class="nt">"schema"</span><span class="p">:</span><span class="w"> </span><span class="s2">"reins.result/1"</span><span class="p">,</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">  </span><span class="nt">"root"</span><span class="p">:</span><span class="w"> </span><span class="s2">"1a2b3c4d"</span><span class="p">,</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">  </span><span class="nt">"kind"</span><span class="p">:</span><span class="w"> </span><span class="s2">"agent"</span><span class="p">,</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">  </span><span class="nt">"observed"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="w">    </span><span class="nt">"state"</span><span class="p">:</span><span class="w"> </span><span class="s2">"exited"</span><span class="p">,</span>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="w">    </span><span class="nt">"exit_code"</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span>
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="w">    </span><span class="nt">"attempt"</span><span class="p">:</span><span class="w"> </span><span class="s2">"1a2b3c4d-a1"</span><span class="p">,</span>
+<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="w">    </span><span class="nt">"started_at"</span><span class="p">:</span><span class="w"> </span><span class="s2">"…"</span><span class="p">,</span>
+<a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="w">    </span><span class="nt">"ended_at"</span><span class="p">:</span><span class="w"> </span><span class="s2">"…"</span><span class="p">,</span>
+<a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="w">    </span><span class="nt">"duration_seconds"</span><span class="p">:</span><span class="w"> </span><span class="mf">7412.3</span><span class="p">,</span>
+<a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="w">    </span><span class="nt">"backend"</span><span class="p">:</span><span class="w"> </span><span class="s2">"systemd"</span><span class="p">,</span>
+<a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="w">    </span><span class="nt">"host"</span><span class="p">:</span><span class="w"> </span><span class="s2">"…"</span><span class="p">,</span>
+<a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="w">    </span><span class="nt">"recovery_reason"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span>
+<a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="w">    </span><span class="nt">"log"</span><span class="p">:</span><span class="w"> </span><span class="s2">"attempt-1.log"</span>
+<a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="w">  </span><span class="p">},</span>
+<a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a><span class="w">  </span><span class="nt">"worker"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">"harness"</span><span class="p">:</span><span class="w"> </span><span class="s2">"claude"</span><span class="p">,</span><span class="w"> </span><span class="nt">"model"</span><span class="p">:</span><span class="w"> </span><span class="s2">"…"</span><span class="p">,</span><span class="w"> </span><span class="nt">"profile"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span><span class="w"> </span><span class="nt">"session"</span><span class="p">:</span><span class="w"> </span><span class="s2">"5b1e…"</span><span class="p">,</span><span class="w"> </span><span class="nt">"checkpoint"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">},</span>
+<a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a><span class="w">  </span><span class="nt">"lineage"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span>
+<a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a><span class="w">  </span><span class="nt">"text_result"</span><span class="p">:</span><span class="w"> </span><span class="s2">"agent-result.md"</span><span class="p">,</span>
+<a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a><span class="w">  </span><span class="nt">"report"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-2-21" name="__codelineno-2-21" href="#__codelineno-2-21"></a><span class="w">    </span><span class="nt">"status"</span><span class="p">:</span><span class="w"> </span><span class="s2">"completed"</span><span class="p">,</span>
+<a id="__codelineno-2-22" name="__codelineno-2-22" href="#__codelineno-2-22"></a><span class="w">    </span><span class="nt">"summary"</span><span class="p">:</span><span class="w"> </span><span class="s2">"…"</span><span class="p">,</span>
+<a id="__codelineno-2-23" name="__codelineno-2-23" href="#__codelineno-2-23"></a><span class="w">    </span><span class="nt">"artifacts"</span><span class="p">:</span><span class="w"> </span><span class="p">[{</span><span class="nt">"path"</span><span class="p">:</span><span class="w"> </span><span class="s2">"docs/guide.md"</span><span class="p">,</span><span class="w"> </span><span class="nt">"description"</span><span class="p">:</span><span class="w"> </span><span class="s2">"…"</span><span class="p">}],</span>
+<a id="__codelineno-2-24" name="__codelineno-2-24" href="#__codelineno-2-24"></a><span class="w">    </span><span class="nt">"questions"</span><span class="p">:</span><span class="w"> </span><span class="p">[],</span>
+<a id="__codelineno-2-25" name="__codelineno-2-25" href="#__codelineno-2-25"></a><span class="w">    </span><span class="nt">"next_steps"</span><span class="p">:</span><span class="w"> </span><span class="p">[]</span>
+<a id="__codelineno-2-26" name="__codelineno-2-26" href="#__codelineno-2-26"></a><span class="w">  </span><span class="p">},</span>
+<a id="__codelineno-2-27" name="__codelineno-2-27" href="#__codelineno-2-27"></a><span class="w">  </span><span class="nt">"report_source"</span><span class="p">:</span><span class="w"> </span><span class="s2">"native-schema"</span><span class="p">,</span>
+<a id="__codelineno-2-28" name="__codelineno-2-28" href="#__codelineno-2-28"></a><span class="w">  </span><span class="nt">"report_error"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span>
+<a id="__codelineno-2-29" name="__codelineno-2-29" href="#__codelineno-2-29"></a><span class="p">}</span>
+</code></pre></div>
+<p><code>kind</code> 的取值：<code>command</code>（<code>reins run</code>）、<code>agent</code>（<code>reins agent</code>）、<code>external</code>（<code>reins done</code>，由外部调度器托管，<code>observed</code> 里只有对方报告的退出码）。</p>
+<p><strong><code>observed.state</code></strong>（Reins 观察到的，可信）：</p>
+<table>
+<thead>
+<tr>
+<th>值</th>
+<th>含义</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>exited</code></td>
+<td>进程正常退出，看 <code>exit_code</code></td>
+</tr>
+<tr>
+<td><code>interrupted</code></td>
+<td>运行中失去所有者（重启、注销、跨主机），看 <code>recovery_reason</code></td>
+</tr>
+<tr>
+<td><code>launch_failed</code></td>
+<td>没能启动</td>
+</tr>
+<tr>
+<td><code>unknown</code></td>
+<td>无法确定是否启动过；不会自动重跑</td>
+</tr>
+</tbody>
+</table>
+<p>这一项把现在的 <code>outcome: completed / unknown</code> 和任务状态 <code>interrupted / launch_failed / foreign_host</code> 合并成一套词。是否成功由读者结合 <code>exit_code</code> 判断，Reins 不替它下结论。</p>
+<p><strong><code>worker.session</code></strong>：子代理自己的会话 ID。Claude Code、Pi 这类能预设 ID 的由 Reins 指定；Codex、Amp 这类从输出事件里读；拿不到就为 <code>null</code>。</p>
+<p><strong><code>worker.checkpoint</code> 与 <code>lineage</code>（预留，v1 恒为 <code>null</code>）</strong>：让做完一件事的专家带着积累的上下文去做下一件事。</p>
+<ul>
+<li>任务完成的那一刻，Reins 用 Harness 的分叉能力（<code>codex exec fork</code>、<code>claude --resume --fork-session</code>、<code>pi --fork</code>）复制出一个<strong>检查点</strong>会话，ID 写进 <code>worker.checkpoint</code>。检查点永远不直接拿来干活，因此始终停在"刚做完"的状态。必须在完成那一刻冻结，因为 Harness 分叉复制的是会话当前状态，事后回不到那个时间点。</li>
+<li>新任务用 <code>reins agent --from &lt;根ID&gt;</code> 从检查点分叉出新会话，多个分叉可以同时运行；<code>--continue &lt;根ID&gt;</code> 在原会话上原地继续，需要独占租约。</li>
+<li>新任务记录 <code>lineage: {"from": "&lt;根ID&gt;", "mode": "fork" | "continue"}</code>，<code>reins tree &lt;根ID&gt;</code> 展示上下文树。血缘写在字段里，不编进 ID，否则 ID 会随分叉层数无限变长。</li>
+<li>会话不能跨 Harness 分叉；跨 Harness 的交接只靠 <code>report</code> 和 <code>text_result</code>。</li>
+</ul>
+<p><strong><code>report</code></strong>（子代理声称的，未经验证）：</p>
+<ul>
+<li><code>reins agent</code> <strong>默认开启</strong>，<code>--no-report</code> 关闭。</li>
+<li>获取方式按 Harness 能力选择，记在 <code>report_source</code>：</li>
+<li><code>native-schema</code>：用 Codex 的 <code>--output-schema</code> 或 Claude 的 <code>--json-schema</code> 约束最终输出</li>
+<li><code>report-file</code>：不支持 Schema 的 Harness，Reins 传环境变量 <code>REINS_REPORT_FILE</code>，并在提示词末尾加一段简短说明，让子代理结束前写好 JSON</li>
+<li><code>status</code> 取 <code>completed</code>、<code>partial</code>、<code>input_required</code>、<code>failed</code>。其中 <code>completed</code>、<code>input_required</code>、<code>failed</code> 有意和 A2A 的任务状态对齐；<code>partial</code>（只完成了一部分）是 Reins 自己加的。</li>
+<li><code>summary</code> 上限 2000 字符，<code>artifacts</code> 上限 50 项，超出部分截断并在 <code>report_error</code> 里说明。</li>
+<li>报告缺失、不是合法 JSON 或字段类型不对时，<code>report</code> 为 <code>null</code>，原因写进 <code>report_error</code>。<strong>不会因为报告有问题就判定任务失败</strong>，也不会因为报告说"完成"就认为任务成功。</li>
+<li><code>text_result</code> 保留现在的自由文本结果，作为报告缺失时的兜底。</li>
+</ul>
+<h3 id="64-reinsack1">6.4 <code>reins.ack/1</code><a class="headerlink" href="#64-reinsack1" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="p">{</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">  </span><span class="nt">"schema"</span><span class="p">:</span><span class="w"> </span><span class="s2">"reins.ack/1"</span><span class="p">,</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">  </span><span class="nt">"callback_id"</span><span class="p">:</span><span class="w"> </span><span class="s2">"1a2b3c4d-c1"</span><span class="p">,</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">  </span><span class="nt">"acked_at"</span><span class="p">:</span><span class="w"> </span><span class="s2">"…"</span><span class="p">,</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="w">  </span><span class="nt">"by"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">"harness"</span><span class="p">:</span><span class="w"> </span><span class="s2">"codex"</span><span class="p">,</span><span class="w"> </span><span class="nt">"session"</span><span class="p">:</span><span class="w"> </span><span class="s2">"019a…"</span><span class="p">},</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="w">  </span><span class="nt">"note"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="p">}</span>
+</code></pre></div>
+<p>语义不变：ACK 表示"收到并看过了"，不表示任务完成，也不表示目标达成。<code>by</code> 从运行 <code>reins ack</code> 的环境里自动识别，识别不到就为 <code>null</code>。</p>
+<h2 id="7-信封文本-reins-compact1">7. 信封文本 <code>reins-compact/1</code><a class="headerlink" href="#7-信封文本-reins-compact1" title="Permanent link">&para;</a></h2>
+<p>命令任务：</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>[reins] 1a2b3c4d-c1
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>Task: train model
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>Result: exited 0 · 2h 3m 32s
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>From: run on systemd
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>Files: ~/.reins/tasks/1a2b3c4d/ (attempt-1.log, result.json)
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>Details: ~/.reins/queue/details/1a2b3c4d-c1.md (as needed)
+<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>Session: 019a… (only)
+<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>ACK after inspection: reins ack 1a2b3c4d-c1
+</code></pre></div>
+<p>子代理任务，多一行 <code>Report</code>：</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>[reins] 8e4f0c12-c1
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>Task: write the migration guide
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>Result: exited 0 · 14m 8s
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>From: agent claude, model …, session 5b1e…
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>Report: completed (claimed, unverified) · 2 artifacts
+<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>Files: ~/.reins/tasks/8e4f0c12/ (attempt-1.log, agent-result.md, result.json)
+<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>Details: ~/.reins/queue/details/8e4f0c12-c1.md (as needed)
+<a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>Session: 019a… (only)
+<a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a>ACK after inspection: reins ack 8e4f0c12-c1
+</code></pre></div>
+<p>规则：</p>
+<ul>
+<li>第一行固定为 <code>[reins] &lt;回调ID&gt;</code>，方便检索。信封里不写协议版本，因为程序不读这段文本。</li>
+<li>每行的键和顺序固定；没有内容的行省略。</li>
+<li><code>Report</code> 行必须带 <code>claimed, unverified</code>，提醒模型这是子代理自己说的。</li>
+<li>中断、启动失败、未知状态，在 <code>Result</code> 后追加 <code>Recovery: &lt;原因&gt;; not restarted. Inspect before relaunching.</code>，沿用现有措辞。</li>
+<li>有自定义消息、模板交接、恢复说明或目标提醒时，<code>Details</code> 行写 <code>(read before acting)</code>，沿用现有规则。</li>
+<li>ACK 命令只写 <code>reins ack &lt;id&gt;</code>；只有使用非默认队列目录时才带 <code>--queue-dir</code>，否则会话在别的环境里执行 ACK 可能找不到队列。固定安装位置落地后，非默认队列会更少见。</li>
+<li>现有的长度测试改成针对新格式，长度不应超过现在的 compact-v1。</li>
+</ul>
+<h2 id="8-和旧-ltc-的衔接">8. 和旧 LTC 的衔接<a class="headerlink" href="#8-和旧-ltc-的衔接" title="Permanent link">&para;</a></h2>
+<p>按已经商定的"一次性迁移"：</p>
+<ul>
+<li><code>reins migrate</code> 发现旧 LTC 还有待投递或运行中的回调、仍在运行的任务时，<strong>拒绝迁移</strong>，列出它们；加 <code>--wait</code> 则等旧 daemon 处理完再继续。</li>
+<li>处理完后：把 <code>~/.ltc</code> 改名为 <code>~/.ltc.migrated-&lt;日期&gt;</code> 留作只读存档，卸载旧服务（<code>codex-long-task-wakeup.*</code>），删除三处旧 skill，安装新 skill。</li>
+<li><strong>不转换历史记录。</strong>旧记录只在存档里，Reins 不读。</li>
+<li>Reins 读到没有 <code>schema</code> 字段的记录时，一律当作无法识别，拒绝处理并提示运行 <code>reins migrate</code>。</li>
+</ul>
+<p>这样代码里不需要保留任何旧格式的读取逻辑。</p>
+<h2 id="9-已拍板">9. 已拍板<a class="headerlink" href="#9-已拍板" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>问题</th>
+<th>决定</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--last</code></td>
+<td>删除。违反"显式指定谁来做、回调给谁"的原则</td>
+</tr>
+<tr>
+<td>子代理报告</td>
+<td><code>reins agent</code> 默认开启，<code>--no-report</code> 关闭</td>
+</tr>
+<tr>
+<td>ID</td>
+<td>一个根 ID 加后缀，见第 5 节</td>
+</tr>
+<tr>
+<td>回调记录是否复制任务细节</td>
+<td>不复制，只引用根 ID</td>
+</tr>
+</tbody>
+</table>
+<h2 id="10-v1-不做的事">10. v1 不做的事<a class="headerlink" href="#10-v1-不做的事" title="Permanent link">&para;</a></h2>
+<ul>
+<li>远程投递、跨机器、多用户鉴权</li>
+<li>任务运行中的进度推送</li>
+<li><code>--notify</code>、专家 Agent、汇合、<code>endpoint</code> 目标、检查点与分叉的具体语义（只预留字段）</li>
+<li>ACP 客户端适配器、新增 Harness（协议已为它们留好位置，实现放到 v0.8 之后）</li>
+<li>和 A2A 的实际桥接（只对齐状态取值）</li>
+<li>CLI 和 daemon 之间的 socket 协议（第 5 步单独设计，届时增加 <code>reins.daemon/1</code>）</li>
+</ul>
+<h2 id="11-上下文节点与专家v09-设计2026-10-15-拍板">11. 上下文、节点与专家（v0.9 设计，2026-10-15 拍板）<a class="headerlink" href="#11-上下文节点与专家v09-设计2026-10-15-拍板" title="Permanent link">&para;</a></h2>
+<h3 id="111-概念">11.1 概念<a class="headerlink" href="#111-概念" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>概念</th>
+<th>含义</th>
+<th>怎么寻址</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>节点（node）</td>
+<td>一次 <code>reins agent</code> 任务及它结束时子代理会话的状态</td>
+<td>任务 ID（<code>1a2b3c4d</code>）、该任务的回调 ID（<code>1a2b3c4d-c1</code>）或路径名（<code>research/review</code>）；命令里优先用 ID，名字给人看</td>
+</tr>
+<tr>
+<td>上下文（context）</td>
+<td>一条线性的节点链，链上每一步都基于上一步的会话</td>
+<td>链上第一个节点的任务 ID</td>
+</tr>
+<tr>
+<td>专家（expert）</td>
+<td>预先配置的"Harness + 模型 + 推理强度 + 系统提示词"组合</td>
+<td>专家名（<code>writer</code>）</td>
+</tr>
+</tbody>
+</table>
+<p><strong>每个节点都有自己的 Harness 会话。</strong> 续写和分叉都是"从某个节点的会话分叉出新会话，再执行新提示词"：Claude 用 <code>--resume &lt;会话&gt; --fork-session --session-id &lt;新 UUID&gt;</code>，Codex 用 <code>codex exec fork &lt;会话&gt; -</code> 并从 <code>--json</code> 事件读出新会话 ID，Pi 用 <code>--fork &lt;会话文件&gt; --session-dir &lt;节点目录&gt;</code>。任务结束后，它的会话不再被任何人写入，天然就是那个时刻的检查点，所以可以从任意历史节点精确地分叉，不需要单独冻结检查点。代价是每个节点各存一份会话历史。</p>
+<p>会话之外的共享状态不在检查点里。Claude Code 的自动记忆（<code>&lt;配置目录&gt;/projects/&lt;项目&gt;/memory/</code>）由同一项目的所有会话共用，子任务里"记住某事"会写进去，之后从更早节点分叉出的会话也会读到（真机实测：从 research 分叉出的 branch 说出了只在 research/recall 里出现过的词，记忆文件里正好有它；设置 <code>CLAUDE_CODE_DISABLE_AUTO_MEMORY=1</code> 后分叉只记得 research 的内容）。Reins 不替用户关掉记忆；需要严格隔离的节点在子进程环境里设置这个变量。</p>
+<h3 id="112-统一入口">11.2 统一入口<a class="headerlink" href="#112-统一入口" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>reins<span class="w"> </span>agent<span class="w"> </span>codex<span class="w"> </span>--name<span class="w"> </span>research<span class="w"> </span>--<span class="w"> </span><span class="s2">"调研 X"</span><span class="w">            </span><span class="c1"># 新上下文</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>reins<span class="w"> </span>agent<span class="w"> </span><span class="k">continue</span><span class="w"> </span>research<span class="w"> </span>--name<span class="w"> </span>review<span class="w"> </span>--<span class="w"> </span><span class="s2">"写评审"</span><span class="w">    </span><span class="c1"># 接在链末尾：research/review</span>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>reins<span class="w"> </span>agent<span class="w"> </span>fork<span class="w"> </span>research<span class="w"> </span>--name<span class="w"> </span>plan<span class="w"> </span>--<span class="w"> </span><span class="s2">"做规划"</span><span class="w">          </span><span class="c1"># 从 research 节点分出新上下文：research/plan</span>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>reins<span class="w"> </span>agent<span class="w"> </span>expert<span class="w"> </span>writer<span class="w"> </span>--name<span class="w"> </span>draft<span class="w"> </span>--<span class="w"> </span><span class="s2">"写初稿"</span><span class="w">         </span><span class="c1"># 按专家配置新建上下文</span>
+</code></pre></div>
+<ul>
+<li>写成子命令，读起来像一句话（<code>reins agent continue research</code>）。<code>continue</code> 和 <code>fork</code> 沿用原节点的 Harness、模型、专家和工作目录，不必重复写。</li>
+<li><code>continue</code> 只能接在链的末尾；从中间节点接着干必须用 <code>fork</code>，并起新名字。</li>
+<li>节点的任务还没结束时，不能从它续写或分叉。</li>
+<li>只有子代理任务产生节点；<code>reins run</code> 和 <code>reins done</code> 不产生。</li>
+</ul>
+<h3 id="113-名字是必填字段">11.3 名字是必填字段<a class="headerlink" href="#113-名字是必填字段" title="Permanent link">&para;</a></h3>
+<ul>
+<li>每个节点都有一段名字：<code>--name</code> 给出；没给时取 <code>--task</code> 的前几个词；两者都没有时拒绝提交。一段名字不含 <code>/</code> 和空白，最长 32 个字符，可以是中文。</li>
+<li><strong>节点的完整名字是血缘路径</strong>：续写和分叉都在父节点的完整名字后面加一段，例如 <code>research</code>、<code>research/review</code>、<code>research/plan</code>。不看 ID，只看名字，就知道这个子代理之前做了什么、后来做了什么。</li>
+<li>完整名字全局唯一，同一个父节点下不允许重名。</li>
+</ul>
+<h3 id="114-读摘要不读原始会话">11.4 读摘要，不读原始会话<a class="headerlink" href="#114-读摘要不读原始会话" title="Permanent link">&para;</a></h3>
+<p><code>reins context list</code> 和 <code>reins context show</code> 只显示每个节点的名字、Harness、模型、状态、观察到的结果和子代理报告的摘要。原始会话文件只给出路径，Reins 从不把它的内容打印出来：父 Agent 读子代理的完整会话会占满自己的上下文，<code>result.json</code> 里的报告摘要才是给它看的。</p>
+<h3 id="115-记录">11.5 记录<a class="headerlink" href="#115-记录" title="Permanent link">&para;</a></h3>
+<ul>
+<li>任务记录新增 <code>node</code>：<code>{"name": "research/review", "context": "1a2b3c4d", "lineage": {"from": "&lt;节点ID&gt;", "mode": "new" | "continue" | "fork"}}</code>。</li>
+<li><code>result.json</code> 的 <code>worker.session</code> 写入这个节点自己的 Harness 会话（Pi 为会话文件路径），<code>lineage</code> 与任务记录一致。</li>
+<li>上下文记录 <code>reins.context/1</code> 存在 <code>~/.reins/contexts/&lt;上下文ID&gt;.json</code>：<code>{"schema", "id", "harness", "cwd", "model", "expert", "nodes": [节点ID...], "parent": {"context", "node"} | null, "archived": false}</code>。</li>
+</ul>
+<h3 id="116-专家配置文件">11.6 专家配置文件<a class="headerlink" href="#116-专家配置文件" title="Permanent link">&para;</a></h3>
+<ul>
+<li>位置：<code>~/.reins/experts.yaml</code>，schema 为 <code>reins.experts/1</code>；可以用 <code>--experts &lt;文件&gt;</code> 临时指定别的文件。</li>
+<li><code>reins expert export &gt; experts.yaml</code> 把系统提示词文件内联进去，生成一个自包含的文件，拷到别的机器上用 <code>reins expert import experts.yaml</code> 导入。</li>
+<li>每个专家：<code>description</code>、<code>harness</code>、<code>model</code>、<code>reasoning</code>、<code>instructions</code>（或相对于配置文件的 <code>instructions_file</code>）、<code>report</code>（默认 true）。</li>
+<li><code>instructions</code> 加在任务提示词前面，而不是作为各 Harness 的系统提示词传入：三个 Harness 设置系统提示词的方式各不相同，统一放进提示词，同一份配置在任何 Harness 上表现一致。续写和分叉不会重复添加，它们已经在会话里了。</li>
+<li>现有的 <code>reins template</code> 由专家取代。</li>
+</ul>
+<h3 id="117-管理命令">11.7 管理命令<a class="headerlink" href="#117-管理命令" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>命令</th>
+<th>作用</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>reins context list</code></td>
+<td>以树状列出上下文和节点（名字、Harness、模型、状态、报告状态）</td>
+</tr>
+<tr>
+<td><code>reins context show &lt;节点&gt;</code></td>
+<td>一个上下文的完整链：每个节点的结果和报告摘要</td>
+</tr>
+<tr>
+<td><code>reins context archive &lt;节点&gt;</code></td>
+<td>归档整个上下文，不再出现在列表里</td>
+</tr>
+<tr>
+<td><code>reins expert list</code> / <code>show</code> / <code>import</code> / <code>export</code></td>
+<td>管理专家配置</td>
+</tr>
+</tbody>
+</table>
+<h2 id="参考资料">参考资料<a class="headerlink" href="#参考资料" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Codex App Server：https://developers.openai.com/codex/app-server</li>
+<li>Gemini CLI 无头模式：https://geminicli.com/docs/cli/headless.md ；钩子环境变量：https://geminicli.com/docs/hooks/reference.md</li>
+<li>Qwen Code 无头模式：https://qwenlm.github.io/qwen-code-docs/de/users/features/headless/</li>
+<li>OpenCode 插件：https://opencode.ai/docs/plugins/ ；CLI：https://opencode.ai/docs/zh-cn/cli</li>
+<li>Cursor CLI：https://cursor.com/docs/cli/overview</li>
+<li>Copilot CLI 命令参考：https://docs.github.com/en/copilot/reference/cli-command-reference</li>
+<li>Goose 无头模式：https://goose-docs.ai/docs/tutorials/headless-goose</li>
+<li>Amp（第三方资料）：https://littlebearapps.com/help/untether/amp-runner/</li>
+<li>Kimi CLI：https://www.kimi.com/code/docs/en/kimi-code-cli/reference/kimi-command ；ACP：https://www.kimi.com/code/docs/en/kimi-code-cli/reference/kimi-acp</li>
+<li>ACP 概览：https://www.philschmid.de/acp-overview</li>
+<li>A2A 推送通知：https://dev.to/nehigna/a2a-push-notifications-what-the-spec-guarantees-and-what-it-leaves-to-you-55i9</li>
+<li>LangGraph 中断与持久执行：https://docs.langchain.com/oss/python/langgraph/durable-execution</li>
+<li>Claude Code Channels（第三方资料）：https://www.atcyrus.com/stories/what-are-claude-code-channels</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  回到页面顶部
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      <script id="__config" type="application/json">{"base": "../..", "features": ["navigation.sections", "navigation.top", "navigation.footer", "search.suggest", "search.highlight", "content.code.copy", "content.action.edit"], "search": "../../assets/javascripts/workers/search.973d3a69.min.js", "tags": null, "translations": {"clipboard.copied": "\u5df2\u590d\u5236", "clipboard.copy": "\u590d\u5236", "search.result.more.one": "\u5728\u8be5\u9875\u4e0a\u8fd8\u6709 1 \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.more.other": "\u5728\u8be5\u9875\u4e0a\u8fd8\u6709 # \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.none": "\u6ca1\u6709\u627e\u5230\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.one": "\u627e\u5230 1 \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.other": "# \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.placeholder": "\u952e\u5165\u4ee5\u5f00\u59cb\u641c\u7d22", "search.result.term.missing": "\u7f3a\u5c11", "select.version": "\u9009\u62e9\u5f53\u524d\u7248\u672c"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.f55a23d4.min.js"></script>
+      
+    
+  </body>
+</html>
