@@ -8,6 +8,13 @@
         <xhtml:link rel="alternate" hreflang="en" href="https://lz59970062.github.io/harness-reins/en/"/>
     </url>
     <url>
+        <loc>https://lz59970062.github.io/harness-reins/benchmark/</loc>
+        <lastmod>2026-10-28</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="zh" href="https://lz59970062.github.io/harness-reins/benchmark/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="https://lz59970062.github.io/harness-reins/en/benchmark/"/>
+    </url>
+    <url>
         <loc>https://lz59970062.github.io/harness-reins/installation/</loc>
         <lastmod>2026-10-28</lastmod>
         <changefreq>daily</changefreq>
@@ -174,6 +181,13 @@
         <changefreq>daily</changefreq>
         <xhtml:link rel="alternate" hreflang="en" href="https://lz59970062.github.io/harness-reins/en/"/>
         <xhtml:link rel="alternate" hreflang="zh" href="https://lz59970062.github.io/harness-reins/"/>
+    </url>
+    <url>
+        <loc>https://lz59970062.github.io/harness-reins/en/benchmark/</loc>
+        <lastmod>2026-10-28</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="https://lz59970062.github.io/harness-reins/en/benchmark/"/>
+        <xhtml:link rel="alternate" hreflang="zh" href="https://lz59970062.github.io/harness-reins/benchmark/"/>
     </url>
     <url>
         <loc>https://lz59970062.github.io/harness-reins/en/installation/</loc>
