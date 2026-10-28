@@ -17,6 +17,11 @@
   --md-default-fg-color--lightest: #d8dee4;
   --reins-surface-2: #f6f8fa;
   --reins-border: #d8dee4;
+  --md-footer-bg-color: #f6f8fa;
+  --md-footer-bg-color--dark: #f6f8fa;
+  --md-footer-fg-color: #1f2328;
+  --md-footer-fg-color--light: #59636e;
+  --md-footer-fg-color--lighter: #818b98;
 }
 
 [data-md-color-scheme="slate"] {
@@ -34,6 +39,11 @@
   --md-code-bg-color: #151b23;
   --reins-surface-2: #151b23;
   --reins-border: #30363d;
+  --md-footer-bg-color: #151b23;
+  --md-footer-bg-color--dark: #151b23;
+  --md-footer-fg-color: #f0f6fc;
+  --md-footer-fg-color--light: #c3cbd4;
+  --md-footer-fg-color--lighter: #8b949e;
 }
 
 /* Header: the page's own surface with a hairline, not a coloured bar. */
@@ -96,10 +106,6 @@
 .md-typeset .reins-figure img { border-radius: .7rem; }
 .md-typeset .reins-scope { color: var(--md-default-fg-color--light); font-size: .74rem; }
 
-/* Footer in the site palette, not a black bar */
-.md-footer { background-color: var(--reins-surface-2); color: var(--md-default-fg-color); border-top: 1px solid var(--reins-border); }
-.md-footer__link, .md-footer__title { color: var(--md-default-fg-color); }
-.md-footer__direction { color: var(--md-default-fg-color--lighter); }
-.md-footer-meta { background-color: var(--reins-surface-2); border-top: 1px solid var(--reins-border); }
-.md-footer-meta, .md-footer-meta .md-copyright { color: var(--md-default-fg-color--lighter); }
-.md-footer-meta a, .md-footer-meta .md-copyright a { color: var(--md-default-fg-color--light); }
+/* Footer: Material's footer variables carry the colours (set per scheme above); add the hairlines. */
+.md-footer { border-top: 1px solid var(--reins-border); }
+.md-footer-meta { border-top: 1px solid var(--reins-border); }
