@@ -120,6 +120,8 @@ exclude_docs: |
   !/overview.en.md
   !/troubleshooting.md
   !/troubleshooting.en.md
+  !/benchmark.md
+  !/benchmark.en.md
   /requirements.txt
 nav:
   - 首页: index.md
