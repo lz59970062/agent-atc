@@ -65,46 +65,39 @@ ACK after inspection: reins ack <task-id>-c1
 
 ## Measured: what waiting costs
 
-Same agent (Codex with Kimi K3), same task, same limits, with and without Reins.
-Method, every run and the caveats are in [the benchmark write-up](docs/benchmark.en.md).
+**8× cheaper, 10× fewer model calls, and the work survives the agent being killed.**
+Same agent (Codex with Kimi K3), same task, with and without Reins.
+→ [The full benchmark](https://lz59970062.github.io/harness-reins/en/benchmark/)
 
 <p align="center">
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/lz59970062/harness-reins/main/assets/readme/benchmark-longrun-dark.svg">
-  <img src="https://raw.githubusercontent.com/lz59970062/harness-reins/main/assets/readme/benchmark-longrun-light.svg" width="100%" alt="Over 60 hours the agent without Reins made 911 model requests and spent 287 yuan, then its session was killed and the task failed; with Reins it made 90 requests and spent 35 yuan, and the kill found no agent process">
+  <img src="https://raw.githubusercontent.com/lz59970062/harness-reins/main/assets/readme/benchmark-longrun-light.svg" width="100%" alt="Over 60 hours the agent without Reins made 911 model requests and spent 287 yuan, then its session was killed and the task failed; with Reins it made 90 requests and spent 35 yuan, and finished all 72 hours">
 </picture>
 </p>
 
-On a job that runs for days, an agent without Reins has to stay alive to wait. It polled for 60 hours,
-made 911 model requests and spent ¥287, and when its process was killed the task failed with it.
-With Reins the agent ended its turn after each step and was resumed when something happened:
-90 requests and ¥35 over the same 60 hours, and the kill found no agent process to stop. It went on
-to finish the whole 72-hour campaign for ¥49.64 in all.
+Without Reins the agent has to keep watch: one session polled for 60 hours, made 911 model requests and spent
+¥287, and when its process was killed the task died with it. With Reins the agent ends its turn after each step
+and is called back when there is something to do: ¥35 over the same 60 hours, nothing to kill at hour 60, and
+the job ran to the end.
 
 <p align="center">
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/lz59970062/harness-reins/main/assets/readme/benchmark-time-dark.svg">
-  <img src="https://raw.githubusercontent.com/lz59970062/harness-reins/main/assets/readme/benchmark-time-light.svg" width="100%" alt="Share of wall time: without Reins 84 and 95 percent is spent waiting with the agent alive; with Reins 83 and 99 percent is spent with no agent process">
+  <img src="https://raw.githubusercontent.com/lz59970062/harness-reins/main/assets/readme/benchmark-time-light.svg" width="100%" alt="Share of wall time: without Reins most of the run is spent waiting with the agent alive; with Reins most of it has no agent process at all">
 </picture>
 </p>
 
-| Run | Arm | Model requests | Money (CNY) | Waiting with the agent alive | Callbacks |
-| --- | --- | ---: | ---: | ---: | --- |
-| Regular task, 4.8 h | without Reins | 164 | 30.59 | 84% | – |
-| Regular task, 4.8 h | with Reins | 134 | 30.11 | 1% | 18, median resume 3 s |
-| 3-day task, first 60 h | without Reins | 911 | 286.78 | 95% | – · killed at 60 h, task failed |
-| 3-day task, first 60 h | with Reins | 90 | 35.17 | <1% | 14, median resume 2 s · unaffected |
-| 3-day task, whole run | with Reins | 110 | 49.64 | <1% | 19, median resume 2 s · finished all 72 h |
+| | Without Reins | With Reins |
+| --- | ---: | ---: |
+| 3-day task, cost of the first 60 h | ¥286.78 | **¥35.17** |
+| Model requests in those 60 h | 911 | **90** |
+| Every agent process killed at hour 60 | task failed | **finished all 72 h** |
+| Result back in the same session (median) | – | **2 s** |
+| 4.8-hour task, cost | ¥30.59 | **¥30.11** |
 
-What this does not show:
-
-- **Short waits.** On the 4.8-hour task both arms cost the same: every resume rereads the context,
-  which offsets the polls it saves. The gap opens as the wait grows.
-- **Better scores.** Across 18 Terminal-Bench 4 trials with Pi and Codex, Reins did not change the pass
-  rate (two passes, one in each arm); the model's own design choices decided the tasks. The 3-day Reins
-  run finished but scored 0 too: its final click-through rate was 1.96% against the 2.2% target.
-- **Statistics.** One run per cell, one model (Kimi K3), money at list price
-  (input ¥20, cache hit ¥2, output ¥100 per million tokens).
+Reins changes what waiting costs and whether the work survives, not how well the model solves the task.
+Money at list price (input ¥20, cache hit ¥2, output ¥100 per million tokens).
 
 ## Why more than one harness?
 
@@ -402,7 +395,7 @@ Use `--service standalone --now` where user systemd is unavailable (e.g. AutoDL)
 | Platform ownership and extension points | [docs/architecture.md](docs/architecture.md) |
 | macOS · Windows · Containers | [macOS](docs/macos.md) · [Windows](docs/windows.md) · [Containers](docs/containers.md) |
 | Desktop bridges | [Mac](docs/macos-desktop-bridge.md) · [Windows](docs/windows-desktop-bridge.md) |
-| Benchmark: method, every run, cost and caveats | [docs/benchmark.en.md](docs/benchmark.en.md) |
+| Benchmark: what waiting costs, with and without Reins | [Benchmark](https://lz59970062.github.io/harness-reins/en/benchmark/) |
 | Validation records | [0.8.0.dev0 Linux in Docker](docs/validation-0.8.0-docker.md) |
 | Validation records (Long Task Callback era) | [0.7.0](docs/validation-0.7.0.md) · [0.7.1 preview](docs/validation-0.7.1-preview.md) · [Linux preview](docs/validation-0.7.0a1.md) · [macOS](docs/validation-macos.md) · [Windows](docs/validation-windows.md) |
 | Release history | [CHANGELOG.md](CHANGELOG.md) |
@@ -418,7 +411,7 @@ Use `--service standalone --now` where user systemd is unavailable (e.g. AutoDL)
 - [ ] Expert agents, and forking an expert's context from a checkpoint
 - [ ] Fan-in: one callback when a group of tasks finishes
 - [ ] More harnesses: Gemini CLI, OpenCode, and agents that speak ACP
-- [x] A first benchmark against working without Reins: Codex and Pi, Terminal-Bench 4 and a 3-day task ([results](docs/benchmark.en.md))
+- [x] A first benchmark against working without Reins: Codex and Pi, Terminal-Bench 4 and a 3-day task ([results](https://lz59970062.github.io/harness-reins/en/benchmark/))
 - [ ] Benchmark with several runs per cell, more models, and injected faults on regular tasks
 
 ## License

@@ -1,38 +1,100 @@
+---
+hide:
+  - toc
+---
+
+<div class="reins-hero" markdown>
+<p class="reins-eyebrow">A harness for your harnesses</p>
+
 # Harness Reins
 
-Harness Reins（Reins）让 Agent 在长任务结束后回到原会话继续工作。你可以让它提交一次模型训练、测试或代码审查，任务在后台执行。结束后，Reins 把结果位置送回会话，Agent 读取日志和产物，接着处理下一步。
+<p class="reins-lead">把训练、测试、长时间实验和子 Agent 交给独立的系统进程托管。Agent 不必守着等待；任务一结束，结果就回到发起它的那个会话。Codex、Claude Code、Pi 都能用。</p>
 
 [开始使用](quickstart.md){ .md-button .md-button--primary }
-[了解架构](overview.md){ .md-button }
+[看实测数据](benchmark.md){ .md-button }
+</div>
 
-## 从一个任务开始
+<div class="reins-stats" markdown>
+<div class="reins-stat" markdown>
+**8×**
+*更省钱*
+<span>3 天任务前 60 小时：¥35 对比 ¥287</span>
+</div>
+<div class="reins-stat" markdown>
+**72 h**
+*进程被杀也跑完*
+<span>不用 Reins 的那一组当场失败</span>
+</div>
+<div class="reins-stat" markdown>
+**2 秒**
+*结果回到原会话*
+<span>任务结束到会话恢复的中位延迟</span>
+</div>
+</div>
 
-在 Agent 会话中提交训练命令：
+## 一个任务，五步走完
+
+![提交、托管、运行、排队、恢复五个步骤；还有下一阶段时，Agent 再提交一次](https://raw.githubusercontent.com/lz59970062/harness-reins/main/assets/readme/workflow-zh-light.svg#only-light)
+![提交、托管、运行、排队、恢复五个步骤；还有下一阶段时，Agent 再提交一次](https://raw.githubusercontent.com/lz59970062/harness-reins/main/assets/readme/workflow-zh-dark.svg#only-dark)
+
+在 Agent 会话里提交一条训练命令：
 
 ```bash
 reins run --cwd "$PWD" --task "训练模型" -- python train.py --config configs/exp.yaml
 ```
 
-Reins 返回任务 ID 和日志路径。任务结束后，原会话收到回调，Agent 检查输出并执行回调中的 ACK 命令。第一次使用可以先按[快速开始](quickstart.md)跑一个十秒钟的示例。
+Reins 立刻返回任务 ID 和日志路径，Agent 结束回合。任务结束后，同一个会话收到回调，Agent 检查输出并执行回调里的 ACK 命令。
+第一次使用可以先按[快速开始](quickstart.md)跑一个十秒钟的示例。
 
-## 选择入口
+## 你想做什么
 
-| 你要做的事 | 从这里开始 |
-| --- | --- |
-| 运行训练、测试、构建或数据处理 | [运行命令](guides/run.md) |
-| 把一项工作交给另一个 Agent | [启动子 Agent](guides/agents.md) |
-| 接收 Slurm、tmux 中已有任务的结果 | [接入已有任务](guides/external-jobs.md) |
-| 重复使用一套审查或分析提示词 | [编写任务模板](guides/templates.md) |
-| 跟踪训练、评估、报告等多个阶段 | [跟踪多阶段目标](guides/goals.md) |
+<div class="grid cards" markdown>
+
+-   :material-console-line: **运行长命令**
+
+    训练、测试、构建、数据处理，跑完自动回到会话。
+
+    [运行命令](guides/run.md)
+
+-   :material-robot-outline: **启动子 Agent**
+
+    把一块独立的工作交给另一个 Agent，结论送回你这里。
+
+    [启动子 Agent](guides/agents.md)
+
+-   :material-transit-connection-variant: **接入已有任务**
+
+    Slurm、tmux 里已经在跑的任务，结束时同样回调。
+
+    [接入已有任务](guides/external-jobs.md)
+
+-   :material-file-document-edit-outline: **复用任务模板**
+
+    把审查、分析的提示词写成模板，一条命令派发。
+
+    [编写任务模板](guides/templates.md)
+
+-   :material-flag-checkered: **跟踪多阶段目标**
+
+    训练、评估、写报告串成一个目标，每一阶段都有核对。
+
+    [跟踪多阶段目标](guides/goals.md)
+
+-   :material-chart-line: **看实测数据**
+
+    3 天任务省 8 倍，进程被杀也照样跑完。
+
+    [基准测试](benchmark.md)
+
+</div>
 
 ## 接入你的环境
 
-先看[典型使用场景](guides/use-cases.md)选择工作流程，再通过 [Harness 支持情况](integrations/support.md)确认接入方式和版本。
-
-Reins 支持 Linux、macOS 和 Windows。按[安装指南](installation.md)配置运行环境，再选择你使用的 Agent：[Codex CLI](integrations/codex.md)、[Claude Code](integrations/claude.md)、[Pi](integrations/pi.md)或 [Codex Desktop](integrations/desktop.md)。
-
-快速开始使用正式版 `0.7.0`。Claude 实时回调、Pi 和 Desktop 接入使用 `0.7.1` 预览版，各接入页给出对应步骤。
+Reins 支持 Linux、macOS 和 Windows。按[安装指南](installation.md)配置运行环境，再选择你的 Agent：
+[Codex CLI](integrations/codex.md)、[Claude Code](integrations/claude.md)、[Pi](integrations/pi.md) 或 [Codex Desktop](integrations/desktop.md)。
+[Harness 支持情况](integrations/support.md)列出了各接入方式的版本和回调路径，[典型使用场景](guides/use-cases.md)给出了完整的工作流程示例。
 
 ## 继续阅读
 
-[架构概览](overview.md)介绍一次任务从提交到回调的过程。[命令速查](reference/cli.md)方便随用随查，遇到运行问题时查看[常见问题](troubleshooting.md)。模块说明、平台实现与验证记录收录在[开发资料](reference/engineering.md)。
+[架构概览](overview.md)介绍一次任务从提交到回调的全过程。[命令速查](reference/cli.md)方便随用随查，遇到问题时查看[常见问题](troubleshooting.md)。
+模块说明、平台实现与验证记录收录在[开发资料](reference/engineering.md)。

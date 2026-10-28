@@ -6,8 +6,8 @@
 <text x="32" y="62" font-size="13" fill="#59636e">Codex + Kimi K3, same task and model in both arms. At 60 h every Codex process in both containers was killed.</text>
 <rect x="32" y="81" width="14" height="4" rx="2" fill="#eb6834"/>
 <text x="52" y="87" font-size="12" fill="#59636e">Without Reins: one Codex session polls the whole time</text>
-<rect x="409.79999999999995" y="81" width="14" height="4" rx="2" fill="#2a78d6"/>
-<text x="429.79999999999995" y="87" font-size="12" fill="#59636e">With Reins: Codex ends its turn, Reins resumes it per event</text>
+<rect x="417.8" y="81" width="14" height="4" rx="2" fill="#2a78d6"/>
+<text x="437.8" y="87" font-size="12" fill="#59636e">With Reins: Codex ends its turn, Reins resumes it per event</text>
 <text x="74" y="128" font-size="14" font-weight="600" fill="#1f2328">Money spent (CNY, list price)</text>
 <line x1="74" x2="390" y1="370.0" y2="370.0" stroke="#c8d1da" stroke-width="1"/>
 <text x="66" y="374.0" font-size="11" fill="#818b98" text-anchor="end" style="font-variant-numeric: tabular-nums">¥0</text>

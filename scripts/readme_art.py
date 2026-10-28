@@ -8,6 +8,7 @@ switches between the two files with <picture> and prefers-color-scheme.
 """
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 
@@ -74,22 +75,63 @@ def wrap(text: str, width: int) -> list[str]:
     return lines + ([line] if line else [])
 
 
-def workflow(t: dict) -> str:
-    steps = [
-        ("Submit", "The agent calls reins run or reins agent; the task is durable before it returns.", "session bound"),
-        ("Own", "The OS starts a separate task service, not a child of the agent or the daemon.", "systemd · launchd · schtasks"),
-        ("Run", "The job runs for minutes or days. The agent has ended its turn; nothing polls.", "no model calls"),
-        ("Queue", "On exit, Reins stores the result and queues one callback for that session.", "at-least-once"),
-        ("Resume", "The same session wakes, inspects the result and runs reins ack.", "explicit ACK"),
-    ]
+WORKFLOW = {
+    "en": {
+        "steps": [
+            ("Submit", "The agent calls reins run or reins agent; the task is durable before it returns.", "session bound"),
+            ("Own", "The OS starts a separate task service, not a child of the agent or the daemon.", "OS-native owner"),
+            ("Run", "The job runs for minutes or days. The agent has ended its turn; nothing polls.", "no model calls"),
+            ("Queue", "On exit, Reins stores the result and queues one callback for that session.", "at-least-once"),
+            ("Resume", "The same session wakes, inspects the result and runs reins ack.", "explicit ACK"),
+        ],
+        "eyebrow": "HOW A CALLBACK WORKS",
+        "sub": "Codex resumes with codex exec resume · Claude Code with a background reins wait · Pi through its extension",
+        "loop": "more to do? the agent submits the next stage and the loop repeats",
+    },
+    "zh": {
+        "steps": [
+            ("提交", "Agent 调用 reins run 或 reins agent，返回之前任务已经落盘。", "绑定原会话"),
+            ("托管", "由操作系统启动独立的任务服务，不是 Agent 或守护进程的子进程。", "系统原生托管"),
+            ("运行", "任务跑几分钟到几天。Agent 已结束回合，没有任何轮询。", "零模型调用"),
+            ("排队", "任务退出后，Reins 保存结果，为那个会话排入一条回调。", "至少投递一次"),
+            ("恢复", "同一个会话醒来，检查结果，执行 reins ack。", "显式 ACK"),
+        ],
+        "eyebrow": "一次回调怎么走完",
+        "sub": "Codex 通过 codex exec resume 恢复 · Claude Code 通过后台 reins wait · Pi 通过扩展",
+        "loop": "还有下一步？Agent 再提交一次，循环继续",
+    },
+}
+
+
+def text_width(text: str, size: float) -> float:
+    return sum(size * (1.0 if ord(ch) > 0x2E80 else 0.55) for ch in text)
+
+
+def wrap_width(text: str, size: float, limit: float) -> list[str]:
+    """Wrap Latin text at spaces and CJK text between characters, by rendered width."""
+    tokens = re.findall(r"[\u2e80-\uffff]|[^\s\u2e80-\uffff]+|\s+", text)
+    lines, line = [], ""
+    for token in tokens:
+        candidate = line + token
+        # Closing punctuation never starts a line; it stays with the text before it.
+        if line and not token.isspace() and token not in "，。、；：？！）」』%" and text_width(candidate.rstrip(), size) > limit:
+            lines.append(line.rstrip())
+            line = token
+        elif not (token.isspace() and not line):
+            line = candidate
+    return lines + ([line.rstrip()] if line.strip() else [])
+
+
+def workflow(t: dict, lang: str = "en") -> str:
+    words = WORKFLOW[lang]
     out, x, cw, gap = [], 40, 204, 25
-    for index, (name, text, foot) in enumerate(steps):
-        last = index == len(steps) - 1
+    for index, (name, text, foot) in enumerate(words["steps"]):
+        last = index == len(words["steps"]) - 1
         out.append(f'<rect x="{x}" y="92" width="{cw}" height="182" rx="10" fill="{t["accent_wash"] if last else t["card"]}" '
                    f'stroke="{t["accent"] if last else t["border"]}"/>')
         out.append(f'<text x="{x + 18}" y="124" font-size="12" font-weight="600" font-family="{MONO}" fill="{t["accent"]}">{index + 1:02d}</text>')
         out.append(f'<text x="{x + 46}" y="124" font-size="16" font-weight="650" fill="{t["ink"]}">{esc(name)}</text>')
-        for row, line in enumerate(wrap(text, 25)):
+        for row, line in enumerate(wrap_width(text, 13.5, cw - 36)):
             out.append(f'<text x="{x + 18}" y="{156 + row * 21}" font-size="13.5" fill="{t["ink2"]}">{esc(line)}</text>')
         out.append(f'<text x="{x + 18}" y="256" font-size="11.5" font-family="{MONO}" fill="{t["muted"]}">{esc(foot)}</text>')
         if not last:
@@ -97,15 +139,15 @@ def workflow(t: dict) -> str:
             out.append(f'<path d="M{ax},183 L{ax + gap - 9},183" stroke="{t["muted"]}" stroke-width="1.5"/>')
             out.append(f'<path d="M{ax + gap - 10},178 L{ax + gap - 4},183 L{ax + gap - 10},188 Z" fill="{t["muted"]}"/>')
         x += cw + gap
-    # The goal loop: from Resume back to Submit, solid hairline.
+    # The goal loop: from Resume back to Submit, solid hairline, its label on a surface patch.
     lx0, lx1 = 40 + cw / 2, 40 + 4 * (cw + gap) + cw / 2
+    half = text_width(words["loop"], 13) / 2 + 14
     out.append(f'<path d="M{lx1},274 L{lx1},314 L{lx0},314 L{lx0},282" fill="none" stroke="{t["muted"]}" stroke-width="1.5"/>')
     out.append(f'<path d="M{lx0 - 5},288 L{lx0},281 L{lx0 + 5},288 Z" fill="{t["muted"]}"/>')
-    out.append(f'<rect x="{(lx0 + lx1) / 2 - 238}" y="303" width="476" height="22" fill="{t["surface"]}"/>')
-    out.append(f'<text x="{(lx0 + lx1) / 2}" y="319" font-size="13" fill="{t["ink2"]}" text-anchor="middle">'
-               f'more to do? the agent submits the next stage and the loop repeats</text>')
-    head = (f'<text x="40" y="56" font-size="13" font-weight="600" letter-spacing="1.6" fill="{t["accent"]}">HOW A CALLBACK WORKS</text>'
-            f'\n<text x="40" y="76" font-size="13" fill="{t["muted"]}">Codex resumes with codex exec resume · Claude Code with a background reins wait · Pi through its extension</text>')
+    out.append(f'<rect x="{(lx0 + lx1) / 2 - half:.1f}" y="303" width="{2 * half:.1f}" height="22" fill="{t["surface"]}"/>')
+    out.append(f'<text x="{(lx0 + lx1) / 2}" y="319" font-size="13" fill="{t["ink2"]}" text-anchor="middle">{esc(words["loop"])}</text>')
+    head = (f'<text x="40" y="56" font-size="13" font-weight="600" letter-spacing="1.6" fill="{t["accent"]}">{esc(words["eyebrow"])}</text>'
+            f'\n<text x="40" y="76" font-size="13" fill="{t["muted"]}">{esc(words["sub"])}</text>')
     return frame(t, 1200, 350, "How a Harness Reins callback works",
                  "Five steps: submit, own, run, queue, resume; a loop returns from resume to submit for the next stage.",
                  head + "\n" + "\n".join(out))
@@ -117,6 +159,7 @@ def main() -> None:
     for mode, t in THEMES.items():
         (out / f"hero-{mode}.svg").write_text(hero(t))
         (out / f"workflow-{mode}.svg").write_text(workflow(t))
+        (out / f"workflow-zh-{mode}.svg").write_text(workflow(t, "zh"))
     print(f"wrote hero and workflow (light, dark) to {out}")
 
 

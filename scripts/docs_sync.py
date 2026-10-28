@@ -41,20 +41,38 @@ def check(config):
 
 
 def portable_markdown(content):
-    """Convert Material buttons and content tabs into plain Markdown."""
+    """Convert Material-only markup into plain Markdown.
+
+    Buttons become links, content tabs and collapsible notes become headings,
+    layout wrappers (hero, stat tiles, card grids) are dropped while their text
+    stays, icon shortcodes go, and of a light/dark image pair only the light
+    image is kept.
+    """
+    content = re.sub(r"\A---\n.*?\n---\n+", "", content, flags=re.S)  # MkDocs page options
     content = re.sub(r"\{\s*\.md-button[^}]*\}", "", content)
+    content = re.sub(r":material-[a-z0-9-]+:\s*", "", content)
+    content = re.sub(r'<p class="[^"]*">(.*?)</p>', r"\1", content)
+    content = re.sub(r"</?span>", "", content)
+    content = content.replace("#only-light)", ")")
     lines = []
-    in_tab = False
+    in_block = False
     for line in content.splitlines():
+        if "#only-dark)" in line:
+            continue
+        if re.fullmatch(r"\s*</?div\b[^>]*>\s*", line):
+            if lines and lines[-1].strip():
+                lines.append("")  # each tile or card stays its own paragraph
+            continue
         tab = re.fullmatch(r'=== "(.+)"', line)
-        if tab:
-            lines.append("### " + tab.group(1))
-            in_tab = True
-        elif in_tab and line.startswith("    "):
+        note = re.fullmatch(r'(?:\?\?\?\+?|!!!) \w+ "(.+)"', line)
+        if tab or note:
+            lines.append("### " + tab.group(1) if tab else "**" + note.group(1) + "**")
+            in_block = True
+        elif in_block and line.startswith("    "):
             lines.append(line[4:])
         else:
             if line.strip():
-                in_tab = False
+                in_block = False
             lines.append(line)
     return "\n".join(lines).rstrip() + "\n"
 

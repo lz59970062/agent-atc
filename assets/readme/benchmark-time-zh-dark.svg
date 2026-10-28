@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="330" viewBox="0 0 960 330" role="img" aria-labelledby="t d" font-family="system-ui, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
+<title id="t">Harness Reins time breakdown</title>
+<desc id="d">Share of wall time spent on model and tools, waiting with the agent alive, and waiting with no agent process.</desc>
+<rect x="0.5" y="0.5" width="959" height="329" rx="12" fill="#0d1117" stroke="#30363d"/>
+<text x="32" y="40" font-size="18" font-weight="650" fill="#f0f6fc">墙钟时间都去哪了</text>
+<text x="32" y="62" font-size="13" fill="#c3cbd4">各次运行的时间占比。不用 Reins，Agent 一直活着等；用 Reins，等待时根本没有 Agent 在运行。</text>
+<rect x="32" y="81" width="14" height="4" rx="2" fill="#199e70"/>
+<text x="52" y="87" font-size="12" fill="#c3cbd4">模型与工具</text>
+<rect x="128.0" y="81" width="14" height="4" rx="2" fill="#d95926"/>
+<text x="148.0" y="87" font-size="12" fill="#c3cbd4">等待中，Agent 进程活着</text>
+<rect x="299.6" y="81" width="14" height="4" rx="2" fill="#3987e5"/>
+<text x="319.6" y="87" font-size="12" fill="#c3cbd4">等待中，没有 Agent 进程</text>
+<text x="32" y="124" font-size="13" font-weight="600" fill="#f0f6fc">常规任务 · 4.8 小时（ctr-optimization）</text>
+<text x="48" y="155" font-size="12" fill="#c3cbd4">不用 Reins</text>
+<rect x="170.0" y="140" width="79.4" height="22" rx="3" fill="#199e70"/>
+<text x="210.7" y="155.5" font-size="11.5" font-weight="600" fill="#ffffff" text-anchor="middle">16%</text>
+<rect x="251.4" y="140" width="438.6" height="22" rx="3" fill="#d95926"/>
+<text x="470.7" y="155.5" font-size="11.5" font-weight="600" fill="#ffffff" text-anchor="middle">84%</text>
+<text x="704" y="155" font-size="12" fill="#c3cbd4" style="font-variant-numeric: tabular-nums">164 次请求 · ¥31</text>
+<text x="48" y="189" font-size="12" fill="#c3cbd4">用 Reins</text>
+<rect x="170.0" y="174" width="81.9" height="22" rx="3" fill="#199e70"/>
+<text x="211.9" y="189.5" font-size="11.5" font-weight="600" fill="#ffffff" text-anchor="middle">16%</text>
+<rect x="257.4" y="174" width="432.6" height="22" rx="3" fill="#3987e5"/>
+<text x="473.7" y="189.5" font-size="11.5" font-weight="600" fill="#ffffff" text-anchor="middle">83%</text>
+<text x="704" y="189" font-size="12" fill="#c3cbd4" style="font-variant-numeric: tabular-nums">134 次请求 · ¥30</text>
+<text x="32" y="226" font-size="13" font-weight="600" fill="#f0f6fc">3 天任务 · 各组完整运行（ctr-3day）</text>
+<text x="48" y="257" font-size="12" fill="#c3cbd4">不用 Reins</text>
+<rect x="170.0" y="242" width="22.7" height="22" rx="3" fill="#199e70"/>
+<rect x="194.7" y="242" width="495.3" height="22" rx="3" fill="#d95926"/>
+<text x="442.4" y="257.5" font-size="11.5" font-weight="600" fill="#ffffff" text-anchor="middle">95%</text>
+<text x="704" y="257" font-size="12" fill="#c3cbd4" style="font-variant-numeric: tabular-nums">60 小时被杀 · 911 次请求 · ¥287</text>
+<text x="48" y="291" font-size="12" fill="#c3cbd4">用 Reins</text>
+<rect x="170.0" y="276" width="3.7" height="22" rx="3" fill="#199e70"/>
+<rect x="176.0" y="276" width="514.0" height="22" rx="3" fill="#3987e5"/>
+<text x="433.0" y="291.5" font-size="11.5" font-weight="600" fill="#ffffff" text-anchor="middle">99%</text>
+<text x="704" y="291" font-size="12" fill="#c3cbd4" style="font-variant-numeric: tabular-nums">跑完 72 小时 · 110 次请求 · ¥50</text>
+</svg>

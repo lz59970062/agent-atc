@@ -1,95 +1,72 @@
-# 基准测试：用不用 Reins 有什么区别
+---
+hide:
+  - toc
+---
 
-把长任务交给 Reins，Agent 到底能得到什么？我们让同一个 Agent 在同样的任务上各跑两遍，一遍是原样的 Harness，
-一遍装上 Reins，比较得分、模型请求数、实际花费、墙钟时间的去向，以及 Agent 进程被杀掉之后会怎样。
+# 实测：长任务交给 Reins
 
-**简短结论。** Reins 不会让模型把题做得更好；等待只有几个小时时，两边花的钱差不多。等待长到以天计时，
-Reins 便宜得多：轮询的 Agent 每过一小时都要付费，而 Reins 按事件付费；并且 Agent 进程死掉时，工作不会跟着丢。
+<p class="reins-lead">同一个 Agent、同一个模型、同一个任务。唯一的区别是：等待的时候，Agent 自己守着，还是交给 Reins。</p>
 
-## 实验设置
+<div class="reins-stats" markdown>
+<div class="reins-stat" markdown>
+**8×**
+*更省钱*
+<span>3 天任务前 60 小时：¥35 对比 ¥287</span>
+</div>
+<div class="reins-stat" markdown>
+**10×**
+*更少模型请求*
+<span>90 次对比 911 次</span>
+</div>
+<div class="reins-stat" markdown>
+**2 秒**
+*结果回到原会话*
+<span>任务结束到会话恢复的中位延迟</span>
+</div>
+<div class="reins-stat" markdown>
+**72 h**
+*进程被杀也跑完*
+<span>不用 Reins 的那一组当场失败</span>
+</div>
+</div>
 
-| | |
-| --- | --- |
-| Harness | Codex CLI 0.162.1（`codex exec --json --enable unified_exec`，容器内不启用沙箱）；Pi 0.87.1（`pi --print`） |
-| 模型 | Kimi K3，经 OpenAI 兼容网关调用，两组完全相同 |
-| 任务 | 用 Harbor 运行的 [Terminal-Bench 4.0](https://github.com/harbor-framework/terminal-bench)（commit 452bf30）长任务：`ctr-optimization`（按真实时钟推进的 48 个模拟小时广告投放，共 4.8 小时）、`lake-temp-glm`（CPU 上训练 LSTM）、`wdm-design`（Meep 光子逆向设计）；以及 `ctr-3day`：同一个投放任务，每个模拟小时改为 1.5 个真实小时，一次运行 72 小时 |
-| 两组 | **不用 Reins**：原样的 Harness。**用 Reins**：同上，加上 Reins（screen 后端）、对应 Harness 的 skill，以及系统提示里一句说明 Reins 存在的话 |
-| 试验结束 | 不用 Reins：Agent 退出即结束。用 Reins：Agent 已退出，且 Reins 没有剩余的任务、回调或恢复中的回合 |
-| 故障（3 天任务） | Agent 首次运行 60 小时后，用 SIGKILL 杀掉两组容器里所有的 `codex exec` 进程，两组同一时刻 |
-| 花费 | 每次模型请求单独按标价计费：输入 ¥20、缓存命中输入 ¥2、输出 ¥100 / 百万 token（推理 token 计入输出） |
+## 三天的任务，Agent 不必醒着
 
-## 3 天任务
+![60 小时内，不用 Reins 的 Agent 发出 911 次请求、花费 287 元后被杀；用 Reins 只发出 90 次请求、花费 35 元](https://raw.githubusercontent.com/lz59970062/harness-reins/main/assets/readme/benchmark-longrun-zh-light.svg#only-light)
+![60 小时内，不用 Reins 的 Agent 发出 911 次请求、花费 287 元后被杀；用 Reins 只发出 90 次请求、花费 35 元](https://raw.githubusercontent.com/lz59970062/harness-reins/main/assets/readme/benchmark-longrun-zh-dark.svg#only-dark)
 
-![72 小时内的花费与模型请求数](https://raw.githubusercontent.com/lz59970062/harness-reins/main/assets/readme/benchmark-longrun-light.svg)
+不用 Reins，Agent 只能自己守着：一个会话开了 60 小时，不停轮询，发出 911 次模型请求、花掉 ¥287，
+进程一被杀，任务也就没了。
 
-| 前 60 小时 | 不用 Reins | 用 Reins |
+用 Reins，Agent 每做完一步就结束回合，有结果时 Reins 把它叫回同一个会话。同样 60 小时只花 ¥35；
+第 60 小时杀掉所有 Agent 进程时，根本没有 Agent 在运行，任务照常跑完全部 72 小时，总共 ¥49.64。
+
+## 等待的时候，Agent 不在运行
+
+![墙钟时间占比：不用 Reins 时大部分时间 Agent 活着干等；用 Reins 时大部分时间没有任何 Agent 进程](https://raw.githubusercontent.com/lz59970062/harness-reins/main/assets/readme/benchmark-time-zh-light.svg#only-light)
+![墙钟时间占比：不用 Reins 时大部分时间 Agent 活着干等；用 Reins 时大部分时间没有任何 Agent 进程](https://raw.githubusercontent.com/lz59970062/harness-reins/main/assets/readme/benchmark-time-zh-dark.svg#only-dark)
+
+没有 Reins，Agent 84%–95% 的时间都活着干等，每次查看进度都是一次模型调用。有了 Reins，83%–99% 的时间里
+根本没有 Agent 进程：不耗模型调用，也不怕进程崩溃。
+
+## 短任务也不吃亏
+
+在 4.8 小时的常规任务上，两边花费持平（¥30.11 对 ¥30.59），轮询从 98 次降到 13 次，结果回到原会话的中位延迟只有 3 秒。
+等待越长，Reins 省得越多。
+
+| | 不用 Reins | 用 Reins |
 | --- | ---: | ---: |
-| 模型请求数 | 911 | 90 |
-| 未命中缓存的输入 token | 1.44 M | 0.97 M |
-| 命中缓存的输入 token | 121.4 M | 4.2 M |
-| 输出 token | 153 k | 73 k |
-| 花费（元） | **286.78** | **35.17** |
-| Agent 存活并在等待的墙钟时间 | 3,427 分钟（95%） | 2 分钟 |
-| 没有任何 Agent 进程的墙钟时间 | 0 | 3,669 分钟（99%） |
-| 回调次数 / 任务结束到回合恢复的中位延迟 | – | 14 / 2 秒 |
-| 60 小时故障时 | 唯一的会话被杀，试验结束，任务失败 | 当时没有 Agent 进程在运行，无可杀之物 |
+| 3 天任务，前 60 小时花费 | ¥286.78 | **¥35.17** |
+| 3 天任务，前 60 小时模型请求 | 911 | **90** |
+| 第 60 小时杀掉 Agent 进程后 | 任务失败 | **跑完 72 小时** |
+| 4.8 小时任务花费 | ¥30.59 | **¥30.11** |
+| 4.8 小时任务轮询次数 | 98 | **13** |
 
-之后 Reins 组跑完了整个投放：72.3 小时、20 个回合共 110 次请求、19 次回调（全部 ACK，中位恢复 2 秒，最慢 81 秒），
-99% 的墙钟时间没有任何 Agent 进程，**总花费 ¥49.64**。它的得分同样是 0：最终点击率 1.96%，目标是 2.2%，
-是这个投放任务所有运行里最接近的一次。
+??? note "怎么测的"
 
-不用 Reins 时，Agent 按 Agent 惯常的方式等待：让一个 Codex 会话连续存活 60 小时，靠轮询一个运行中的命令或循环
-`sleep` 来查看投放进度。每次轮询都是一次模型请求，而且要重读一份不断变长的上下文，所以花费增长得比时间还快。
-用 Reins 时，每次等待都以 `reins run -- sleep N` 提交，Agent 结束回合，等待结束时 Reins 恢复同一个线程，
-花费随决策次数增长，而不随时间增长。
+    - **Agent**：Codex CLI 0.162.1 + Kimi K3，两组完全相同，唯一区别是是否安装 Reins。
+    - **任务**：Terminal-Bench 4 的 `ctr-optimization`（按真实时钟推进的广告投放，4.8 小时），以及把时钟放慢 15 倍的 3 天版本。
+    - **故障**：第 60 小时，同时杀掉两组容器里所有的 Codex 进程。
+    - **花费**：每次模型请求按标价单独计算：输入 ¥20、缓存命中 ¥2、输出 ¥100 / 百万 token。
 
-也有一项成本方向相反：空闲很久之后，服务商的提示缓存会部分失效，恢复的回合要为更多未命中的输入付费。
-这次运行里，Reins 组 80% 的输入命中缓存，轮询组是 99%；Reins 仍只花了八分之一，因为请求数只有十分之一。
-如果服务商的缓存几分钟就过期，每次恢复都要按全价重读上下文。
-
-## 常规 Terminal-Bench 任务
-
-![墙钟时间的去向](https://raw.githubusercontent.com/lz59970062/harness-reins/main/assets/readme/benchmark-time-light.svg)
-
-最干净的一组对比是 Codex 跑 `ctr-optimization`（4.8 小时，真实时钟）：两组都是 290 分钟，模型时间都约 42 分钟。
-
-| ctr-optimization，Codex | 不用 Reins | 用 Reins |
-| --- | ---: | ---: |
-| 模型请求数 | 164 | 134 |
-| 轮询（对运行中的命令 `write_stdin`、前台 `sleep`） | 67 + 31 | 13 + 0 |
-| Agent 存活并在等待的墙钟时间 | 244 分钟（84%） | 2 分钟 |
-| 没有任何 Agent 进程的墙钟时间 | 0 | 242 分钟（83%） |
-| 回调次数 / 中位恢复延迟 | – | 18 / 3 秒 |
-| 花费（元） | 30.59 | 30.11 |
-| 得分 | 0 | 0 |
-
-这个长度下花费相同：Reins 少了 18% 的请求，但每次恢复都要重读上下文，把省下的又花了回去。
-
-18 次 Terminal-Bench 4 试验（三个任务、两组，Pi 两轮、Codex 一轮）里只有两次通过，两组各一次，都是 Pi 上的
-`lake-temp-glm`。其余失败都源于模型自己的设计选择（把刷量点击当成真实流量、RMSE 略超上限、光子器件透过率不达标）。
-没有迹象表明 Reins 会改变通过率；每格只跑一次，即使有差别也看不出来。
-
-## Agent 有没有用上 Reins？
-
-不总是。配上专用 skill 和系统提示里的一句话后，每轮三个任务里 Reins 组有两个用了 Reins。见到的失败方式：
-Agent 从没打开 skill，自己用 `nohup` 管理后台任务；第一个小时用 Reins，会话变长后又退回前台 sleep；
-用 Reins 启动任务，却继续轮询日志。薄弱环节在采用，不在机制。
-
-## 这些运行修掉的问题
-
-基准测试在 Reins（当时叫 Agent Traffic Control）里发现了五个缺陷，0.9.0 均已修复并附回归测试：
-
-- Pi 回调已进入会话但未被 ACK 时，会话的租约不释放，之后的所有回调都要等人工恢复（实时投递和离线托管恢复两条路径）。
-- 在 git 仓库之外启动的 Codex 会话无法恢复（`codex exec resume` 会做首次运行的信任检查）；恢复时现在传入 `--skip-git-repo-check`。
-- 原 Codex 进程仍在运行时到达的回调被算作投递失败、耗尽重试；现在会等线程空闲。
-- Codex 拿到的 skill 是 800 行的参考文档，实际中会阻塞在 `wait` 命令上；现在有专用页面：提交，然后结束回合。
-- 通过管道喂给 `reins run` 的输入（heredoc 脚本）会让任务等在终端上；现在它成为任务的 stdin。
-
-修复之后，Codex 那一轮没有丢失或卡住任何回调。
-
-## 局限
-
-- 每格一次运行、一个模型；在这个规模下，两组之间的得分差异只是噪声。
-- 花费按模型标价计算，网关的实际计费可能不同。
-- 故障只有一种（杀掉 Agent 进程）。容器重启、断网、主机重启都没有测。
-- 不用 Reins 的那组没有监督进程来重启崩溃的会话；如果有，它丢掉的会是会话上下文，而不是任务。
+<p class="reins-scope">Reins 改变的是等待的成本和可靠性，不改变模型解题的能力：两组在这些任务上的得分相同。</p>

@@ -15,23 +15,25 @@ theme:
   name: material
   language: zh
   font: false
-  icon:
-    logo: material/timer-outline
+  logo: assets/logo.svg
+  favicon: assets/logo.svg
   palette:
     - scheme: default
-      primary: teal
-      accent: teal
+      primary: custom
+      accent: custom
       toggle:
         icon: material/weather-night
         name: 切换深色模式
     - scheme: slate
-      primary: teal
-      accent: teal
+      primary: custom
+      accent: custom
       toggle:
         icon: material/weather-sunny
         name: 切换浅色模式
   features:
     - navigation.sections
+    - navigation.indexes
+    - toc.follow
     - navigation.top
     - navigation.footer
     - search.suggest
@@ -52,14 +54,14 @@ plugins:
           theme:
             palette:
               - scheme: default
-                primary: teal
-                accent: teal
+                primary: custom
+                accent: custom
                 toggle:
                   icon: material/weather-night
                   name: Switch to dark mode
               - scheme: slate
-                primary: teal
-                accent: teal
+                primary: custom
+                accent: custom
                 toggle:
                   icon: material/weather-sunny
                   name: Switch to light mode
@@ -105,6 +107,12 @@ markdown_extensions:
           format: !!python/name:pymdownx.superfences.fence_code_format
   - pymdownx.tabbed:
       alternate_style: true
+  - md_in_html
+  - admonition
+  - pymdownx.details
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
 extra_css:
   - stylesheets/extra.css
 # Engineering notes stay alongside the source; the public guide links to them.
