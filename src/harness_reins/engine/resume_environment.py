@@ -30,6 +30,8 @@ EXCLUDED = (
     "INVOCATION_ID", "JOURNAL_STREAM", "SYSTEMD_EXEC_PID", "STY", "WINDOW", "XPC_SERVICE_NAME", "XPC_FLAGS",
     "CLAUDE_CODE_ENTRYPOINT", "CODEX_INTERNAL_ORIGINATOR_OVERRIDE", "REINS_FORWARDED",
     "CODEX_LONG_TASK_DELIVERY_LOCK_FDS", "CODEX_LONG_TASK_DELIVERY_LOCK_FD",
+    # Names the target lock of the resume that captured it; only that resume holds it.
+    "REINS_RESUMED_TARGET",
 )
 # The coordinator's own queue and lock locations always win over the session's.
 COORDINATOR_OWNED = (layout.REINS_HOME_ENV, layout.TARGET_LOCK_DIR_ENV)

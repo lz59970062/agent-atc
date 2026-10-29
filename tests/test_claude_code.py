@@ -306,6 +306,81 @@ class LiveWaiterTests(unittest.TestCase):
             queue_store.release_owner_lock(target_lock, remove=False)
         self.assertEqual(self.run_wait()[0], 0)
 
+    def test_submission_holds_callbacks_for_the_waiter_it_asks_for(self) -> None:
+        # A task that fails at once queues its callback before the session has
+        # started `reins wait`; the daemon must not resume the session headless.
+        claude_session.expect_live_waiter(SESSION, 60)
+        claude = self.enqueue("cb-instant")
+        codex = self.enqueue("cb-codex", agent="codex")
+        self.assertEqual(delivery_engine.select_pending(self.root, time.time()), codex)
+        codex.unlink()
+        self.assertIsNone(delivery_engine.select_pending(self.root, time.time()))
+        status, output, _ = self.run_wait()
+        self.assertEqual(status, 0)
+        self.assertIn("[reins] cb-instant", output)
+        self.ack("cb-instant")
+        self.assertFalse(claude.exists())
+
+    def test_expired_reservation_lets_the_daemon_resume_a_closed_session(self) -> None:
+        directory = claude_session.live_watcher_dir(SESSION)
+        claude_session.expect_live_waiter(SESSION, 60)
+        reservation, = directory.glob("*" + claude_session.EXPECTED_WAITER_SUFFIX)
+        reservation.write_text(repr(time.time() - 1), encoding="utf-8")
+        claude = self.enqueue("cb-late")
+        self.assertEqual(delivery_engine.select_pending(self.root, time.time()), claude)
+        self.assertFalse(reservation.exists())
+        claude_session.expect_live_waiter(SESSION, 0)
+        self.assertFalse(any(directory.glob("*" + claude_session.EXPECTED_WAITER_SUFFIX)))
+
+    def test_live_wait_grace_comes_from_the_environment(self) -> None:
+        grace = claude_session.live_wait_grace
+        self.assertEqual(grace({}), claude_session.DEFAULT_LIVE_WAIT_GRACE_SECONDS)
+        self.assertEqual(grace({claude_session.LIVE_WAIT_GRACE_ENV: "15"}), 15.0)
+        self.assertEqual(grace({claude_session.LIVE_WAIT_GRACE_ENV: "0"}), 0.0)
+        self.assertEqual(grace({claude_session.LIVE_WAIT_GRACE_ENV: "-3"}), 0.0)
+        self.assertEqual(grace({claude_session.LIVE_WAIT_GRACE_ENV: "soon"}),
+                         claude_session.DEFAULT_LIVE_WAIT_GRACE_SECONDS)
+
+    def test_wait_inside_the_headless_resume_reaches_its_own_session(self) -> None:
+        # The resume's worker holds the target lock until the resumed process
+        # exits; a waiter started by that process must not wait for itself.
+        self.enqueue("cb-next")
+        target = {"agent": "claude", "target": {"kind": "session", "session": SESSION}}
+        target_lock = delivery_engine.acquire_target_lock(target, blocking=False)
+        try:
+            with mock.patch.dict(os.environ, {claude_session.RESUMED_TARGET_ENV: "session:another-session"}):
+                self.assertEqual(self.run_wait(timeout=0.2)[0], 3)
+            key = delivery_engine.callback_target_key(target)
+            with mock.patch.dict(os.environ, {claude_session.RESUMED_TARGET_ENV: key}):
+                status, output, _ = self.run_wait(timeout=5)
+        finally:
+            queue_store.release_owner_lock(target_lock, remove=False)
+        self.assertEqual(status, 0)
+        self.assertIn("[reins] cb-next", output)
+
+    def test_wait_says_when_a_headless_resume_has_its_callback(self) -> None:
+        layout.managed_task_dir(self.root, "abcd1234").mkdir(parents=True)
+        layout.managed_task_path(self.root, "abcd1234").write_text("{}", encoding="utf-8")
+        running = queue_store.move_request(self.enqueue("cb-headless", managed_task_id="abcd1234"), self.root / "running")
+        delivery_lock = queue_store.acquire_owner_lock(self.root, layout.delivery_lock_id("cb-headless"), blocking=False)
+        try:
+            with mock.patch.object(claude_session, "HEADLESS_NOTICE_SECONDS", 0.1):
+                status, output, _ = self.run_wait(task="abcd1234", timeout=30)
+            self.assertEqual(status, claude_session.HEADLESS_EXIT_CODE)
+            self.assertIn("[reins] cb-headless went to a headless resume", output)
+            self.assertIn(f"claude -p --resume {SESSION}", output)
+            self.assertNotIn("ACK after inspection", output)
+
+            # The resume ACKed it but is still running: the callback stays under
+            # running/, and a waiter for that task must not wait for it forever.
+            self.ack("cb-headless")
+            self.assertTrue(running.exists())
+            status, output, errors = self.run_wait(task="abcd1234", timeout=30)
+            self.assertEqual((status, output), (0, ""))
+            self.assertIn("already acknowledged", errors)
+        finally:
+            queue_store.release_owner_lock(delivery_lock, remove=False)
+
     def test_daemon_does_not_redeliver_a_callback_live_delivered_after_selection(self) -> None:
         self.enqueue("cb-raced")
         select_pending = delivery_engine.select_pending

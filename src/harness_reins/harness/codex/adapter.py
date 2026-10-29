@@ -61,7 +61,10 @@ class CodexAdapter:
         self, options: ChildOptions, environment: Mapping[str, str]
     ) -> list[str]:
         # A kept session is forked by later nodes; --json reports its thread id.
-        cmd = [self.executable(environment), "exec", "--json" if options.keep_session else "--ephemeral"]
+        # The caller chose the cwd with --cwd; Codex's git/trust check would
+        # otherwise end a child started outside a repository within a second.
+        cmd = [self.executable(environment), "exec", "--json" if options.keep_session else "--ephemeral",
+               "--skip-git-repo-check"]
         if options.model:
             cmd.extend(["--model", options.model])
         if options.reasoning_effort:

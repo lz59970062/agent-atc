@@ -49,13 +49,26 @@ keep receiving callbacks from the daemon and are never told about this command.
 | `--timeout <s>` | Give up after this many seconds (exit 3). Default: wait forever. |
 
 One rule: a callback keeps coming back until it is ACKed. Exit codes: `0` callback printed (or the
-task's callback is already acknowledged), `2` not a Claude session / unknown task, `3` timeout.
+task's callback is already acknowledged), `2` not a Claude session / unknown task, `3` timeout, `4`
+the callback went to a headless resume of this session (see below) and is handled there.
 
 ### How it coordinates with the daemon
 
 - A waiter holds a lock file under `<target-locks>/live-watchers/<session-hash>/`. While any waiter
   for a session is alive, the daemon does not start a headless resume for that session's Claude
   callbacks. Closing Claude Code kills the waiter, the OS drops the lock, and the daemon takes over.
+- `reins run` returns before the session has started its waiter, and a task can end in that gap (a
+  command that fails at once). So a submission from a live Claude session (background tasks enabled,
+  no channel, callback not manual) also writes a reservation file in the same directory. Until it
+  expires, 120 s later by default (`REINS_CLAUDE_WAIT_GRACE_SECONDS`, `0` turns it off), the daemon
+  treats the session as live. A session that closed before starting its waiter is resumed once the
+  reservation expires.
+- The daemon holds the session's target lock for as long as a headless resume runs. It passes the
+  resume `REINS_RESUMED_TARGET`, so a `reins wait` that the resumed session itself starts can still
+  claim that session's callbacks instead of waiting for its own process to exit.
+- A waiter outside that resume never waits silently on a callback the resume holds: after 3 s it
+  prints a notice naming the callback and exits `4`. A `--task` waiter also exits `0` once that task's
+  callback is ACKed, even while the resume that ACKed it is still running.
 - The waiter claims a callback with the same atomic `pending → running` move the daemon uses, so a
   callback is never delivered by both at once.
 - After printing, the callback returns to `pending` and the daemon waits 30 minutes for the ACK

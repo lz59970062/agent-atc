@@ -667,6 +667,12 @@ def delivery_worker_main() -> int:
                     resume_env = resume_environment.merged(os.environ, session_environment)
                 else:
                     resume_env = None
+                target_key = callback_target_key(request) if isinstance(request, dict) else None
+                if target_key is not None and dispatch.request_agent(request) == "claude":
+                    # This worker holds the session's target lock for the whole resume;
+                    # a `reins wait` inside the resume must still reach its own session.
+                    resume_env = dict(os.environ if resume_env is None else resume_env)
+                    resume_env[claude_session.RESUMED_TARGET_ENV] = target_key
                 # A Codex thread whose original process is still running refuses a
                 # second writer before any turn starts; that means busy, not failed.
                 codex_resume = pi_delivery is None and isinstance(request, dict) and dispatch.request_agent(request) == "codex"

@@ -217,6 +217,19 @@ LIVE_ACK_GRACE_SECONDS = 30 * 60.0
 LIVE_WATCHER_DIR_NAME = "live-watchers"
 # A channel server (claude_channel.py) holds the same lock under this prefix.
 CHANNEL_WATCHER_PREFIX = "channel-"
+# `reins run` returns before the session starts its background `reins wait`. A
+# task that ends inside that gap (a command that fails at once) must not make
+# the daemon resume the session headless next to the live one, so a submission
+# from a live session reserves its callbacks for a waiter for this long.
+LIVE_WAIT_GRACE_ENV = "REINS_CLAUDE_WAIT_GRACE_SECONDS"
+DEFAULT_LIVE_WAIT_GRACE_SECONDS = 120.0
+EXPECTED_WAITER_SUFFIX = ".expected"
+# Set by the daemon in a headless resume: the delivery target its worker holds.
+# A `reins wait` run inside that resume may deliver into its own session.
+RESUMED_TARGET_ENV = "REINS_RESUMED_TARGET"
+# How long a waiter sees its callback held by a headless resume before saying so.
+HEADLESS_NOTICE_SECONDS = 3.0
+HEADLESS_EXIT_CODE = 4
 
 
 def _session_of(request: Mapping[str, object]) -> str | None:
@@ -276,10 +289,57 @@ def release_live_watcher(lock: tuple[object, Path]) -> None:
     queue_store.release_owner_lock(lock, remove=False)
 
 
+def live_wait_grace(environment: Mapping[str, str]) -> float:
+    value = environment.get(LIVE_WAIT_GRACE_ENV, "").strip()
+    try:
+        return max(0.0, float(value)) if value else DEFAULT_LIVE_WAIT_GRACE_SECONDS
+    except ValueError:
+        return DEFAULT_LIVE_WAIT_GRACE_SECONDS
+
+
+def expect_live_waiter(session: str, grace: float) -> None:
+    """Reserve this session's callbacks for a `reins wait` that starts within ``grace`` seconds."""
+    if grace <= 0:
+        return
+    try:
+        directory = live_watcher_dir(session)
+        directory.mkdir(parents=True, exist_ok=True)
+        path = directory / f"{os.getpid()}-{secrets.token_hex(6)}{EXPECTED_WAITER_SUFFIX}"
+        path.write_text(repr(time.time() + grace), encoding="utf-8")
+    except OSError:
+        pass  # Only the grace is lost: the daemon delivers as before.
+
+
+def _expected(session: str) -> bool:
+    directory = live_watcher_dir(session)
+    if not directory.is_dir():
+        return False
+    now = time.time()
+    expected = False
+    for path in directory.glob(f"*{EXPECTED_WAITER_SUFFIX}"):
+        try:
+            until = float(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            until = 0.0
+        if until > now:
+            expected = True
+        else:
+            path.unlink(missing_ok=True)
+    return expected
+
+
 def live_watcher_is_held(request: Mapping[str, object]) -> bool:
-    """Daemon hook: whether a live waiter owns delivery for this Claude callback."""
+    """Daemon hook: whether a live waiter owns, or is about to own, delivery for this Claude callback."""
     session = _session_of(request)
-    return session is not None and _held(session, "")
+    return session is not None and (_held(session, "") or _expected(session))
+
+
+def inside_resume_of(request: Mapping[str, object]) -> bool:
+    """Whether this process runs inside the daemon's headless resume of the callback's session."""
+    from ...engine import delivery as delivery_engine
+
+    held = os.environ.get(RESUMED_TARGET_ENV, "").strip()
+    return bool(held) and held == delivery_engine.callback_target_key(dict(request))
 
 
 def channel_is_held(session: str) -> bool:
@@ -327,8 +387,10 @@ def _claim(root: Path, path: Path) -> str | None:
         except FileNotFoundError:
             return None
         target_lock = delivery_engine.acquire_target_lock(request, blocking=False)
-        if target_lock is None:
-            return None  # The daemon is delivering to this session right now.
+        if target_lock is None and not inside_resume_of(request):
+            # The daemon is delivering to this session right now. Inside that
+            # delivery's own resume the session is this process, so it may take it.
+            return None
         try:
             running = queue_store.move_request(path, root / "running")
         except FileNotFoundError:
@@ -362,14 +424,56 @@ def _matches(request: Mapping[str, object], session: str, task: str | None) -> b
 
 
 def _task_already_acknowledged(root: Path, session: str, task: str) -> bool:
-    for path in (root / "done").glob("*.json"):
+    from ...store import layout
+
+    # An ACKed callback stays under running/ while the resume that ACKed it is still alive.
+    for state in ("done", "running"):
+        for path in (root / state).glob("*.json"):
+            try:
+                request = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                continue
+            if (isinstance(request, dict) and _matches(request, session, task)
+                    and (state == "done" or layout.ack_path(root, path.stem).exists())):
+                return True
+    return False
+
+
+def _held_by_headless_resume(root: Path, session: str, task: str | None) -> list[dict[str, object]]:
+    """Unacknowledged callbacks of this session that the daemon is delivering to a headless resume."""
+    from ...store import records as queue_store
+    from ...store import layout
+
+    held = []
+    for path in sorted((root / "running").glob("*.json")):
         try:
             request = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             continue
-        if isinstance(request, dict) and _matches(request, session, task):
-            return True
-    return False
+        if (isinstance(request, dict) and _matches(request, session, task)
+                and not layout.ack_path(root, path.stem).exists()
+                and not inside_resume_of(request)
+                and queue_store.delivery_lock_is_held(root, path.stem)):
+            held.append(request)
+    return held
+
+
+def _headless_notice(requests: list[dict[str, object]], session: str) -> str:
+    from ...engine import dispatch
+
+    lines = []
+    for request in requests:
+        lines += [
+            f"[reins] {request.get('id')} went to a headless resume of this session, not to this waiter",
+            f"Task: {dispatch.request_task(request)}",
+        ]
+    lines += [
+        f"The daemon found no `reins wait` for session {session} when the callback was due and started "
+        f"`claude -p --resume {session}`. That copy of the session is handling it and will ACK it; do not "
+        "repeat its work. Check `reins status` and the task's files, and wait for that resume to end before "
+        "starting more work on the same task.",
+    ]
+    return "\n".join(lines)
 
 
 def wait(args: argparse.Namespace) -> int:
@@ -404,6 +508,7 @@ def wait(args: argparse.Namespace) -> int:
     deadline = time.monotonic() + args.timeout if args.timeout else None
     watcher = register_live_watcher(session)
     print(f"reins wait: watching Claude Code session {session}", file=sys.stderr)
+    held_since: float | None = None
     try:
         while True:
             prompts = []
@@ -424,6 +529,16 @@ def wait(args: argparse.Namespace) -> int:
             if args.task and _task_already_acknowledged(root, session, args.task):
                 print(f"reins wait: task {args.task}'s callback is already acknowledged", file=sys.stderr)
                 return 0
+            # A callback that went to a headless resume never comes back here
+            # while that resume runs; say so instead of waiting in silence.
+            held = _held_by_headless_resume(root, session, args.task)
+            if not held:
+                held_since = None
+            elif held_since is None:
+                held_since = time.monotonic()
+            elif time.monotonic() - held_since >= HEADLESS_NOTICE_SECONDS:
+                print(_headless_notice(held, session), flush=True)
+                return HEADLESS_EXIT_CODE
             if deadline is not None and time.monotonic() >= deadline:
                 print("reins wait: timed out; the callback will still be delivered when it arrives", file=sys.stderr)
                 return 3

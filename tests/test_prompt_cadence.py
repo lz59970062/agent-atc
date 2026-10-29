@@ -164,6 +164,33 @@ class PromptCadenceTests(unittest.TestCase):
                 else:
                     child.communicate.assert_called_once_with(input=selected, timeout=1.0)
 
+    def test_claude_resume_names_the_target_its_worker_holds(self):
+        from harness_reins.harness.claude import session as claude_session
+
+        for agent, environment in (("claude", None), ("claude", {"SESSION_ONLY": "1"}), ("codex", None)):
+            with self.subTest(agent=agent, environment=environment):
+                payload = self.payload(f"marker-{agent}-{bool(environment)}")
+                payload["request"]["agent"] = agent
+                payload.update(command=[sys.executable], timeout=1, cwd=str(self.root.parent),
+                               ack_path=str(self.root.parent / "absent-ack"),
+                               canceled_path=str(self.root.parent / "absent-cancel"), environment=environment)
+                child = mock.Mock(returncode=0)
+                child.communicate.return_value = ("", "")
+                with mock.patch.dict(os.environ, {"CODEX_LONG_TASK_DELIVERY_LOCK_FDS": "[]"}), \
+                        mock.patch.object(sys, "stdin", io.StringIO(json.dumps(payload))), \
+                        mock.patch.object(cli.signal, "signal"), \
+                        mock.patch.object(delivery_engine, "start_desktop_app_server_turn", return_value=None), \
+                        mock.patch.object(cli.subprocess, "Popen", return_value=child) as popen, \
+                        contextlib.redirect_stdout(io.StringIO()):
+                    self.assertEqual(delivery_engine.delivery_worker_main(), 0)
+                resume_env = popen.call_args.kwargs["env"]
+                if agent == "claude":
+                    self.assertEqual(resume_env[claude_session.RESUMED_TARGET_ENV], "session:parent")
+                    if environment:
+                        self.assertEqual(resume_env["SESSION_ONLY"], "1")
+                else:
+                    self.assertNotIn(claude_session.RESUMED_TARGET_ENV, resume_env or {})
+
     def test_worker_startup_markers_skip_allocation_and_transport(self):
         for marker, expected in (("ack", "already_acknowledged"), ("cancel", "canceled")):
             with self.subTest(marker=marker):

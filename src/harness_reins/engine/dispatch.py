@@ -499,6 +499,13 @@ def submit_managed_run(args: argparse.Namespace) -> int:
             managed_tasks.write_private_bytes(stdin_path, stdin_data)
             task["stdin_path"] = str(stdin_path)
         queue_store.write_request(environment_path, {"version": 1, "environment": environment})
+        live_wait = (task["agent"] == "claude" and target.get("kind") == "session"
+                     and task["callback_mode"] != "manual"
+                     and not claude_session.channel_is_held(str(target.get("session")))
+                     and not claude_session.background_tasks_disabled(os.environ))
+        if live_wait:
+            # Before the task exists, so even one that ends at once waits for this session's waiter.
+            claude_session.expect_live_waiter(str(target.get("session")), claude_session.live_wait_grace(os.environ))
         managed_tasks.write_managed_task(root, task)
         if task["callback_mode"] != "manual" and target.get("kind") == "session":
             resume_environment.capture(root, ids.callback_id(task_id), environment)
@@ -533,6 +540,10 @@ def submit_managed_run(args: argparse.Namespace) -> int:
             wait = reins_runtime.control_command("wait", "--queue-dir", str(root), "--task", task_id)
             print(f"reins: Claude Code live callback: run in the background (run_in_background): {wait}",
                   file=sys.stderr)
+            grace = claude_session.live_wait_grace(os.environ)
+            if live_wait and grace > 0:
+                print(f"reins: start it now: the callback is held for this session's waiter for {grace:g}s, "
+                      "then resumed headless", file=sys.stderr)
     return 0
 
 

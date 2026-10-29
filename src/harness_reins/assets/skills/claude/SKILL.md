@@ -39,7 +39,8 @@ differs from this page about callback delivery, this page applies to Claude Code
 2. **Wait** — run exactly that `reins wait ... --task <id>` command with the Bash tool's
    `run_in_background: true`. Do not run it in the foreground (it blocks until the job ends), and do
    not poll its output. Then tell the user what is running and end your turn, or carry on with other
-   work.
+   work. Start it right after the submission: the daemon holds this session's callbacks for a waiter
+   for 120 s after `reins run` (`REINS_CLAUDE_WAIT_GRACE_SECONDS`), then resumes the session headless.
 
    If the Bash tool has no `run_in_background` (background tasks are disabled; `reins run` then says
    so instead of printing a wait command), skip the wait: tell the user what is running and end your
@@ -112,6 +113,9 @@ differs from this page about callback delivery, this page applies to Claude Code
   a signed-in standalone CLI; otherwise the callback stays queued and the next `reins wait` from this
   session (or `reins status`) picks it up. After a live delivery, the daemon waits 30 minutes for the
   ACK before it falls back.
+- **Wait exit code 4** means the callback went to such a headless resume of this session instead: a
+  second copy of the session is handling it. Do not redo its work; check `reins status` and the
+  task's files, and let that copy finish before starting more work on the task.
 - `reins wait` exists only for Claude Code. It refuses to run without `CLAUDE_CODE_SESSION_ID` and
   never touches callbacks bound to other agents.
 - **Do not** call `claude -p --resume` yourself, add `--via-daemon`, or invent launch flags. Callback

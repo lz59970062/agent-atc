@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.9.1 — 2026-10-29
+
+- A Claude Code session no longer gets a headless twin when a task ends before
+  the session has started `reins wait`. `reins run` returns first and the
+  waiter starts a few seconds later; a task that failed at once (for example a
+  Codex child refusing a directory outside git) queued its callback in that
+  gap, the daemon saw no waiter and ran `claude -p --resume` on the session
+  that was still open. A submission from a live session now reserves its
+  callbacks for the waiter for 120 s (`REINS_CLAUDE_WAIT_GRACE_SECONDS`, `0`
+  turns it off); a session that closed before waiting is still resumed after.
+- `reins wait` no longer hangs while the daemon resumes its session headless.
+  A waiter started inside that resume can claim its own session's callbacks
+  (the daemon sets `REINS_RESUMED_TARGET`), where it used to wait on the lock
+  held for its own process. A waiter elsewhere prints which callback went to
+  the headless resume and exits 4 instead of waiting in silence, and a
+  `--task` waiter returns once that task's callback is ACKed even while the
+  resume that ACKed it is still running.
+- `reins agent codex` passes `--skip-git-repo-check`, so a child given a
+  `--cwd` outside a git repository runs instead of exiting within a second.
+
 ## 0.9.0 — 2026-10-26 (Harness Reins)
 
 - Rename Agent Traffic Control (ATC) to Harness Reins: a harness for your

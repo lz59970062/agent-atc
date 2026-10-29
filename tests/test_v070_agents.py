@@ -109,6 +109,8 @@ class AgentRegistryTests(unittest.TestCase):
         self.assertEqual(command[0], "/opt/my codex/codex")
         self.assertIn("workspace-write", command)
         self.assertIn("--ephemeral", command)
+        # A child started outside a git repository must not exit at once.
+        self.assertIn("--skip-git-repo-check", command)
         self.assertIn("fixture-model", command)
         self.assertIn('model_reasoning_effort="max"', command)
         self.assertNotIn("--approve-for-me", command)

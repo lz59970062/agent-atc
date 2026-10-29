@@ -266,6 +266,7 @@ class CliTests(unittest.TestCase):
                     "/opt/codex/bin/codex",
                     "exec",
                     "--json",
+                    "--skip-git-repo-check",
                     "-C",
                     tmp,
                     "-s",
@@ -792,6 +793,25 @@ class CliTests(unittest.TestCase):
                 self.assertEqual(dispatch.submit_managed_run(args), 125)
 
             wrapped.assert_not_called()
+
+    def test_claude_submission_reserves_its_callback_for_the_session_waiter(self) -> None:
+        claude_session = cli.claude_session
+        cases = (({}, True), ({"CLAUDE_CODE_DISABLE_BACKGROUND_TASKS": "1"}, False),
+                 ({claude_session.LIVE_WAIT_GRACE_ENV: "0"}, False))
+        for extra, reserved in cases:
+            with self.subTest(extra=extra), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp) / "queue"
+                args = self._run_args(tmp, root, [sys.executable, "-c", "pass"])
+                args.agent = "claude"
+                errors = io.StringIO()
+                with mock.patch.dict(os.environ, dict(extra, **{layout.TARGET_LOCK_DIR_ENV: str(Path(tmp) / "locks")})), \
+                        mock.patch.object(managed_tasks, "screen_binary", return_value="/usr/bin/screen"), \
+                        contextlib.redirect_stderr(errors):
+                    self.assertEqual(dispatch.submit_managed_run(args), 0)
+                    held = claude_session.live_watcher_is_held(
+                        {"agent": "claude", "target": {"kind": "session", "session": "test-thread"}})
+                self.assertEqual(held, reserved)
+                self.assertEqual("then resumed headless" in errors.getvalue(), reserved)
 
     def test_screen_worker_launch_failure_queues_unknown_callback(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
