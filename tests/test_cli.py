@@ -796,8 +796,13 @@ class CliTests(unittest.TestCase):
 
     def test_claude_submission_reserves_its_callback_for_the_session_waiter(self) -> None:
         claude_session = cli.claude_session
-        cases = (({}, True), ({"CLAUDE_CODE_DISABLE_BACKGROUND_TASKS": "1"}, False),
-                 ({claude_session.LIVE_WAIT_GRACE_ENV: "0"}, False))
+        inside = {"CLAUDE_CODE_SESSION_ID": "test-thread", "CLAUDE_CODE_DISABLE_BACKGROUND_TASKS": "",
+                  claude_session.LIVE_WAIT_GRACE_ENV: ""}
+        cases = ((inside, True), (dict(inside, CLAUDE_CODE_DISABLE_BACKGROUND_TASKS="1"), False),
+                 (dict(inside, **{claude_session.LIVE_WAIT_GRACE_ENV: "0"}), False),
+                 # A script that names the session with --session gets the daemon at once.
+                 (dict(inside, CLAUDE_CODE_SESSION_ID=""), False),
+                 (dict(inside, CLAUDE_CODE_SESSION_ID="other-session"), False))
         for extra, reserved in cases:
             with self.subTest(extra=extra), tempfile.TemporaryDirectory() as tmp:
                 root = Path(tmp) / "queue"

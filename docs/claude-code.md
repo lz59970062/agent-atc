@@ -58,8 +58,10 @@ the callback went to a headless resume of this session (see below) and is handle
   for a session is alive, the daemon does not start a headless resume for that session's Claude
   callbacks. Closing Claude Code kills the waiter, the OS drops the lock, and the daemon takes over.
 - `reins run` returns before the session has started its waiter, and a task can end in that gap (a
-  command that fails at once). So a submission from a live Claude session (background tasks enabled,
-  no channel, callback not manual) also writes a reservation file in the same directory. Until it
+  command that fails at once). So a submission made from inside the Claude session it targets
+  (`CLAUDE_CODE_SESSION_ID` is that session; background tasks enabled, no channel, callback not
+  manual) also writes a reservation file in the same directory. A script that names a session with
+  `--session` from outside it gets no reservation: nothing there will start a waiter. Until it
   expires, 120 s later by default (`REINS_CLAUDE_WAIT_GRACE_SECONDS`, `0` turns it off), the daemon
   treats the session as live. A session that closed before starting its waiter is resumed once the
   reservation expires.

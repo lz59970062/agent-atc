@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.9.2 — 2026-10-29
+
+- The live-waiter reservation from 0.9.1 applies only to a submission made
+  from inside the session it targets (`CLAUDE_CODE_SESSION_ID` equals the
+  bound session). 0.9.1 also held callbacks for 120 s when a script named a
+  Claude session with `--session` from outside it, where no waiter will ever
+  start; the npm package smoke test caught the delay.
+
 ## 0.9.1 — 2026-10-29
 
 - A Claude Code session no longer gets a headless twin when a task ends before

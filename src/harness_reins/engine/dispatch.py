@@ -499,7 +499,10 @@ def submit_managed_run(args: argparse.Namespace) -> int:
             managed_tasks.write_private_bytes(stdin_path, stdin_data)
             task["stdin_path"] = str(stdin_path)
         queue_store.write_request(environment_path, {"version": 1, "environment": environment})
+        # Only the session itself starts a waiter; a script that names a session
+        # with --session expects the daemon to deliver at once.
         live_wait = (task["agent"] == "claude" and target.get("kind") == "session"
+                     and os.environ.get(claude_session.SESSION_ENV, "").strip() == str(target.get("session"))
                      and task["callback_mode"] != "manual"
                      and not claude_session.channel_is_held(str(target.get("session")))
                      and not claude_session.background_tasks_disabled(os.environ))
