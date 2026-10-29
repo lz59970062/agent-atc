@@ -254,8 +254,10 @@ def live_watcher_dir(session: str) -> Path:
 def register_live_watcher(session: str, *, prefix: str = "") -> tuple[object, Path]:
     """Lock a uniquely named file; the OS releases it if the waiter dies.
 
-    The lock is taken under a staging name and renamed into place, so the
-    daemon never observes an unlocked live file.
+    The daemon must never observe an unlocked live file. On POSIX the lock is
+    taken under a staging name and renamed into place. On Windows the file is
+    created already locked (share mode 0), and a file open that way can be
+    neither renamed nor deleted, so it is locked under its final name.
     """
     from ...engine import dispatch
     from ...engine import delivery as delivery_engine
@@ -266,12 +268,13 @@ def register_live_watcher(session: str, *, prefix: str = "") -> tuple[object, Pa
     directory = live_watcher_dir(session)
     directory.mkdir(parents=True, exist_ok=True)
     name = f"{prefix}{os.getpid()}-{secrets.token_hex(6)}"
-    lock = queue_store.acquire_path_lock(directory / f".{name}.staging", blocking=False)
+    final = directory / f"{name}.lock"
+    lock = queue_store.acquire_path_lock(final if os.name == "nt" else directory / f".{name}.staging", blocking=False)
     if lock is None:
         raise RuntimeError("could not lock a fresh live waiter file")
     handle, staging = lock
-    final = directory / f"{name}.lock"
-    os.replace(staging, final)
+    if staging != final:
+        os.replace(staging, final)
     return handle, final
 
 
@@ -282,11 +285,17 @@ def release_live_watcher(lock: tuple[object, Path]) -> None:
     from ...store import records as queue_store
     from ...store import layout
 
-    try:
-        lock[1].unlink()
-    except FileNotFoundError:
-        pass
+    if os.name != "nt":
+        lock[1].unlink(missing_ok=True)
+        queue_store.release_owner_lock(lock, remove=False)
+        return
+    # Windows deletes nothing that is still open: close first. A concurrent
+    # `_held` probe may hold the file for a moment; it deletes it itself.
     queue_store.release_owner_lock(lock, remove=False)
+    try:
+        lock[1].unlink(missing_ok=True)
+    except PermissionError:
+        pass
 
 
 def live_wait_grace(environment: Mapping[str, str]) -> float:

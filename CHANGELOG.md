@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- `reins wait` and the `reins claude` channel work on Windows. Registering a
+  live waiter locked a staging file and then renamed it into place; Windows
+  cannot rename (or delete) a file held open with share mode 0, so every wait
+  failed at start with `PermissionError: [WinError 32]` and callbacks only
+  arrived through a headless resume after the session closed. On Windows the
+  waiter file is now created already locked under its final name, and it is
+  closed before it is deleted.
+
 ## 0.9.2 — 2026-10-29
 
 - The live-waiter reservation from 0.9.1 applies only to a submission made

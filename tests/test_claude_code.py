@@ -9,6 +9,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import types
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -223,6 +224,66 @@ class LiveWaiterTests(unittest.TestCase):
         stale.write_text("", encoding="utf-8")
         self.assertFalse(claude_session.live_watcher_is_held(claude))
         self.assertFalse(stale.exists())
+
+    def test_watcher_never_renames_or_deletes_an_open_lock_on_windows(self) -> None:
+        # Models Windows sharing rules on POSIX: a file opened with share mode 0
+        # can be neither renamed nor deleted (WinError 32). On Windows the other
+        # tests here exercise the real lock.
+        if os.name == "nt":
+            self.skipTest("native Windows runs the real lock")
+        held: set[Path] = set()
+
+        def acquire(path: Path, *, blocking: bool) -> tuple[object, Path] | None:
+            path = Path(path)
+            if path in held:
+                return None
+            path.touch()
+            held.add(path)
+            return io.StringIO(), path
+
+        def release(lock: tuple[object, Path] | None, *, remove: bool) -> None:
+            if lock is not None:
+                held.discard(lock[1])
+
+        def refuse_open(path: object) -> None:
+            if Path(path) in held:
+                raise PermissionError(13, "[WinError 32] being used by another process", str(path))
+
+        real_replace, real_unlink = os.replace, Path.unlink
+
+        def replace(source: object, destination: object) -> None:
+            refuse_open(source)
+            real_replace(source, destination)
+
+        def unlink(path: Path, missing_ok: bool = False) -> None:
+            refuse_open(path)
+            real_unlink(path, missing_ok=missing_ok)
+
+        windows_os = types.SimpleNamespace(**vars(os))
+        windows_os.name, windows_os.replace = "nt", replace
+        for patcher in (
+            mock.patch.object(claude_session, "os", windows_os),
+            mock.patch.object(queue_store, "acquire_path_lock", acquire),
+            mock.patch.object(queue_store, "release_owner_lock", release),
+            mock.patch.object(Path, "unlink", unlink),
+        ):
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+        claude = {"agent": "claude", "target": {"kind": "session", "session": SESSION}}
+        directory = claude_session.live_watcher_dir(SESSION)
+        watcher = claude_session.register_live_watcher(SESSION)
+        self.assertEqual([path.name for path in directory.iterdir()], [watcher[1].name])
+        self.assertTrue(claude_session.live_watcher_is_held(claude))
+        claude_session.release_live_watcher(watcher)
+        self.assertFalse(claude_session.live_watcher_is_held(claude))
+        self.assertEqual(list(directory.iterdir()), [])
+
+        self.enqueue("cb-1")
+        status, output, _ = self.run_wait()
+        self.assertEqual(status, 0)
+        self.assertIn("[reins] cb-1", output)
+        self.assertEqual(list(directory.iterdir()), [])
 
     def test_daemon_leaves_only_claude_callbacks_to_a_live_waiter(self) -> None:
         claude = self.enqueue("cb-claude")
