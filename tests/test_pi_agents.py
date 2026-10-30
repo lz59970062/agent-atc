@@ -531,12 +531,14 @@ class PiAgentContractTests(unittest.TestCase):
             "states": {state: {key: record.get(key) for key in ("last_error", "last_deferred_reason", "attempts")}
                        for state, record in records.items()}}, indent=1))
         received = json.loads(capture.read_text(encoding="utf-8"))
-        self.assertEqual(received["argv"], ["--print", "--session", bound,
-                                            "--extension", str(pi_channel.extension_path())])
+        # Windows paths compare case-insensitively (the worker may see Lib, the test lib).
+        self.assertEqual([os.path.normcase(value) for value in received["argv"]],
+                         [os.path.normcase(value) for value in
+                          ["--print", "--session", bound, "--extension", str(pi_channel.extension_path())]])
         self.assertNotIn("--no-session", received["argv"])
         self.assertEqual(received["cwd"], str(self.directory))
         self.assertIn("[reins]", received["prompt"])
-        self.assertIn("Session: " + str(session) + " (only)", received["prompt"])
+        self.assertIn("Session: " + bound + " (only)", received["prompt"])
         self.assertIn("Details: " + str(request["prompt_details_path"]) + " (read before acting)", received["prompt"])
         self.assertIn("Inspect the finished work.",
                       Path(str(request["prompt_details_path"])).read_text(encoding="utf-8"))
