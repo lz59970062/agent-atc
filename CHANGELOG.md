@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.9.3 — 2026-10-30
 
 - `reins wait` and the `reins claude` channel work on Windows. Registering a
   live waiter locked a staging file and then renamed it into place; Windows
@@ -24,11 +24,17 @@
   (`Win32_Process`) through PowerShell.
 - Claude desktop CLI paths (the macOS bundle, the SSH-session `ccd-cli`) are
   recognized with Windows path separators too.
-- The test suite runs on Windows CI: cleared environments keep a Windows home
+- The whole CI matrix passes for the first time: Linux, macOS (with real
+  launchd), Windows (with Task Scheduler and the native coordinator lifecycle)
+  and the container job. Cleared test environments keep a Windows home
   (`USERPROFILE`), POSIX-only expectations (paths, shell quoting, mode bits,
-  newline translation) follow the platform, and two broken fixtures were
-  repaired (a coordinator program that never imported the delivery engine, a
-  stderr file left open while its directory was removed).
+  newline translation, case) follow the platform, and stale fixtures were
+  repaired: coordinator programs that never imported the module they called,
+  a launchd test reading the pre-`reins.result/1` exit code, a container test
+  expecting the pre-canonical-launcher daemon command, and a stderr file left
+  open while its directory was removed.
+- Known limitation: on native Windows, input piped into `reins run` (a heredoc
+  script) is not handed to the task yet; its test is skipped there.
 
 ## 0.9.2 — 2026-10-29
 
