@@ -507,8 +507,9 @@ class PiAgentContractTests(unittest.TestCase):
             "REINS_TEST_PI_CALLBACK_ID": str(request["id"]),
         }
         args = argparse.Namespace(retries=3, retry_delay=0.0, retry_backoff=2.0, resume_timeout=15.0)
+        delivery_output = io.StringIO()
         with mock.patch.dict(os.environ, environment), \
-                contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                contextlib.redirect_stdout(delivery_output), contextlib.redirect_stderr(delivery_output):
             self.assertTrue(delivery_engine.process_one(root, args))
 
         deadline = time.monotonic() + 15.0
@@ -519,7 +520,12 @@ class PiAgentContractTests(unittest.TestCase):
             time.sleep(0.05)
         self.assertFalse(delivery_engine._BACKGROUND_RESUMES, "the delivery worker did not finish")
         delivery_engine.recover_running(root)
-        self.assertTrue((root / "done" / f"{request['id']}.json").exists())
+        records = {state: dispatch.load_request(path) for state in ("pending", "running", "failed")
+                   for path in (root / state).glob(f"{request['id']}.json")}
+        self.assertTrue((root / "done" / f"{request['id']}.json").exists(), json.dumps({
+            "output": delivery_output.getvalue()[-2000:], "captured": capture.exists(),
+            "states": {state: {key: record.get(key) for key in ("last_error", "last_deferred_reason", "attempts")}
+                       for state, record in records.items()}}, indent=1))
         received = json.loads(capture.read_text(encoding="utf-8"))
         self.assertEqual(received["argv"], ["--print", "--session", bound,
                                             "--extension", str(pi_channel.extension_path())])
