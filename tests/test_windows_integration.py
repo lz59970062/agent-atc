@@ -96,7 +96,7 @@ class WindowsIntegrationTests(unittest.TestCase):
             raise SystemExit(7)
             """), encoding="utf-8")
         task_path, task = self.submit(script, str(started), str(release), str(executions))
-        coordinator_code = "from pathlib import Path; from harness_reins import cli; import sys,time; managed_tasks.recover_managed_tasks(Path(sys.argv[1])); time.sleep(40)"
+        coordinator_code = "from pathlib import Path; from harness_reins.engine import tasks as managed_tasks; import sys,time; managed_tasks.recover_managed_tasks(Path(sys.argv[1])); time.sleep(40)"
         # This submitter/control process can disappear; Task Scheduler owns the runner.
         coordinator = subprocess.Popen([sys.executable, "-c", coordinator_code, str(self.root)],
                                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
