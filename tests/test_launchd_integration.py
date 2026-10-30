@@ -114,7 +114,7 @@ class RealLaunchdTests(unittest.TestCase):
                 callback_path = layout.request_path(root, "pending", ids.callback_id(str(task["id"])))
                 self.wait_until(callback_path.exists, "task failed to publish callback")
                 self.wait_until(lambda: backend.probe(task_owner) == OwnerState.ABSENT, "task owner did not exit")
-                self.assertEqual(json.loads(layout.managed_result_path(root, task["id"]).read_text())["exit_code"], 7)
+                self.assertEqual(json.loads(layout.managed_result_path(root, task["id"]).read_text())["observed"]["exit_code"], 7)
                 self.assertIn("finished after coordinator exit", Path(task["log_path"]).read_text())
                 managed_tasks.recover_managed_tasks(root)
                 managed_tasks.recover_managed_tasks(root)
