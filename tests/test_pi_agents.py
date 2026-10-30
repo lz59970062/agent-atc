@@ -102,7 +102,8 @@ class PiAdapterContractTests(unittest.TestCase):
             self.assertEqual(dispatch.resolve_agent(args), "pi")
             prompt = dispatch.build_prompt(args)
         self.assertEqual(request["agent"], "pi")
-        self.assertEqual(request["target"], {"kind": "session", "session": session})
+        # Bound by its resolved path: on macOS /home is reached through /System/Volumes/Data.
+        self.assertEqual(request["target"], {"kind": "session", "session": pi_channel.canonical_session(session)})
         self.assertEqual(request["origin"]["binding"], "PI_SESSION_FILE")
         self.assertIn("called back into PI Agent", prompt)
         acknowledgement = dispatch.build_acknowledgement_text("reins ack --queue-dir /q --id abc", agent="pi")

@@ -9,6 +9,15 @@
   arrived through a headless resume after the session closed. On Windows the
   waiter file is now created already locked under its final name, and it is
   closed before it is deleted.
+- The Pi extension resolves a `REINS_PI_CHANNEL_ROOT` that is reached through a
+  symlink, or does not exist yet, the way Reins does. It used the path as
+  given, so the owner record it wrote never matched the route Reins froze in
+  the callback ("Pi callback owner does not match the bound session") and Pi
+  callbacks could not be delivered live. Existing Pi processes pick up the
+  fix after `reins setup` reinstalls the extension and Pi reloads.
+- The Pi, template and channel tests no longer assume the temporary directory
+  has no symlinks in its path; on macOS `/var` leads to `/private/var`. The Pi
+  live-callback tests now run through a symlinked directory on every platform.
 
 ## 0.9.2 — 2026-10-29
 

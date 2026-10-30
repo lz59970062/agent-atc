@@ -163,7 +163,7 @@ class TemplateRegistrationTests(unittest.TestCase):
     def test_registration_copies_template_dependencies_for_other_workspaces(self):
         status, output = self.register()
         self.assertEqual(status, 0, output)
-        self.assertEqual(user_template_dir(), self.templates.resolve())
+        self.assertEqual(user_template_dir().resolve(), self.templates.resolve())
         installed = self.templates / f"{self.NAME}.yaml"
         template = load_template(self.NAME)
         self.assertEqual(template.worker, "pi")

@@ -3,6 +3,7 @@ import argparse
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 from unittest import mock
 
@@ -41,7 +42,8 @@ def build_bound(tmp_path):
     directory = bridge.channel_dir(str(session), Path(request['pi_channel_root']))
     bridge.ensure_private_directory(Path(request['pi_channel_root']))
     bridge.ensure_private_directory(directory)
-    owner = {'version': 1, 'session_file': str(session), 'session_id': 'session-fixture',
+    # The extension records the resolved session path, as canonical_session does.
+    owner = {'version': 1, 'session_file': bridge.canonical_session(str(session)), 'session_id': 'session-fixture',
              'profile_dir': request['pi_profile_dir'], 'channel_dir': str(directory),
              'owner_nonce': 'fixture-owner', 'owner_pid': os.getpid(), 'managed': False, 'state': 'active',
              'delivery_modes': ['follow-up', 'steer']}
@@ -51,6 +53,16 @@ def build_bound(tmp_path):
                'canceled_path': str(layout.request_path(queue, 'canceled', 'fixture')),
                'command': delivery_engine.resume_command(request), 'cwd': str(tmp_path), 'timeout': 1}
     return request, owner, directory, queue, payload
+
+
+def linked_directory(base):
+    """A work directory reached through a symlink, as macOS reaches /var/folders through /private/var."""
+    (base / 'real').mkdir()
+    try:
+        (base / 'linked').symlink_to(base / 'real', target_is_directory=True)
+    except OSError:  # Windows without the symlink privilege.
+        return base / 'real'
+    return base / 'linked'
 
 
 def dead_managed(owner, directory):
@@ -63,7 +75,7 @@ class PiLiveCallbackTests(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory(prefix='reins-pi-live-')
         self.addCleanup(temporary.cleanup)
-        self.directory = Path(temporary.name)
+        self.directory = linked_directory(Path(temporary.name))
         patch = mock.patch.dict(os.environ)
         patch.start(); self.addCleanup(patch.stop)
         self.bound = build_bound(self.directory)
@@ -450,3 +462,52 @@ class PiLiveCallbackTests(unittest.TestCase):
                 'REINS_PI_CALLBACK_ACK_PATH':'/ack','REINS_PI_CALLBACK_CANCEL_PATH':'/cancel',
                 'PI_CODING_AGENT_DIR':'/keep/profile','PATH':'/keep/path'}
         assert managed_tasks.child_agent_environment(values)=={'PI_CODING_AGENT_DIR':'/keep/profile','PATH':'/keep/path'}
+
+
+# Runs the bundled extension's session_start with a stand-in for Pi's API.
+EXTENSION_DRIVER = """
+import { pathToFileURL } from "node:url";
+const [extension, session] = process.argv.slice(2);
+const handlers = {};
+(await import(pathToFileURL(extension))).default({ on: (name, handler) => { handlers[name] = handler; } });
+const context = { sessionManager: { getSessionFile: () => session, getSessionId: () => "session-fixture" },
+                  ui: { notify: (message) => { console.error(message); process.exitCode = 3; } } };
+await handlers.session_start({}, context);
+"""
+
+
+@unittest.skipIf(os.name == 'nt' or shutil.which('node') is None,
+                 'needs node; Windows channel roots are created by the installer')
+class PiExtensionPathTests(unittest.TestCase):
+    def test_owner_written_through_symlinked_paths_matches_the_bound_session(self):
+        # The extension and Reins must record the same resolved paths, also for a
+        # channel root that does not exist yet and is named through a symlink.
+        temporary = tempfile.TemporaryDirectory(prefix='reins-pi-extension-')
+        self.addCleanup(temporary.cleanup)
+        base = Path(temporary.name)
+        directory = linked_directory(base)
+        if directory.name != 'linked':
+            self.skipTest('symlinks unavailable')
+        patch = mock.patch.dict(os.environ, {'PI_CODING_AGENT_DIR': str(directory / 'pi'),
+                                             bridge.CHANNEL_ROOT_ENV: str(directory / 'channels'),
+                                             'REINS_HOME': str(directory / 'reins'),
+                                             layout.TARGET_LOCK_DIR_ENV: str(directory / 'target-locks')})
+        patch.start(); self.addCleanup(patch.stop)
+        os.environ.pop(bridge.RESERVATION_ENV, None)
+        (directory / 'pi').mkdir()
+        session = directory / 'session.jsonl'
+        session.write_text(json.dumps({'type': 'session', 'version': 3, 'id': 'session-fixture',
+                                       'cwd': str(directory), 'timestamp': '2026-10-04T00:00:00.000Z'}) + '\n')
+        args = argparse.Namespace(agent='pi', session=str(session), last=False, cwd=str(directory),
+                                  task='fixture', callback_mode='cli')
+        request = dispatch.make_request(args, 'Wake the same Pi')
+        extension = base / 'reins-callback.mjs'
+        extension.write_bytes(bridge.extension_path().read_bytes())
+        driver = base / 'driver.mjs'
+        driver.write_text(EXTENSION_DRIVER, encoding='utf-8')
+        result = subprocess.run(['node', str(driver), str(extension), str(session)],
+                                capture_output=True, text=True, timeout=60)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        _, owner = bridge.owner_record(request)
+        self.assertEqual(owner['session_file'], bridge.canonical_session(str(session)))
+        self.assertEqual(owner['profile_dir'], request['pi_profile_dir'])

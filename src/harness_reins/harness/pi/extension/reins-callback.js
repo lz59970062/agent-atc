@@ -11,7 +11,20 @@ const digest = (value) => crypto.createHash("sha256").update(value).digest("hex"
 
 function canonical(value) {
   if (typeof value !== "string" || !path.isAbsolute(value)) throw new Error("An absolute session file is required");
-  return norm(fs.existsSync(value) ? fs.realpathSync(value) : path.resolve(value));
+  return resolved(value);
+}
+
+// Like Python's Path.resolve(): follow symlinks through the part that exists, so
+// paths recorded here match the ones Reins compares them with (/var on macOS
+// is a symlink to /private/var).
+function resolved(value) {
+  let head = path.resolve(value);
+  const tail = [];
+  while (!fs.existsSync(head) && path.dirname(head) !== head) {
+    tail.unshift(path.basename(head));
+    head = path.dirname(head);
+  }
+  return norm(path.join(fs.existsSync(head) ? fs.realpathSync(head) : head, ...tail));
 }
 
 function privateDirectory(directory) {
@@ -163,7 +176,7 @@ export default function ltcCallback(pi) {
       if (!file) return; // --no-session children have no callback owner.
       const session = canonical(file);
       const profile = canonical(path.resolve(process.env.PI_CODING_AGENT_DIR || path.join(os.homedir(), ".pi", "agent")));
-      const root = path.resolve(process.env.REINS_PI_CHANNEL_ROOT || path.join(profile, "harness-reins", "channels"));
+      const root = resolved(process.env.REINS_PI_CHANNEL_ROOT || path.join(profile, "harness-reins", "channels"));
       if (process.platform === "win32" && !fs.existsSync(root)) {
         throw new Error("Install the extension with Reins to initialize private Windows channel permissions");
       }
