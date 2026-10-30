@@ -858,6 +858,7 @@ class CliTests(unittest.TestCase):
             self.assertEqual(task_worker.run_screen_worker(worker), 0)
         return managed_tasks.load_managed_task(task_path)
 
+    @unittest.skipIf(os.name == "nt", "piped_input does not read Windows pipes yet (no select())")
     def test_input_piped_into_atc_run_becomes_the_task_stdin(self) -> None:
         # reins run -- python3 - <<EOF: the heredoc reaches reins, so reins must hand it to the task.
         read_end, write_end = os.pipe()

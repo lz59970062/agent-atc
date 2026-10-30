@@ -97,7 +97,10 @@ class PiAdapterContractTests(unittest.TestCase):
             command=None, exit_code=None, message=None,
             approvals_reviewer="auto_review", approval_policy="on-request", sandbox_mode="workspace-write",
         )
-        with mock.patch.dict(os.environ, {"PI_SESSION_FILE": session, "PI_SESSION_ID": "1"}, clear=True):
+        home = tempfile.TemporaryDirectory()
+        self.addCleanup(home.cleanup)
+        with mock.patch.dict(os.environ, {"PI_SESSION_FILE": session, "PI_SESSION_ID": "1",
+                                          "HOME": home.name, "USERPROFILE": home.name}, clear=True):
             request = dispatch.make_request(args, "wake up")
             self.assertEqual(dispatch.resolve_agent(args), "pi")
             prompt = dispatch.build_prompt(args)
@@ -492,7 +495,7 @@ class PiAgentContractTests(unittest.TestCase):
 
         channel = pi_channel.channel_dir(str(session), Path(request["pi_channel_root"]))
         pi_channel.ensure_private_directory(channel)
-        owner = {"version": 1, "session_file": str(session), "session_id": "1",
+        owner = {"version": 1, "session_file": bound, "session_id": "1",
                  "channel_dir": str(channel), "profile_dir": request["pi_profile_dir"],
                  "owner_nonce": "fixture", "owner_pid": 99999999, "managed": True,
                  "state": "closed", "owner_identity": tower.daemon_process_identity(os.getpid())}
@@ -518,7 +521,7 @@ class PiAgentContractTests(unittest.TestCase):
         delivery_engine.recover_running(root)
         self.assertTrue((root / "done" / f"{request['id']}.json").exists())
         received = json.loads(capture.read_text(encoding="utf-8"))
-        self.assertEqual(received["argv"], ["--print", "--session", str(session),
+        self.assertEqual(received["argv"], ["--print", "--session", bound,
                                             "--extension", str(pi_channel.extension_path())])
         self.assertNotIn("--no-session", received["argv"])
         self.assertEqual(received["cwd"], str(self.directory))
