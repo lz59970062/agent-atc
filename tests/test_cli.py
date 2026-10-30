@@ -1993,6 +1993,8 @@ class CliTests(unittest.TestCase):
         args = argparse.Namespace(claude_bin=None)
         completed = subprocess.CompletedProcess(["claude", "auth", "status", "--json"], 0)
         output = io.StringIO()
+        home = tempfile.TemporaryDirectory()
+        self.addCleanup(home.cleanup)
         with (
             mock.patch.object(cli.shutil, "which", return_value="/opt/claude/bin/claude"),
             mock.patch.object(shell, "process_command", side_effect=lambda command, environment=None: command),
@@ -2005,6 +2007,7 @@ class CliTests(unittest.TestCase):
                     "CODEX_THREAD_ID": "parent-codex",
                     "CLAUDE_CODE_SESSION_ID": "parent-claude",
                     "CLAUDECODE": "1",
+                    "HOME": home.name, "USERPROFILE": home.name,
                 },
                 clear=True,
             ),

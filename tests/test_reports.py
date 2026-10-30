@@ -36,6 +36,12 @@ if REPORT is not None and report_file:
 
 class ChildReportTests(unittest.TestCase):
     def setUp(self) -> None:
+        # Models screen selection as CliTests does; Windows IO and process
+        # adapters still run natively because os.name remains unchanged.
+        if os.name == "nt":
+            platform = mock.patch.object(sys, "platform", "linux")
+            platform.start()
+            self.addCleanup(platform.stop)
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         self.directory = Path(temporary.name)

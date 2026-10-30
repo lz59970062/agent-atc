@@ -39,6 +39,7 @@ class StandaloneDaemonIdentityTests(unittest.TestCase):
             linux_os.name = "posix"
             for patcher in (
                 mock.patch.object(cli, "os", linux_os),
+                mock.patch.object(services, "os", linux_os),
                 mock.patch.object(signal, "SIGHUP", 1, create=True),
                 mock.patch.object(queue_store, "fsync_directory", side_effect=cli.windows_io.fsync_directory),
                 mock.patch.object(queue_store, "acquire_owner_lock", side_effect=lambda root, ident, blocking:

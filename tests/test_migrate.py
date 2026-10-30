@@ -21,7 +21,7 @@ class MigrateTests(unittest.TestCase):
         self.addCleanup(temporary.cleanup)
         self.home = Path(temporary.name).resolve()
         self.environment = {
-            "HOME": str(self.home), "CODEX_HOME": str(self.home / ".codex"), "CLAUDE_CONFIG_DIR": str(self.home / ".claude"),
+            "HOME": str(self.home), "USERPROFILE": str(self.home), "CODEX_HOME": str(self.home / ".codex"), "CLAUDE_CONFIG_DIR": str(self.home / ".claude"),
             "REINS_HOME": str(self.home / ".reins"), pi_channel.PROFILE_ENV: str(self.home / ".pi" / "agent"),
             "XDG_CONFIG_HOME": str(self.home / ".config"), "PATH": "",
         }

@@ -77,7 +77,8 @@ class BridgeClientTests(unittest.TestCase):
             self.assertIsNone(app_server.desktop_app_server_socket(request))
         self.write_metadata()
         with mock.patch.dict(os.environ, {app_server.DESKTOP_APP_SERVER_ENV: "1",
-                                         app_server.APP_SERVER_BRIDGE_FILE_ENV: str(self.metadata)}, clear=True), \
+                                         app_server.APP_SERVER_BRIDGE_FILE_ENV: str(self.metadata),
+                                         "HOME": str(self.directory), "USERPROFILE": str(self.directory)}, clear=True), \
                 mock.patch.object(layout, "codex_home", return_value=self.profile):
             self.assertIsInstance(app_server.desktop_app_server_socket(request), BridgeEndpoint)
             with mock.patch.object(layout, "queue_dir", return_value=self.directory / "queue"), \

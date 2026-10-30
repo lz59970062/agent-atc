@@ -122,6 +122,7 @@ class HealthReportTests(unittest.TestCase):
             "CODEX_HOME": str(self.codex_home), "REINS_HOME": str(self.codex_home / "reins-home"), "CLAUDE_CONFIG_DIR": str(self.claude_home),
             "REINS_CODEX_BIN": "fixture-codex", "REINS_CLAUDE_BIN": "fixture-claude",
             "API_KEY": "SECRET_ENV_SENTINEL", "PATH": "/fixture/bin",
+            "HOME": str(self.directory / "home"), "USERPROFILE": str(self.directory / "home"),
         }, clear=True))
         self.patches.enter_context(mock.patch.object(diagnostics, "queue_writable", return_value=True))
         self.patches.enter_context(mock.patch.object(diagnostics, "coordinator_issue", return_value=None))
