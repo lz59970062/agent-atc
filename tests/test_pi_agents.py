@@ -493,33 +493,37 @@ class PiAgentContractTests(unittest.TestCase):
         self.assertIn("Bound session: " + bound,
                       Path(str(request["prompt_details_path"])).read_text(encoding="utf-8"))
 
-        channel = pi_channel.channel_dir(str(session), Path(request["pi_channel_root"]))
-        pi_channel.ensure_private_directory(channel)
-        owner = {"version": 1, "session_file": bound, "session_id": "1",
-                 "channel_dir": str(channel), "profile_dir": request["pi_profile_dir"],
-                 "owner_nonce": "fixture", "owner_pid": 99999999, "managed": True,
-                 "state": "closed", "owner_identity": tower.daemon_process_identity(os.getpid())}
-        queue_store.write_request(channel / "owner.json", owner)
-        environment = {
-            "REINS_PI_BIN": str(fake_pi),
-            "REINS_TEST_PI_CALLBACK_CAPTURE": str(capture),
-            "REINS_TEST_PI_CALLBACK_QUEUE": str(root),
-            "REINS_TEST_PI_CALLBACK_ID": str(request["id"]),
-        }
-        args = argparse.Namespace(retries=3, retry_delay=0.0, retry_backoff=2.0, resume_timeout=15.0)
-        delivery_output = io.StringIO()
-        with mock.patch.dict(os.environ, environment), \
-                contextlib.redirect_stdout(delivery_output), contextlib.redirect_stderr(delivery_output):
-            self.assertTrue(delivery_engine.process_one(root, args))
+        # setUp models Linux for screen selection; offline recovery must record and
+        # check this host's real process identity.
+        native = mock.patch.object(sys, "platform", "win32") if os.name == "nt" else contextlib.nullcontext()
+        with native:
+            channel = pi_channel.channel_dir(str(session), Path(request["pi_channel_root"]))
+            pi_channel.ensure_private_directory(channel)
+            owner = {"version": 1, "session_file": bound, "session_id": "1",
+                     "channel_dir": str(channel), "profile_dir": request["pi_profile_dir"],
+                     "owner_nonce": "fixture", "owner_pid": 99999999, "managed": True,
+                     "state": "closed", "owner_identity": tower.daemon_process_identity(os.getpid())}
+            queue_store.write_request(channel / "owner.json", owner)
+            environment = {
+                "REINS_PI_BIN": str(fake_pi),
+                "REINS_TEST_PI_CALLBACK_CAPTURE": str(capture),
+                "REINS_TEST_PI_CALLBACK_QUEUE": str(root),
+                "REINS_TEST_PI_CALLBACK_ID": str(request["id"]),
+            }
+            args = argparse.Namespace(retries=3, retry_delay=0.0, retry_backoff=2.0, resume_timeout=15.0)
+            delivery_output = io.StringIO()
+            with mock.patch.dict(os.environ, environment), \
+                    contextlib.redirect_stdout(delivery_output), contextlib.redirect_stderr(delivery_output):
+                self.assertTrue(delivery_engine.process_one(root, args))
 
-        deadline = time.monotonic() + 15.0
-        while time.monotonic() < deadline:
-            delivery_engine.reap_background_resumes()
-            if not delivery_engine._BACKGROUND_RESUMES:
-                break
-            time.sleep(0.05)
-        self.assertFalse(delivery_engine._BACKGROUND_RESUMES, "the delivery worker did not finish")
-        delivery_engine.recover_running(root)
+            deadline = time.monotonic() + 15.0
+            while time.monotonic() < deadline:
+                delivery_engine.reap_background_resumes()
+                if not delivery_engine._BACKGROUND_RESUMES:
+                    break
+                time.sleep(0.05)
+            self.assertFalse(delivery_engine._BACKGROUND_RESUMES, "the delivery worker did not finish")
+            delivery_engine.recover_running(root)
         records = {state: dispatch.load_request(path) for state in ("pending", "running", "failed")
                    for path in (root / state).glob(f"{request['id']}.json")}
         self.assertTrue((root / "done" / f"{request['id']}.json").exists(), json.dumps({
