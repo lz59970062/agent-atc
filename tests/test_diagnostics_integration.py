@@ -24,6 +24,7 @@ from harness_reins import cli
 from harness_reins.install import services
 from harness_reins.tower import main as tower
 from harness_reins.store import records as queue_store
+from harness_reins.store import install_record
 from harness_reins.store import layout
 from harness_reins.owners import SystemdUserBackend
 from harness_reins.runtime import worker_command
@@ -97,7 +98,8 @@ class RealDiagnosticsRepairTests(unittest.TestCase):
                 command = arguments[0] if arguments else keywords.get("args")
                 if isinstance(command, (list, tuple)):
                     command = [os.fspath(value) for value in command]
-                    prefix = worker_command()
+                    # Setup starts the coordinator through the canonical launcher it installs.
+                    prefix = [str(install_record.launcher_path())]
                     if command[:len(prefix)] == prefix and command[len(prefix):len(prefix) + 1] == ["daemon"]:
                         self.assertIn(str(root), command, "only the isolated queue may be started")
                         daemons.append(process)
