@@ -43,6 +43,8 @@ INSTRUCTIONS = (
 
 
 def parent_command_line(pid: int) -> list[str]:
+    if os.name == "nt":
+        return _windows_command_line(pid)
     try:
         return Path(f"/proc/{pid}/cmdline").read_bytes().decode("utf-8", "replace").split("\0")
     except OSError:
@@ -50,6 +52,21 @@ def parent_command_line(pid: int) -> list[str]:
     try:
         output = subprocess.run(["ps", "-o", "command=", "-p", str(pid)], capture_output=True,
                                 text=True, timeout=5, check=False).stdout
+    except (OSError, subprocess.SubprocessError):
+        return []
+    return output.split()
+
+
+def _windows_command_line(pid: int) -> list[str]:
+    # Windows has neither /proc nor ps. The opt-in flag and server name contain
+    # no spaces, so whitespace splitting is enough, as with ps.
+    executable = Path(os.environ.get("SystemRoot", r"C:\Windows")) / "System32/WindowsPowerShell/v1.0/powershell.exe"
+    script = f"(Get-CimInstance Win32_Process -Filter 'ProcessId={int(pid)}').CommandLine"
+    try:
+        output = subprocess.run([str(executable), "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", script],
+                                stdin=subprocess.DEVNULL,  # never the MCP pipe Claude writes to
+                                capture_output=True, text=True, timeout=30, check=False,
+                                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0)).stdout
     except (OSError, subprocess.SubprocessError):
         return []
     return output.split()

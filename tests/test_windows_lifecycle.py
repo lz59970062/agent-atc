@@ -224,7 +224,7 @@ class WindowsLifecycleTests(unittest.TestCase):
             encoding="utf-8",
         )
         coordinator_program = (
-            "import argparse,json,sys\nfrom pathlib import Path\nfrom harness_reins import cli\n"
+            "import argparse,json,sys\nfrom pathlib import Path\nfrom harness_reins.engine import delivery as delivery_engine\n"
             f"root=Path({str(self.root)!r})\nrequest=json.loads({json.dumps(owner)!r})\n"
             f"delivery_engine.resume_command=lambda request:[sys.executable,{str(fixture)!r}]\n"
             "delivery_engine.run_resume_until_exit_or_ack(root,'owner',request,argparse.Namespace(resume_timeout=25))\n"

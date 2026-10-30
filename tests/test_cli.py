@@ -852,7 +852,9 @@ class CliTests(unittest.TestCase):
         task["state"] = "launching"
         managed_tasks.write_managed_task(root, task)
         worker = argparse.Namespace(task_file=str(task_path), token=task["token"])
-        with mock.patch.dict(os.environ, {"STY": "screen-session"}, clear=True), contextlib.redirect_stdout(io.StringIO()):
+        # A real file: on Windows the worker hands its own stdout to the task.
+        with tempfile.TemporaryFile("w+") as log, mock.patch.dict(os.environ, {"STY": "screen-session"}, clear=True), \
+                contextlib.redirect_stdout(log):
             self.assertEqual(task_worker.run_screen_worker(worker), 0)
         return managed_tasks.load_managed_task(task_path)
 
@@ -3042,22 +3044,22 @@ class CliTests(unittest.TestCase):
                 }
                 read_fd, lock_fd = os.pipe()
                 output = io.StringIO()
-                errors = open(Path(tmp) / "worker.err", "w+", encoding="utf-8")  # Popen needs a real descriptor.
-                self.addCleanup(errors.close)
-                try:
-                    with (
-                        mock.patch.dict(os.environ, {"CODEX_LONG_TASK_DELIVERY_LOCK_FDS": json.dumps([lock_fd])}, clear=False),
-                        mock.patch.object(sys, "stdin", io.StringIO(json.dumps(payload))),
-                        mock.patch.object(sys, "stdout", output),
-                        mock.patch.object(sys, "stderr", errors),
-                        mock.patch.object(delivery_engine, "start_desktop_app_server_turn", return_value=None),
-                    ):
-                        delivery_engine.delivery_worker_main()
-                finally:
-                    os.close(read_fd)
-                self.assertEqual(json.loads(output.getvalue())["returncode"], expected)
-                errors.seek(0)
-                self.assertIn(message, errors.read())  # Codex's stderr still reaches the daemon log.
+                # Popen needs a real descriptor; close it before Windows removes the directory.
+                with open(Path(tmp) / "worker.err", "w+", encoding="utf-8") as errors:
+                    try:
+                        with (
+                            mock.patch.dict(os.environ, {"CODEX_LONG_TASK_DELIVERY_LOCK_FDS": json.dumps([lock_fd])}, clear=False),
+                            mock.patch.object(sys, "stdin", io.StringIO(json.dumps(payload))),
+                            mock.patch.object(sys, "stdout", output),
+                            mock.patch.object(sys, "stderr", errors),
+                            mock.patch.object(delivery_engine, "start_desktop_app_server_turn", return_value=None),
+                        ):
+                            delivery_engine.delivery_worker_main()
+                    finally:
+                        os.close(read_fd)
+                    self.assertEqual(json.loads(output.getvalue())["returncode"], expected)
+                    errors.seek(0)
+                    self.assertIn(message, errors.read())  # Codex's stderr still reaches the daemon log.
 
     def test_desktop_app_server_explicit_turn_rejection_allows_cli_fallback(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

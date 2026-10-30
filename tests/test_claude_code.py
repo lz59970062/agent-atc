@@ -22,6 +22,7 @@ from harness_reins.engine import delivery as delivery_engine
 from harness_reins import runtime as reins_runtime
 from harness_reins.store import records as queue_store
 from harness_reins.store import layout
+from harness_reins.system import shell
 
 SRC = str(Path(__file__).resolve().parents[1] / "src")
 SESSION = "3f0c9a52-claude-session"
@@ -503,8 +504,9 @@ class ControlCommandTests(unittest.TestCase):
     def test_ack_command_is_runnable_without_atc_on_path(self) -> None:
         with mock.patch.object(reins_runtime, "console_script_path", return_value=None):
             command = reins_runtime.control_command("ack", "--id", "x")
-        self.assertEqual(command.split()[:2], [sys.executable, str(Path(cli.__file__).with_name("_entry.py"))])
-        self.assertTrue(command.endswith("ack --id x"))
+        # PowerShell's call operator on Windows, a POSIX shell line elsewhere.
+        self.assertEqual(command, shell.format_command(
+            [sys.executable, str(Path(cli.__file__).with_name("_entry.py")), "ack", "--id", "x"]))
 
 if __name__ == "__main__":
     unittest.main()

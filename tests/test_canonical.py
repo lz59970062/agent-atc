@@ -15,6 +15,7 @@ from harness_reins import runtime as reins_runtime
 from harness_reins.engine import dispatch
 from harness_reins.install import canonical
 from harness_reins.store import install_record
+from harness_reins.system import shell
 
 SRC = str(Path(__file__).resolve().parents[1] / "src")
 
@@ -69,8 +70,7 @@ class CanonicalInstallTests(unittest.TestCase):
         queue = self.home / "queue"
         with mock.patch.object(dispatch.layout, "queue_dir", return_value=queue):
             command = dispatch.ack_command(queue, "1a2b3c4d-c1")
-        self.assertTrue(command.startswith(str(install_record.launcher_path()) if os.name != "nt" else "&"))
-        self.assertTrue(command.endswith("ack 1a2b3c4d-c1"))
+        self.assertEqual(command, shell.format_command([str(install_record.launcher_path()), "ack", "1a2b3c4d-c1"]))
 
 
 if __name__ == "__main__":

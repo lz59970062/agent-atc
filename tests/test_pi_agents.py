@@ -91,7 +91,7 @@ class PiAdapterContractTests(unittest.TestCase):
                 get_agent("pi").resume_command({"target": target}, {})
 
     def test_make_request_binds_the_pi_session_file_and_acknowledgement_names_pi(self):
-        session = "/home/user/.pi/agent/sessions/--data-proj--/2026-10-03T14-37-07-412Z_1.jsonl"
+        session = os.path.abspath("/home/user/.pi/agent/sessions/--data-proj--/2026-10-03T14-37-07-412Z_1.jsonl")
         args = argparse.Namespace(
             cwd="/tmp", session=None, last=False, agent=None, task="long task",
             command=None, exit_code=None, message=None,
@@ -413,7 +413,8 @@ class PiAgentContractTests(unittest.TestCase):
             with self.subTest(arguments=arguments), mock.patch.object(sys, "argv", argv), \
                     contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()) as stderr:
                 cli.main()
-            self.assertIn(session, stderr.getvalue())
+            # Bound by its canonical path (resolved; lower case on Windows).
+            self.assertIn(pi_channel.canonical_session(session), stderr.getvalue())
             self.assertFalse(layout.managed_tasks_root(self.queue).exists())
 
     def test_doctor_for_a_pi_callback_parent_keeps_cli_resume_and_a_valid_repair_command(self):
@@ -440,7 +441,7 @@ class PiAgentContractTests(unittest.TestCase):
         self.assertEqual(repair[repair.index("--pi-bin") + 1], "/fixture/bin/pi")
         recheck = report["recheck_command"]
         self.assertEqual(recheck[recheck.index("--agent") + 1], "pi")
-        self.assertEqual(recheck[recheck.index("--session") + 1], session)
+        self.assertEqual(recheck[recheck.index("--session") + 1], pi_channel.canonical_session(session))
 
     def fake_pi_callback(self):
         script = self.directory / "fake Pi callback.py"
@@ -484,8 +485,9 @@ class PiAgentContractTests(unittest.TestCase):
         self.assertEqual(len(pending), 1)
         request = dispatch.load_request(pending[0])
         self.assertEqual(request["agent"], "pi")
-        self.assertEqual(request["target"], {"kind": "session", "session": str(session)})
-        self.assertIn("Bound session: " + str(session),
+        bound = pi_channel.canonical_session(str(session))
+        self.assertEqual(request["target"], {"kind": "session", "session": bound})
+        self.assertIn("Bound session: " + bound,
                       Path(str(request["prompt_details_path"])).read_text(encoding="utf-8"))
 
         channel = pi_channel.channel_dir(str(session), Path(request["pi_channel_root"]))

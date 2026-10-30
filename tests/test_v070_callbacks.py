@@ -126,7 +126,8 @@ class CompactCallbackTests(unittest.TestCase):
         with mock.patch.object(reins_runtime, "console_script_path", return_value=launcher), \
                 mock.patch.object(layout, "queue_dir", return_value=self.root):
             prepared = self.prepare("default-queue")
-        self.assertIn(f"ACK after inspection: {launcher} ack default-queue", prepared["prompt_compact"])
+            expected = reins_runtime.control_command("ack", "default-queue")  # Windows ignores the script
+        self.assertIn(f"ACK after inspection: {expected}", prepared["prompt_compact"])
         self.assertNotIn("--queue-dir", prepared["prompt_compact"])
 
     def test_ack_takes_the_id_positionally_or_by_flag(self) -> None:

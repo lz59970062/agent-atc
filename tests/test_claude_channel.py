@@ -44,7 +44,7 @@ class ChannelOptInTests(unittest.TestCase):
         self.assertEqual(command[0], "/bin/claude")
         self.assertEqual(command[3:6], ["--dangerously-load-development-channels", "server:reins", "--resume"])
         server = json.loads(command[2])["mcpServers"]["reins"]
-        self.assertEqual(server["args"][-3:], ["_claude-channel", "--queue-dir", "/q"])
+        self.assertEqual(server["args"][-3:], ["_claude-channel", "--queue-dir", str(root)])
         self.assertEqual(server["env"], {layout.TARGET_LOCK_DIR_ENV: "/locks"})
         self.assertTrue(claude_channel.channel_enabled(command))
 

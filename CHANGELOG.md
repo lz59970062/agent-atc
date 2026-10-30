@@ -18,6 +18,17 @@
 - The Pi, template and channel tests no longer assume the temporary directory
   has no symlinks in its path; on macOS `/var` leads to `/private/var`. The Pi
   live-callback tests now run through a symlinked directory on every platform.
+- The `reins claude` channel recognizes its opt-in on Windows. It reads the
+  parent Claude process's command line from `/proc` or `ps`, neither of which
+  exists on Windows, so it never pushed a callback there; it now asks CIM
+  (`Win32_Process`) through PowerShell.
+- Claude desktop CLI paths (the macOS bundle, the SSH-session `ccd-cli`) are
+  recognized with Windows path separators too.
+- The test suite runs on Windows CI: cleared environments keep a Windows home
+  (`USERPROFILE`), POSIX-only expectations (paths, shell quoting, mode bits,
+  newline translation) follow the platform, and two broken fixtures were
+  repaired (a coordinator program that never imported the delivery engine, a
+  stderr file left open while its directory was removed).
 
 ## 0.9.2 — 2026-10-29
 

@@ -29,7 +29,7 @@ class TemplateRegistrationNamespaceTests(unittest.TestCase):
             "description: The user's own Reins description.\n"
             "custom-field: preserved\n---\n\nUser workflow instructions.\n"
         )
-        self.workflow.write_text(self.user_text, encoding="utf-8")
+        self.workflow.write_bytes(self.user_text.encode("utf-8"))  # No newline translation on Windows.
         self.source = self.base / "source.yaml"
         self.source.write_text(
             "version: 1\nworker: pi\ndescription: Independent task review.\n"

@@ -67,11 +67,12 @@ def _home(environment: Mapping[str, str]) -> Path:
 
 
 def is_desktop_bundle(path: str | os.PathLike[str]) -> bool:
-    return "/claude-code/" in str(path) and "claude.app/Contents/MacOS/" in str(path)
+    value = Path(path).as_posix()  # Windows paths use backslashes.
+    return "/claude-code/" in value and "claude.app/Contents/MacOS/" in value
 
 
 def is_desktop_remote(path: str | os.PathLike[str]) -> bool:
-    return "/.claude/remote/ccd-cli/" in str(path)
+    return "/.claude/remote/ccd-cli/" in Path(path).as_posix()
 
 
 def _source_of(path: str) -> str | None:

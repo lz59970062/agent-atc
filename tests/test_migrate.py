@@ -137,7 +137,8 @@ class MigrateTests(unittest.TestCase):
         self.assertFalse((units / "agent-atc.service.d").exists())
         experts = self.home / ".reins" / "experts.yaml"
         self.assertIn("schema: reins.experts/1", experts.read_text(encoding="utf-8"))
-        self.assertEqual(experts.stat().st_mode & 0o777, 0o600)
+        if os.name != "nt":  # Windows keeps ACLs, not POSIX mode bits.
+            self.assertEqual(experts.stat().st_mode & 0o777, 0o600)
         for skills in (".codex/skills", ".claude/skills"):
             self.assertFalse((self.home / skills / "agent-atc").exists())
             self.assertTrue((self.home / skills / "long-task-callback").exists(), "LTC is untouched")
